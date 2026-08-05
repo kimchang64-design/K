@@ -89,6 +89,7 @@ def get_stock_ticker_map():
         "대한전선": "001440",
         "대한광통신": "010170",
         "대원전선": "006340",
+        "한화오션": "042660",
         "광전자": "017900",
         "RF머트리얼즈": "327260",
         "DB하이텍": "000990",
@@ -162,28 +163,16 @@ def get_financial_info(code):
                 "SK하이닉스, 장중 신고가 경신… \"메모리 슈퍼사이클 진입\"",
             ],
         },
-        "006340": {
-            "mcap": 18000,
-            "op_profit": 420,
-            "trade_type": "🌊 스윙",
-            "foreign_net": "+18,500주",
-            "inst_net": "+5,100주",
-            "prog_net": "+30억",
-            "credit_ratio": "1.50%",
+        "042660": {
+            "mcap": 250000,
+            "op_profit": 3500,
+            "trade_type": "🏆 중장기",
+            "foreign_net": "+45,000주",
+            "inst_net": "+12,000주",
+            "prog_net": "+150억",
+            "credit_ratio": "0.80%",
             "news": [
-                "대원전선, 전력망 교체 슈퍼사이클 수혜 기대감에 매수세 유입",
-            ],
-        },
-        "096530": {
-            "mcap": 15000,
-            "op_profit": 850,
-            "trade_type": "🌊 스윙",
-            "foreign_net": "+15,000주",
-            "inst_net": "+4,200주",
-            "prog_net": "+25억",
-            "credit_ratio": "1.15%",
-            "news": [
-                "씨젠, 글로벌 진단키트 수요 변동에 따른 실적 반등 주목",
+                "한화오션, 특수선 수주 호조 및 해양 플랜트 실적 개선 기대감",
             ],
         },
     }
@@ -217,16 +206,14 @@ with main_tab1:
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
-        # 입력값 변경 콜백 (엔터 또는 입력 즉시 반영)
+
         def on_input_change():
             st.session_state.target_stock = st.session_state.stock_input_field
 
-        # 최근 검색 버튼 클릭 콜백
         def set_recent_stock(val):
             st.session_state.target_stock = val
             st.session_state.stock_input_field = val
 
-        # 입력창과 [검색] 버튼을 가로로 배치 (비율 4:1)
         sc1, sc2 = st.columns([4, 1])
 
         with sc1:
@@ -554,6 +541,14 @@ with main_tab1:
             template="plotly_white",
             height=360,
         )
+
+        # 📅 X축 날짜 형식을 영문(Feb 2026)에서 숫자 형식(YYYY-MM)으로 강제 변환
+        fig.update_xaxes(
+            tickformat="%Y-%m",
+            dtick="M1",
+            tickangle=0,
+        )
+
         st.plotly_chart(fig, use_container_width=True)
 
 
