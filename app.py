@@ -65,21 +65,45 @@ main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs(
 
 
 # ---------------------------------------------------------
-# 공통 함수
+# 공통 함수 (한글 종목명 검색 정확도 강화)
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_stock_ticker_map():
+    name_map = {
+        "삼성전자": "005930",
+        "SK하이닉스": "000660",
+        "LG에너지솔루션": "373220",
+        "삼성바이오로직스": "207940",
+        "현대차": "005380",
+        "셀트리온": "068270",
+        "KIA": "000270",
+        "기아": "000270",
+        "KB금융": "105560",
+        "POSCO홀딩스": "005490",
+        "네이버": "035420",
+        "NAVER": "035420",
+        "카카오": "035720",
+        "에코프로비엠": "247540",
+        "에코프로": "086520",
+        "한미반도체": "042700",
+        "대한전선": "001440",
+        "대한광통신": "010170",
+        "광전자": "017900",
+        "RF머트리얼즈": "327260",
+        "DB하이텍": "000990",
+        "제주반도체": "080220",
+    }
     try:
         today_str = datetime.datetime.now().strftime("%Y%m%d")
-        tickers = stock.get_market_ticker_list(today_str, market="ALL")
-        name_map = {}
-        for t in tickers:
-            name = stock.get_market_ticker_name(t)
-            if name and isinstance(name, str):
-                name_map[name.strip()] = t
-        return name_map
+        for mkt in ["ALL"]:
+            tickers = stock.get_market_ticker_list(today_str, market=mkt)
+            for t in tickers:
+                name = stock.get_market_ticker_name(t)
+                if name and isinstance(name, str):
+                    name_map[name.strip()] = t
     except Exception:
-        return {}
+        pass
+    return name_map
 
 
 def resolve_code_or_name(user_input):
@@ -96,8 +120,9 @@ def resolve_code_or_name(user_input):
     if user_input in name_map:
         return name_map[user_input], user_input
 
+    # 부분 일치 검색 지원 (예: 'SK하'만 쳐도 'SK하이닉스' 매칭)
     for name, code in name_map.items():
-        if user_input in name:
+        if user_input.lower() in name.lower():
             return code, name
 
     return "005930", "삼성전자"
@@ -179,6 +204,10 @@ def get_financial_info(code):
 # TAB 1: 평단선 차트
 # ---------------------------------------------------------
 with main_tab1:
+    # 세션 상태에 최근 검색 기록 리스트 초기화
+    if "search_history" not in st.session_state:
+        st.session_state.search_history = ["삼성전자", "SK하이닉스"]
+
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
@@ -190,7 +219,31 @@ with main_tab1:
             placeholder="종목명 또는 코드 입력",
         )
         code, stock_name = resolve_code_or_name(raw_input)
+
+        # 🕒 최근 검색 기록에 추가 (중복 방지 및 최신순 유지)
+        if stock_name and stock_name not in st.session_state.search_history:
+            st.session_state.search_history.insert(0, stock_name)
+            if len(st.session_state.search_history) > 8:
+                st.session_state.search_history.pop()
+
         st.caption(f"📌 **종목:** {stock_name} ({code})")
+
+        # 🕒 최근 검색한 종목 버튼 기록 표시 영역
+        if st.session_state.search_history:
+            st.markdown(
+                "<span style='font-size:11px; color:#666;'>최근 검색 기록:</span>",
+                unsafe_allow_html=True,
+            )
+            history_cols = st.columns(min(len(st.session_state.search_history), 4))
+            for idx, hist_name in enumerate(
+                st.session_state.search_history[:4]
+            ):
+                with history_cols[idx % len(history_cols)]:
+                    if st.button(
+                        hist_name, key=f"hist_{idx}", use_container_width=True
+                    ):
+                        st.session_state.vwap_code_input = hist_name
+                        st.rerun()
 
     with col2:
         timeframe_options = [
@@ -350,7 +403,7 @@ with main_tab1:
         s_c3.metric("💻 실시간 프로그램", prog_net)
         s_c4.metric("💳 신용잔고율", credit_ratio)
 
-        # 📰 실시간 상승 이유 및 뉴스 요약 섹션 추가 (다른 기능 손상 없음)
+        # 📰 실시간 상승 이유 및 뉴스 속보 섹션
         st.markdown(
             f"""
             <div style="background-color: #f1f3f5; border-left: 4px solid #1a73e8; padding: 10px 15px; border-radius: 0 6px 6px 0; margin: 10px 0;">
