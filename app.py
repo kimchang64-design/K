@@ -24,39 +24,40 @@ def get_stock_name(code):
 if "recent_codes" not in st.session_state:
     st.session_state.recent_codes = []
 
-# 1. 상단 입력 및 설정 옵션
-col1, col2 = st.columns([1, 1])
+# 1. 상단 입력 및 차트 주기 설정
+col1, col2, col3 = st.columns([1.2, 1, 1])
+
 with col1:
     code = st.text_input("종목코드 (6자리)", "005930")
-    # 한글 종목명 자동 표시
     stock_name = get_stock_name(code)
     if stock_name != code:
         st.caption(f"📌 **종목명:** {stock_name} ({code})")
 
 with col2:
-    timeframe = st.selectbox(
-        "차트 주기 선택",
-        [
-            "1분봉",
-            "3분봉",
-            "5분봉",
-            "10분봉",
-            "15분봉",
-            "30분봉",
-            "45분봉",
-            "60분봉",
-            "90분봉",
-            "120분봉",
-            "240분봉",
-            "300분봉",
-            "일봉",
-            "주봉",
-            "월봉",
-        ],
-        index=12,  # 기본값: 일봉
+    # 일봉/주봉/월봉/분봉 구분 선택
+    time_type = st.radio(
+        "차트 주기 구분",
+        ["일/주/월봉", "분봉"],
+        horizontal=True
     )
 
-# 최근 검색 종목 표시 (종목명 포함)
+with col3:
+    if time_type == "일/주/월봉":
+        day_type = st.selectbox("봉 단위 선택", ["일봉", "주봉", "월봉"], index=0)
+        selected_timeframe = day_type
+    else:
+        min_type = st.selectbox(
+            "분봉 단위 선택",
+            [
+                "1분봉", "3분봉", "5분봉", "10분봉", "15분봉", 
+                "30분봉", "45분봉", "60분봉", "90분봉", "120분봉", 
+                "240분봉", "300분봉", "999분봉"
+            ],
+            index=0
+        )
+        selected_timeframe = min_type
+
+# 최근 검색 종목 표시
 if st.session_state.recent_codes:
     st.write("🔍 **최근 검색 종목:**")
     cols = st.columns(min(len(st.session_state.recent_codes), 5))
@@ -67,7 +68,7 @@ if st.session_state.recent_codes:
             code = r_code
 
 # 2. 날짜 선택
-if timeframe in ["일봉", "주봉", "월봉"]:
+if time_type == "일/주/월봉":
     c1, c2 = st.columns(2)
     with c1:
         start_date = st.date_input("시작일", pd.to_datetime("2024-01-01"))
@@ -93,9 +94,9 @@ if st.button("차트 및 수치 분석 실행", type="primary"):
     e_date = end_date.strftime("%Y%m%d")
 
     with st.spinner("데이터를 계산 중입니다..."):
-        if timeframe == "일봉":
+        if selected_timeframe == "일봉":
             df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "d")
-        elif timeframe == "주봉":
+        elif selected_timeframe == "주봉":
             df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "d")
             if not df.empty:
                 df = df.resample("W-MON").agg(
@@ -108,13 +109,13 @@ if st.button("차트 및 수치 분석 실행", type="primary"):
                     }
                 )
                 df = df.dropna()
-        elif timeframe == "월봉":
+        elif selected_timeframe == "월봉":
             df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
         else:
             # 분봉 처리
             df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
             if not df.empty:
-                minutes = timeframe.replace("분봉", "") + "T"
+                minutes = selected_timeframe.replace("분봉", "") + "T"
                 if minutes != "1T":
                     df = df.resample(minutes).agg(
                         {
@@ -199,7 +200,7 @@ if st.button("차트 및 수치 분석 실행", type="primary"):
         )
 
         fig.update_layout(
-            title=f"{current_name} ({code}) - {timeframe} 세력평단 차트",
+            title=f"{current_name} ({code}) - {selected_timeframe} 세력평단 차트",
             xaxis_title="시간/날짜",
             yaxis_title="가격(원)",
             hovermode="x unified",
