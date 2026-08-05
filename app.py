@@ -442,41 +442,41 @@ with main_tab1:
 
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
-        m1, m2, m3, m4, m5, m6 = st.columns(6)
-        m1.metric("현재가", f"{last_close:,}원")
-        m2.metric(
-            f"{selected_timeframe} 평단가",
-            f"{last_vwap:,}원",
-            f"괴리율 {disparity:+.1f}%",
-        )
-        m3.metric("🎯1차목표(+5%)", f"{target_1st:,}원")
-        m4.metric("🚀2차목표(+10%)", f"{target_2nd:,}원")
-        m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
-        m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
+        # 📌 수치 클릭 시 클립보드 즉시 복사 적용 HTML 컴포넌트
+        metrics_click_copy_html = f"""
+        <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 5px;">
+            <div onclick="navigator.clipboard.writeText('{last_close}'); alert('현재가 ({last_close:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+                <div style="font-size:11px; color:#666; font-weight:bold;">현재가 (클릭 복사)</div>
+                <div style="font-size:15px; font-weight:bold; color:#111; margin-top:2px;">{last_close:,}원</div>
+            </div>
+            
+            <div onclick="navigator.clipboard.writeText('{last_vwap}'); alert('평단가 ({last_vwap:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+                <div style="font-size:11px; color:#1a73e8; font-weight:bold;">📌 {selected_timeframe} 평단가 (클릭 복사)</div>
+                <div style="font-size:15px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원 <span style="font-size:11px; font-weight:normal; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.1f}%)</span></div>
+            </div>
 
-        st.markdown(
-            "### 📋 키움차트/주문창 단가 수치 복사하기 (클릭 시 확인창 없이 즉시 복사)"
-        )
-        copy_html = f"""
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#1a73e8; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
-                📌 평단가 ({last_vwap}) 복사
-            </button>
-            <button onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#0ca678; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
-                🎯 1차목표 ({target_1st}) 복사
-            </button>
-            <button onclick="navigator.clipboard.writeText('{target_2nd}');" style="background:#7048e8; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
-                🚀 2차목표 ({target_2nd}) 복사
-            </button>
-            <button onclick="navigator.clipboard.writeText('{stop_loss}');" style="background:#f59f00; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
-                🛑 1차손절 ({stop_loss}) 복사
-            </button>
-            <button onclick="navigator.clipboard.writeText('{absolute_stop_loss}');" style="background:#e03131; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
-                🚨 절대손절 ({absolute_stop_loss}) 복사
-            </button>
+            <div onclick="navigator.clipboard.writeText('{target_1st}'); alert('1차목표가 ({target_1st:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 1차목표(+5%) (클릭 복사)</div>
+                <div style="font-size:15px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_1st:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{target_2nd}'); alert('2차목표가 ({target_2nd:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+                <div style="font-size:11px; color:#7048e8; font-weight:bold;">🚀 2차목표(+10%) (클릭 복사)</div>
+                <div style="font-size:15px; font-weight:bold; color:#7048e8; margin-top:2px;">{target_2nd:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{stop_loss}'); alert('1차손절가 ({stop_loss:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+                <div style="font-size:11px; color:#f59f00; font-weight:bold;">🛑 1차손절(-2%) (클릭 복사)</div>
+                <div style="font-size:15px; font-weight:bold; color:#f59f00; margin-top:2px;">{stop_loss:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{absolute_stop_loss}'); alert('절대손절가 ({absolute_stop_loss:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+                <div style="font-size:11px; color:#e03131; font-weight:bold;">🚨 절대손절(-4%) (클릭 복사)</div>
+                <div style="font-size:15px; font-weight:bold; color:#e03131; margin-top:2px;">{absolute_stop_loss:,}원</div>
+            </div>
         </div>
         """
-        components.html(copy_html, height=55)
+        components.html(metrics_click_copy_html, height=75)
 
         with st.expander("📝 텍스트 요약 및 전체 복사 기능"):
             copy_summary = (
@@ -634,7 +634,6 @@ with main_tab2:
     col_left, col_right = st.columns([1, 3.2])
 
     with col_left:
-        # 🔄 검색 모드 및 검색 입력 영역을 상단으로 올리고 순서 교체 (종목 검색 <-> 테마 검색)
         search_mode = st.radio(
             "검색 모드", ["종목 검색", "테마 검색"], horizontal=True, key="s_mode"
         )
