@@ -58,9 +58,9 @@ ticker_bar_html = """
 """
 st.markdown(ticker_bar_html, unsafe_allow_html=True)
 
-# 4개의 상단 메인 탭 구성
+# 4개의 상단 메인 탭 구성 (평단선 차트 명칭 복원)
 main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs(
-    ["📈 평단선 차트", "⭐ 업종·주도테마", "🔥 거래대금 TOP 30", "🌙 시간외 톱 30"]
+    ["📈 평단선 차트", "⭐ 업종·테마 분석", "🔥 거래대금 TOP 30", "🌙 시간외 톱 30"]
 )
 
 
@@ -434,13 +434,11 @@ with main_tab1:
 
 
 # ---------------------------------------------------------
-# TAB 2: 업종·주도테마 분석 대시보드 (정렬 버튼 추가 완료)
+# TAB 2: 업종·테마 분석 대시보드 (두 번째 사진 스타일 복원)
 # ---------------------------------------------------------
 with main_tab2:
-    st.title("⭐ 오늘의 시장 주도 테마 및 업종 분석")
-    st.caption(
-        "테마별 실시간 주도주, 거래대금, 영업이익, 외국인·기관 및 프로그램 수급 종합 분석"
-    )
+    st.title("⭐ 업종·테마 분석 대시보드")
+    st.caption("주도 업종/테마 순위 및 테마별 세부 구성 종목의 시세를 분석합니다.")
 
     THEME_DATA = {
         "광케이블/광섬유": {
@@ -453,14 +451,10 @@ with main_tab2:
                     "price": 1850,
                     "change": 14.50,
                     "amt": 12500000,
-                    "op": 231,
+                    "vol": "12,500,000",
+                    "mcap": "2,100억",
                     "d_vwap": 2100,
                     "w_vwap": 1810,
-                    "m_vwap": 1580,
-                    "m3_vwap": 1450,
-                    "net": -45,
-                    "type": "⚡ 단타",
-                    "prog": "+180억",
                 },
                 {
                     "name": "광전자",
@@ -468,14 +462,10 @@ with main_tab2:
                     "price": 2450,
                     "change": 9.80,
                     "amt": 4200000,
-                    "op": 102,
+                    "vol": "4,200,000",
+                    "mcap": "1,400억",
                     "d_vwap": 1400,
                     "w_vwap": 2100,
-                    "m_vwap": 2050,
-                    "m3_vwap": 1950,
-                    "net": 18,
-                    "type": "🌊 스윙",
-                    "prog": "+12억",
                 },
                 {
                     "name": "RF머트리얼즈",
@@ -483,18 +473,14 @@ with main_tab2:
                     "price": 33750,
                     "change": 29.80,
                     "amt": 3480000,
-                    "op": 1174,
+                    "vol": "3,480,000",
+                    "mcap": "3,920억",
                     "d_vwap": 3920,
                     "w_vwap": 16572,
-                    "m_vwap": 15200,
-                    "m3_vwap": 13800,
-                    "net": 32,
-                    "type": "⚡ 단타",
-                    "prog": "+62억",
                 },
             ],
         },
-        "전선/전력인프라": {
+        "전선": {
             "change": "+8.91%",
             "leader": "대한전선",
             "stocks": [
@@ -504,14 +490,10 @@ with main_tab2:
                     "price": 14200,
                     "change": 8.50,
                     "amt": 18200000,
-                    "op": 2584,
+                    "vol": "18,200,000",
+                    "mcap": "18,500억",
                     "d_vwap": 18500,
                     "w_vwap": 13950,
-                    "m_vwap": 12100,
-                    "m3_vwap": 11500,
-                    "net": 780,
-                    "type": "🌊 스윙",
-                    "prog": "+94억",
                 },
                 {
                     "name": "KBI메탈",
@@ -519,14 +501,10 @@ with main_tab2:
                     "price": 2150,
                     "change": 12.10,
                     "amt": 8900000,
-                    "op": 191,
+                    "vol": "8,900,000",
+                    "mcap": "850억",
                     "d_vwap": 850,
                     "w_vwap": 1850,
-                    "m_vwap": 1780,
-                    "m3_vwap": 1650,
-                    "net": 12,
-                    "type": "⚡ 단타",
-                    "prog": "+8억",
                 },
                 {
                     "name": "LS마린솔루션",
@@ -534,20 +512,44 @@ with main_tab2:
                     "price": 19800,
                     "change": 6.20,
                     "amt": 3100000,
-                    "op": 613,
+                    "vol": "3,100,000",
+                    "mcap": "5,100억",
                     "d_vwap": 5100,
                     "w_vwap": 17200,
-                    "m_vwap": 16500,
-                    "m3_vwap": 15200,
-                    "net": 130,
-                    "type": "🏆 중장기",
-                    "prog": "+25억",
+                },
+            ],
+        },
+        "통신장비": {
+            "change": "+7.51%",
+            "leader": "이노인스트루먼트",
+            "stocks": [
+                {
+                    "name": "이노인스트루먼트",
+                    "code": "215790",
+                    "price": 2150,
+                    "change": 5.20,
+                    "amt": 5200000,
+                    "vol": "5,200,000",
+                    "mcap": "1,200억",
+                    "d_vwap": 2100,
+                    "w_vwap": 2050,
+                },
+                {
+                    "name": "CS",
+                    "code": "065770",
+                    "price": 3100,
+                    "change": 4.10,
+                    "amt": 2100000,
+                    "vol": "2,100,000",
+                    "mcap": "980억",
+                    "d_vwap": 3000,
+                    "w_vwap": 2900,
                 },
             ],
         },
         "반도체 대표주(생산)": {
             "change": "+6.94%",
-            "leader": "SK하이닉스",
+            "leader": "삼성전자",
             "stocks": [
                 {
                     "name": "삼성전자",
@@ -555,14 +557,10 @@ with main_tab2:
                     "price": 72500,
                     "change": 4.50,
                     "amt": 28500000,
-                    "op": 20600,
-                    "d_vwap": 4320000,
-                    "w_vwap": 71000,
-                    "m_vwap": 66200,
-                    "m3_vwap": 64000,
-                    "net": 656700,
-                    "type": "🏆 중장기",
-                    "prog": "+450억",
+                    "vol": "28,500,000",
+                    "mcap": "432,000억",
+                    "d_vwap": 71000,
+                    "w_vwap": 66200,
                 },
                 {
                     "name": "SK하이닉스",
@@ -570,49 +568,47 @@ with main_tab2:
                     "price": 188500,
                     "change": 8.90,
                     "amt": 8900000,
-                    "op": 16700,
-                    "d_vwap": 1370000,
-                    "w_vwap": 165000,
-                    "m_vwap": 158000,
-                    "m3_vwap": 149000,
-                    "net": 120500,
-                    "type": "🏆 중장기",
-                    "prog": "+310억",
+                    "vol": "8,900,000",
+                    "mcap": "137,000억",
+                    "d_vwap": 165000,
+                    "w_vwap": 158000,
                 },
+            ],
+        },
+        "5G(5세대 이동통신)": {
+            "change": "+6.59%",
+            "leader": "RFHIC",
+            "stocks": [
                 {
-                    "name": "DB하이텍",
-                    "code": "000990",
-                    "price": 48500,
-                    "change": 7.20,
-                    "amt": 1250000,
-                    "op": 606,
-                    "d_vwap": 21500,
-                    "w_vwap": 47200,
-                    "m_vwap": 41500,
-                    "m3_vwap": 39800,
-                    "net": 2100,
-                    "type": "🌊 스윙",
-                    "prog": "+45억",
-                },
+                    "name": "RFHIC",
+                    "code": "218410",
+                    "price": 21500,
+                    "change": 3.10,
+                    "amt": 1500000,
+                    "vol": "1,500,000",
+                    "mcap": "3,100억",
+                    "d_vwap": 21000,
+                    "w_vwap": 20500,
+                }
             ],
         },
     }
 
-    st.subheader("🔥 오늘의 시장 주도 테마 TOP 3")
-    top_keys = list(THEME_DATA.keys())[:3]
+    st.subheader("🔥 인기 업종·테마 Top (1위 ~ 5위)")
+    top_keys = list(THEME_DATA.keys())[:5]
     top_cols = st.columns(len(top_keys))
 
     for i, t_name in enumerate(top_keys):
         t_info = THEME_DATA[t_name]
         rank_num = i + 1
         card_html = (
-            '<div style="background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">'
+            '<div style="background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); min-height: 110px;">'
             f'<div style="display: flex; justify-content: space-between; align-items: center;">'
-            f'<span style="background-color: #ffebee; color: #d32f2f; font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 12px;">주도 {rank_num}위</span>'
-            f'<span style="color: #d32f2f; font-weight: bold; font-size: 15px;">{t_info["change"]}</span>'
+            f'<span style="color: #d32f2f; font-weight: bold; font-size: 13px;">{rank_num}위</span>'
+            f'<span style="color: #d32f2f; font-weight: bold; font-size: 13px;">{t_info["change"]}</span>'
             "</div>"
-            f'<div style="font-weight: bold; font-size: 16px; margin-top: 8px; color: #111;">{t_name}</div>'
-            f'<div style="font-size: 12px; font-weight: bold; color: #1971c2; margin-top: 6px;">⭐ 대장주: {t_info["leader"]}</div>'
+            f'<div style="font-weight: bold; font-size: 14px; margin-top: 6px; color: #111;">{t_name}</div>'
+            f'<div style="font-size: 11px; color: #666; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{t_info["leader"]} 외</div>'
             "</div>"
         )
         with top_cols[i]:
@@ -620,105 +616,107 @@ with main_tab2:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    c_col1, c_col2 = st.columns([1, 1])
-    with c_col1:
-        selected_theme = st.selectbox(
-            "상세 분석할 테마 선택", list(THEME_DATA.keys()), key="theme_sel"
+    # 좌우 분할 레이아웃 (왼쪽: 테마 목록 선택 / 오른쪽: 상세 테이블)
+    col_left, col_right = st.columns([1, 3.2])
+
+    with col_left:
+        st.markdown(
+            "### 📊 인기 테마 목록 (총 25개)",
+            unsafe_allow_html=True,
         )
-    with c_col2:
-        theme_sort_mode = st.radio(
-            "테마 내 종목 정렬",
-            ["기본 순위", "거래대금 많은순", "등락률 높은순"],
-            horizontal=True,
-            key="theme_sort_radio",
+        search_theme = st.text_input(
+            "테마 검색...", "", label_visibility="collapsed", placeholder="테마 검색..."
         )
 
-    if selected_theme:
-        st.subheader(f"📌 [{selected_theme}] 세부 종목 및 평단선 진단")
-        stocks_list = THEME_DATA[selected_theme]["stocks"]
+        theme_list = list(THEME_DATA.keys())
+        if search_theme.strip():
+            theme_list = [
+                t for t in theme_list if search_theme.strip() in t
+            ]
 
-        if theme_sort_mode == "거래대금 많은순":
-            stocks_list = sorted(
-                stocks_list, key=lambda x: x["amt"], reverse=True
-            )
-        elif theme_sort_mode == "등락률 높은순":
-            stocks_list = sorted(
-                stocks_list, key=lambda x: x["change"], reverse=True
-            )
+        selected_theme = st.radio(
+            "테마 선택",
+            theme_list,
+            index=0,
+            label_visibility="collapsed",
+            key="theme_radio_list",
+        )
 
-        table_rows_html = ""
-        for idx, item in enumerate(stocks_list, start=1):
-            s_name = item["name"]
-            s_code = item["code"]
-            curr_price = item["price"]
-            change_pct = item["change"]
-            trade_amt = item["amt"]
-            op_profit = item["op"]
-            trade_type = item["type"]
-            prog_amt = item["prog"]
+    with col_right:
+        if selected_theme:
+            st.markdown(f"### 📌 {selected_theme}", unsafe_allow_html=True)
 
-            d_vwap = item["w_vwap"]
-            w_vwap = item["m_vwap"]
-            m_vwap = item["m3_vwap"]
-            d_disp = ((curr_price - d_vwap) / d_vwap) * 100
-
-            profit_badge = (
-                '<span style="color:#0ca678; font-weight:bold;">🟢 흑자</span>'
-                if op_profit > 0
-                else '<span style="color:#f03e3e; font-weight:bold;">🔴 적자</span>'
+            theme_sort_mode = st.radio(
+                "정렬 필터",
+                ["전체", "거래대금 상위", "상승 TOP"],
+                horizontal=True,
+                key=f"sort_{selected_theme}",
             )
 
-            table_rows_html += f"""
-            <tr style="border-bottom: 1px solid #f0f0f0; height: 60px; font-size: 12px;">
-                <td style="text-align: center;">{idx}</td>
-                <td style="font-weight: bold;">{s_name} <br><span style="color:#1c7ed6; font-size:10px;">{trade_type}</span></td>
-                <td style="text-align: center;">{s_code}</td>
-                <td style="text-align: center;">{profit_badge}</td>
-                <td style="text-align: center; color: #d32f2f; font-weight: bold;">💻 {prog_amt}</td>
-                <td style="text-align: right; font-weight: bold;">{curr_price:,}원</td>
-                <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change_pct:.2f}%</td>
-                <td style="text-align: right;">{trade_amt:,}백만</td>
-                <td style="text-align: center; background-color: #fff9db;"><b>{d_vwap:,}원</b><br><span style="color:{'#d32f2f' if d_disp>0 else '#1976d2'};">({d_disp:+.1f}%)</span></td>
-                <td style="text-align: center; background-color: #fff3bf;"><b>{w_vwap:,}원</b></td>
-                <td style="text-align: center; background-color: #ffec99;"><b>{m_vwap:,}원</b></td>
-            </tr>
+            stocks_list = THEME_DATA[selected_theme]["stocks"]
+
+            if theme_sort_mode == "거래대금 상위":
+                stocks_list = sorted(
+                    stocks_list, key=lambda x: x["amt"], reverse=True
+                )
+            elif theme_sort_mode == "상승 TOP":
+                stocks_list = sorted(
+                    stocks_list, key=lambda x: x["change"], reverse=True
+                )
+
+            table_rows_html = ""
+            for idx, item in enumerate(stocks_list, start=1):
+                s_name = item["name"]
+                s_code = item["code"]
+                curr_price = item["price"]
+                change_pct = item["change"]
+                vol = item["vol"]
+                trade_amt = item["amt"]
+                mcap = item["mcap"]
+
+                table_rows_html += f"""
+                <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
+                    <td style="text-align: center;">{idx}</td>
+                    <td style="font-weight: bold;">{s_name}</td>
+                    <td style="text-align: center;">{s_code}</td>
+                    <td style="text-align: right; font-weight: bold;">{curr_price:,}원</td>
+                    <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change_pct:.2f}%</td>
+                    <td style="text-align: right;">{vol}</td>
+                    <td style="text-align: right;">{trade_amt:,}백만</td>
+                    <td style="text-align: right;">{mcap}</td>
+                </tr>
+                """
+
+            full_table_html = f"""
+            <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+                <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 800px;">
+                    <thead>
+                        <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 35px;">
+                            <th style="text-align: center;">순위</th>
+                            <th style="text-align: left;">종목명</th>
+                            <th style="text-align: center;">종목코드</th>
+                            <th style="text-align: right;">현재가</th>
+                            <th style="text-align: right;">전일대비</th>
+                            <th style="text-align: right;">거래량</th>
+                            <th style="text-align: right;">거래대금</th>
+                            <th style="text-align: right;">시가총액</th>
+                        </tr>
+                    </thead>
+                    <tbody>{table_rows_html}</tbody>
+                </table>
+            </div>
             """
-
-        full_table_html = f"""
-        <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 20px;">
-            <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 950px;">
-                <thead>
-                    <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 35px;">
-                        <th style="text-align: center;">순위</th>
-                        <th style="text-align: left;">종목명</th>
-                        <th style="text-align: center;">코드</th>
-                        <th style="text-align: center;">실적</th>
-                        <th style="text-align: center;">프로그램 수급</th>
-                        <th style="text-align: right;">현재가</th>
-                        <th style="text-align: right;">등락률</th>
-                        <th style="text-align: right;">거래대금</th>
-                        <th style="text-align: center; background-color: #fff9db;">일봉 평단</th>
-                        <th style="text-align: center; background-color: #fff3bf;">주봉 평단</th>
-                        <th style="text-align: center; background-color: #ffec99;">월봉 평단</th>
-                    </tr>
-                </thead>
-                <tbody>{table_rows_html}</tbody>
-            </table>
-        </div>
-        """
-        components.html(
-            full_table_html, height=len(stocks_list) * 65 + 50, scrolling=True
-        )
+            components.html(
+                full_table_html, height=len(stocks_list) * 60 + 50, scrolling=True
+            )
 
 
 # ---------------------------------------------------------
-# TAB 3: 전체 거래대금 TOP 30 대시보드 (정렬 버튼 추가 완료)
+# TAB 3: 전체 거래대금 TOP 30 대시보드 (정렬 기능 포함)
 # ---------------------------------------------------------
 with main_tab3:
     st.title("🔥 전체 거래대금 TOP 30 대시보드")
-    st.caption(
-        "오늘 시장에서 가장 자금이 많이 몰린 상위 종목들의 평단선 및 타점 분석"
-    )
+    st.caption("오늘 시장에서 가장 자금이 많이 몰린 상위 종목들의 평단선 및 타점 분석")
 
     t30_sort_mode = st.radio(
         "정렬 기준 선택",
@@ -903,7 +901,7 @@ with main_tab3:
 
 
 # ---------------------------------------------------------
-# TAB 4: 시간외 거래 TOP 30 대시보드 (정렬 버튼 포함)
+# TAB 4: 시간외 거래 TOP 30 대시보드 (정렬 기능 포함)
 # ---------------------------------------------------------
 with main_tab4:
     st.title("🌙 시간외 단일가 거래 TOP 30 대시보드")
