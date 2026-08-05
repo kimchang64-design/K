@@ -464,6 +464,11 @@ with main_tab1:
         last_vwap = int(df["평단가"].iloc[-1])
         disparity = ((last_close - last_vwap) / last_vwap) * 100
 
+        # VI 가격 계산 (정적 VI: 전일 종가 기준 +10%, -10%)
+        prev_close_val = float(df["종가"].iloc[-2]) if len(df) > 1 else float(df["종가"].iloc[-1])
+        vi_upper = int(prev_close_val * 1.10)
+        vi_lower = int(prev_close_val * 0.90)
+
         f_info = get_financial_info(code)
         mcap_val = f_info["mcap"]
         op_profit = f_info["op_profit"]
@@ -523,7 +528,7 @@ with main_tab1:
         <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 5px;">
             <div onclick="navigator.clipboard.writeText('{last_close}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#666; font-weight:bold;">현재가 (클릭 복사)</div>
-                <div style="font-size:15px; font-weight:bold; color:#111; margin-top:2px;">{last_close:,}원</div>
+                <div style="font-size:15px; font-weight:bold; color:#111; margin-top:2px;">{last_close:,}원 <span style="font-size:11px; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.2f}%)</span></div>
             </div>
             
             <div onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
@@ -531,24 +536,24 @@ with main_tab1:
                 <div style="font-size:15px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원 <span style="font-size:11px; font-weight:normal; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.1f}%)</span></div>
             </div>
 
-            <div onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 1차목표(+5%) (클릭 복사)</div>
-                <div style="font-size:15px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_1st:,}원</div>
+            <div onclick="navigator.clipboard.writeText('{vi_upper}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#d63384; font-weight:bold;">⚡ VI상한(+10%) (클릭 복사)</div>
+                <div style="font-size:15px; font-weight:bold; color:#d63384; margin-top:2px;">{vi_upper:,}원 <span style="font-size:11px;">(+10.0%)</span></div>
             </div>
 
-            <div onclick="navigator.clipboard.writeText('{target_2nd}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#7048e8; font-weight:bold;">🚀 2차목표(+10%) (클릭 복사)</div>
-                <div style="font-size:15px; font-weight:bold; color:#7048e8; margin-top:2px;">{target_2nd:,}원</div>
+            <div onclick="navigator.clipboard.writeText('{vi_lower}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#0d6efd; font-weight:bold;">⚡ VI하한(-10%) (클릭 복사)</div>
+                <div style="font-size:15px; font-weight:bold; color:#0d6efd; margin-top:2px;">{vi_lower:,}원 <span style="font-size:11px;">(-10.0%)</span></div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 1차목표(+5%) (클릭 복사)</div>
+                <div style="font-size:15px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_1st:,}원 <span style="font-size:11px;">(+5.0%)</span></div>
             </div>
 
             <div onclick="navigator.clipboard.writeText('{stop_loss}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#f59f00; font-weight:bold;">🛑 1차손절(-2%) (클릭 복사)</div>
-                <div style="font-size:15px; font-weight:bold; color:#f59f00; margin-top:2px;">{stop_loss:,}원</div>
-            </div>
-
-            <div onclick="navigator.clipboard.writeText('{absolute_stop_loss}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#e03131; font-weight:bold;">🚨 절대손절(-4%) (클릭 복사)</div>
-                <div style="font-size:15px; font-weight:bold; color:#e03131; margin-top:2px;">{absolute_stop_loss:,}원</div>
+                <div style="font-size:15px; font-weight:bold; color:#f59f00; margin-top:2px;">{stop_loss:,}원 <span style="font-size:11px;">(-2.0%)</span></div>
             </div>
         </div>
         """
@@ -558,8 +563,8 @@ with main_tab1:
             copy_summary = (
                 f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
                 f"• 매매성향: {trade_type} | 괴리율: {disparity:+.2f}%\n"
-                f"• 현재가: {last_close:,}원 | 평단가: {last_vwap:,}원\n"
-                f"• 매수타점범위: {last_vwap:,}원 ~ {buy_limit:,}원 (손절짧은타점)\n"
+                f"• 현재가: {last_close:,}원 ({disparity:+.2f}%) | 평단가: {last_vwap:,}원\n"
+                f"• ⚡ VI 상한(+10%): {vi_upper:,}원 | VI 하한(-10%): {vi_lower:,}원\n"
                 f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
                 f"• 🚀 2차목표(+10%): {target_2nd:,}원\n"
                 f"• 🛑 1차손절(-2%): {stop_loss:,}원\n"
@@ -571,7 +576,7 @@ with main_tab1:
         
         hover_x = [d.strftime("%Y-%m-%d") for d in df.index]
         
-        hover_close = [f"종가: {int(val):,}원" for val in df["종가"]]
+        hover_close = [f"종가: {int(val):,}원 ({disparity:+.2f}%)" for val in df["종가"]]
         hover_vwap = [f"누적 평단가: {int(val):,}원" if pd.notna(val) else "누적 평단가: -" for val in df["평단가"]]
         hover_net_inc = [f"순매수 증감: {int(val):,}주" for val in df["누적순매수증감"]]
 
@@ -613,28 +618,44 @@ with main_tab1:
             )
         )
 
+        # VI 상/하한선 추가 (% 및 가격 표시)
+        fig.add_hline(
+            y=vi_upper,
+            line_dash="dash",
+            line_color="#d63384",
+            annotation_text=f"⚡ VI 상한 (+10.0%): {vi_upper:,}원",
+            annotation_position="top right",
+        )
+        fig.add_hline(
+            y=vi_lower,
+            line_dash="dash",
+            line_color="#0d6efd",
+            annotation_text=f"⚡ VI 하한 (-10.0%): {vi_lower:,}원",
+            annotation_position="bottom right",
+        )
+
         fig.add_hline(
             y=target_1st,
             line_dash="dot",
-            line_color="#1f77b4",
-            annotation_text=f"🎯 1차 목표가(+5%): {target_1st:,}원",
-            annotation_position="top right",
+            line_color="#2b8a3e",
+            annotation_text=f"🎯 1차 목표가 (+5.0%): {target_1st:,}원",
+            annotation_position="top left",
         )
         fig.add_hline(
             y=stop_loss,
             line_dash="dash",
-            line_color="#ff7f0e",
-            annotation_text=f"🛑 1차 손절가(-2%): {stop_loss:,}원",
-            annotation_position="bottom right",
+            line_color="#f59f00",
+            annotation_text=f"🛑 1차 손절가 (-2.0%): {stop_loss:,}원",
+            annotation_position="bottom left",
         )
 
         fig.update_layout(
-            title=f"{stock_name} ({code}) - 평단선 및 누적 순매수 증감 추세 차트",
+            title=f"{stock_name} ({code}) - 평단선, VI 구간 및 순매수 증감 추세 차트",
             margin=dict(l=20, r=20, t=35, b=20),
             hovermode="x unified",
             template="plotly_white",
             height=380,
-            yaxis=dict(title="가격 (원)"),
+            yaxis=dict(title="가격 (원) / %"),
             yaxis2=dict(title="누적 순매수 증감 (주)", overlaying="y", side="right", showgrid=False)
         )
 
@@ -662,11 +683,11 @@ with main_tab1:
             card_rows_html += f"""
             <tr style="border-bottom: 1px solid #f0f0f0; height: 40px; font-size: 12px;">
                 <td style="text-align: center; font-weight: bold; color: #333;">{d_str}</td>
-                <td onclick="navigator.clipboard.writeText('{c_val}');" style="text-align: right; font-weight: bold; color: #1f77b4; cursor: pointer;" title="클릭 시 즉시 복사">{c_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{c_val}');" style="text-align: right; font-weight: bold; color: #1f77b4; cursor: pointer;" title="클릭 시 즉시 복사">{c_val:,}원 <span style="font-size:10px; color:#2b8a3e;">({disparity:+.1f}%)</span></td>
                 <td onclick="navigator.clipboard.writeText('{v_val}');" style="text-align: right; font-weight: bold; color: #ff7f0e; cursor: pointer; background: #fff9db;" title="클릭 시 즉시 복사">{v_val:,}원</td>
                 <td onclick="navigator.clipboard.writeText('{n_val}');" style="text-align: right; font-weight: bold; color: {'#d32f2f' if n_val>=0 else '#7048e8'}; cursor: pointer;" title="클릭 시 즉시 복사">{n_val:,}주</td>
-                <td onclick="navigator.clipboard.writeText('{t1_val}');" style="text-align: right; font-weight: bold; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t1_val:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{s1_val}');" style="text-align: right; font-weight: bold; color: #e03131; cursor: pointer;" title="클릭 시 즉시 복사">{s1_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{t1_val}');" style="text-align: right; font-weight: bold; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t1_val:,}원 <span style="font-size:10px;">(+5.0%)</span></td>
+                <td onclick="navigator.clipboard.writeText('{s1_val}');" style="text-align: right; font-weight: bold; color: #e03131; cursor: pointer;" title="클릭 시 즉시 복사">{s1_val:,}원 <span style="font-size:10px;">(-2.0%)</span></td>
             </tr>
             """
             
