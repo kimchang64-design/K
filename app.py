@@ -95,12 +95,11 @@ def get_stock_ticker_map():
     }
     try:
         today_str = datetime.datetime.now().strftime("%Y%m%d")
-        for mkt in ["ALL"]:
-            tickers = stock.get_market_ticker_list(today_str, market=mkt)
-            for t in tickers:
-                name = stock.get_market_ticker_name(t)
-                if name and isinstance(name, str):
-                    name_map[name.strip()] = t
+        tickers = stock.get_market_ticker_list(today_str, market="ALL")
+        for t in tickers:
+            name = stock.get_market_ticker_name(t)
+            if name and isinstance(name, str):
+                name_map[name.strip()] = t
     except Exception:
         pass
     return name_map
@@ -120,7 +119,7 @@ def resolve_code_or_name(user_input):
     if user_input in name_map:
         return name_map[user_input], user_input
 
-    # 부분 일치 검색 지원 (예: 'SK하'만 쳐도 'SK하이닉스' 매칭)
+    # 부분 일치 검색 지원 (예: 'SK하이닉스', '삼성' 등)
     for name, code in name_map.items():
         if user_input.lower() in name.lower():
             return code, name
@@ -204,23 +203,25 @@ def get_financial_info(code):
 # TAB 1: 평단선 차트
 # ---------------------------------------------------------
 with main_tab1:
-    # 세션 상태에 최근 검색 기록 리스트 초기화
+    # 세션 상태 초기화
     if "search_history" not in st.session_state:
         st.session_state.search_history = ["삼성전자", "SK하이닉스"]
+    if "selected_search_stock" not in st.session_state:
+        st.session_state.selected_search_stock = "삼성전자"
 
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
         raw_input = st.text_input(
             "종목 입력",
-            "삼성전자",
+            value=st.session_state.selected_search_stock,
             key="vwap_code_input",
             label_visibility="collapsed",
             placeholder="종목명 또는 코드 입력",
         )
         code, stock_name = resolve_code_or_name(raw_input)
 
-        # 🕒 최근 검색 기록에 추가 (중복 방지 및 최신순 유지)
+        # 현재 검색된 종목이 유효하면 최근 검색 기록에 추가
         if stock_name and stock_name not in st.session_state.search_history:
             st.session_state.search_history.insert(0, stock_name)
             if len(st.session_state.search_history) > 8:
@@ -228,7 +229,7 @@ with main_tab1:
 
         st.caption(f"📌 **종목:** {stock_name} ({code})")
 
-        # 🕒 최근 검색한 종목 버튼 기록 표시 영역
+        # 🕒 최근 검색 기록 버튼 영역
         if st.session_state.search_history:
             st.markdown(
                 "<span style='font-size:11px; color:#666;'>최근 검색 기록:</span>",
@@ -242,7 +243,7 @@ with main_tab1:
                     if st.button(
                         hist_name, key=f"hist_{idx}", use_container_width=True
                     ):
-                        st.session_state.vwap_code_input = hist_name
+                        st.session_state.selected_search_stock = hist_name
                         st.rerun()
 
     with col2:
