@@ -11,14 +11,13 @@ st.set_page_config(
     layout="wide",
 )
 
-# 여백 최소화 및 클립보드 복사 안내 스타일 패치 CSS
+# 여백 최소화 패치 CSS
 st.markdown(
     """
     <style>
         .block-container { padding-top: 0.8rem; padding-bottom: 0rem; padding-left: 2rem; padding-right: 2rem; }
         div[data-testid="stMetricValue"] { font-size: 1.05rem !important; font-weight: bold; }
         div[data-testid="stMetricLabel"] { font-size: 0.75rem !important; }
-        .copy-box { background: #f8f9fa; border: 1px solid #ced4da; padding: 10px; border-radius: 6px; text-align: center; margin-top: 5px; }
     </style>
 """,
     unsafe_allow_html=True,
@@ -202,37 +201,45 @@ with main_tab1:
             label_visibility="collapsed",
         )
 
-    # 📅 한글 날짜(연도·월) 직접 선택 UI 구성
-    st.markdown("📅 **조회 기간 설정 (한글 선택)**")
-    k_col1, k_col2, k_col3, k_col4 = st.columns([1, 1, 1, 1])
+    # 📅 연도, 월, 일까지 완벽하게 선택 가능한 한글 날짜 설정 UI
+    st.markdown("📅 **조회 기간 설정 (연도·월·일 상세 선택)**")
+    d_cols = st.columns(6)
 
-    with k_col1:
-        start_year = st.selectbox(
-            "시작 연도", [2022, 2023, 2024, 2025, 2026], index=2, key="s_year"
+    with d_cols[0]:
+        s_year = st.selectbox(
+            "시작 연도", [2022, 2023, 2024, 2025, 2026], index=2, key="sy"
         )
-    with k_col2:
-        start_month = st.selectbox(
-            "시작 월", list(range(1, 13)), index=0, key="s_mon"
+    with d_cols[1]:
+        s_mon = st.selectbox(
+            "시작 월", list(range(1, 13)), index=0, key="sm"
         )
-    with k_col3:
-        end_year = st.selectbox(
-            "종료 연도", [2022, 2023, 2024, 2025, 2026], index=4, key="e_year"
-        )
-    with k_col4:
-        end_month = st.selectbox(
-            "종료 월", list(range(1, 13)), index=7, key="e_mon"
+    with d_cols[2]:
+        s_day = st.selectbox(
+            "시작 일", list(range(1, 32)), index=0, key="sd"
         )
 
-    # 선택된 연/월의 첫날과 마지막 날 계산
-    start_date = datetime.date(start_year, start_month, 1)
-    if end_month == 12:
-        end_date = datetime.date(end_year + 1, 1, 1) - datetime.timedelta(
-            days=1
+    with d_cols[3]:
+        e_year = st.selectbox(
+            "종료 연도", [2022, 2023, 2024, 2025, 2026], index=4, key="ey"
         )
-    else:
-        end_date = datetime.date(end_year, end_month + 1, 1) - datetime.timedelta(
-            days=1
+    with d_cols[4]:
+        e_mon = st.selectbox(
+            "종료 월", list(range(1, 13)), index=7, key="em"
         )
+    with d_cols[5]:
+        e_day = st.selectbox(
+            "종료 일", list(range(1, 32)), index=4, key="ed"
+        )
+
+    try:
+        start_date = datetime.date(s_year, s_mon, s_day)
+    except ValueError:
+        start_date = datetime.date(s_year, s_mon, 1)
+
+    try:
+        end_date = datetime.date(e_year, e_mon, e_day)
+    except ValueError:
+        end_date = datetime.date(e_year, e_mon, 1)
 
     s_date = start_date.strftime("%Y%m%d")
     e_date = end_date.strftime("%Y%m%d")
@@ -333,29 +340,29 @@ with main_tab1:
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
         m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
 
-        # 📋 키움차트/주문창 붙여넣기용 단가 수치 원클릭 복사 컴포넌트 추가
+        # 📋 확인창 없이 곧바로 복사되는 단가 복사 버튼 (키움차트/주문창 붙여넣기용)
         st.markdown(
-            "### 📋 키움차트/주문창 단가 수치 복사하기 (클릭 시 자동 복사)"
+            "### 📋 키움차트/주문창 단가 수치 복사하기 (클릭 시 확인창 없이 즉시 복사)"
         )
         copy_html = f"""
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button onclick="navigator.clipboard.writeText('{last_vwap}'); alert('평단선 단가 ({last_vwap})가 복사되었습니다!');" style="background:#1a73e8; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
+            <button onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#1a73e8; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
                 📌 평단선 ({last_vwap}) 복사
             </button>
-            <button onclick="navigator.clipboard.writeText('{target_1st}'); alert('1차 목표가 ({target_1st})가 복사되었습니다!');" style="background:#0ca678; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
+            <button onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#0ca678; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
                 🎯 1차목표 ({target_1st}) 복사
             </button>
-            <button onclick="navigator.clipboard.writeText('{target_2nd}'); alert('2차 목표가 ({target_2nd})가 복사되었습니다!');" style="background:#7048e8; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
+            <button onclick="navigator.clipboard.writeText('{target_2nd}');" style="background:#7048e8; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
                 🚀 2차목표 ({target_2nd}) 복사
             </button>
-            <button onclick="navigator.clipboard.writeText('{stop_loss}'); alert('1차 손절가 ({stop_loss})가 복사되었습니다!');" style="background:#f59f00; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
+            <button onclick="navigator.clipboard.writeText('{stop_loss}');" style="background:#f59f00; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
                 🛑 1차손절 ({stop_loss}) 복사
             </button>
-            <button onclick="navigator.clipboard.writeText('{absolute_stop_loss}'); alert('절대 손절가 ({absolute_stop_loss})가 복사되었습니다!');" style="background:#e03131; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
+            <button onclick="navigator.clipboard.writeText('{absolute_stop_loss}');" style="background:#e03131; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
                 🚨 절대손절 ({absolute_stop_loss}) 복사
             </button>
         </div>
-        <p style="font-size: 11px; color: #666; margin-top: 5px;">💡 버튼을 클릭하면 순수 숫자 단가가 클립보드에 복사되며, 키움증권 HTS/MTS 주문창이나 차트 가격 설정란에 바로 <code>Ctrl + V</code>로 붙여넣기 하실 수 있습니다.</p>
+        <p style="font-size: 11px; color: #666; margin-top: 5px;">💡 버튼을 클릭하면 확인창 없이 순수 숫자 단가가 클립보드에 곧바로 복사되어, 키움증권 HTS/MTS 주문창이나 차트 가격 입력란에 <code>Ctrl + V</code>로 바로 붙여넣으실 수 있습니다.</p>
         """
         components.html(copy_html, height=85)
 
