@@ -27,31 +27,31 @@ st.markdown(
 ticker_bar_html = """
 <div style="display: flex; gap: 10px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px;">
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">???? 국내 지수</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇰🇷 국내 지수</div>
         <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">2,755.20 (+0.85%) <span style="color:#333; font-weight:normal;">(코스피)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">???? 코스닥 지수</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇰🇷 코스닥 지수</div>
         <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">872.40 (+1.12%) <span style="color:#333; font-weight:normal;">(코스닥)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 160px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">?? 파생 시장</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">📈 파생 시장</div>
         <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">362.85 (+0.92%) <span style="color:#333; font-weight:normal;">(선물지수)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">? 베이시스 상태</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">⚡ 베이시스 상태</div>
         <div style="font-size: 12px; font-weight: bold; color: #1971c2;">+0.65 (콘탱고) <span style="color:#333; font-weight:normal;">(시장 베이시스)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 160px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">???? 미국 증시</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇺🇸 미국 증시</div>
         <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">17,928.30 (+1.45%) <span style="color:#333; font-weight:normal;">(나스닥)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">?? 외환 시장</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">💱 외환 시장</div>
         <div style="font-size: 12px; font-weight: bold; color: #1971c2;">1,372.50원 (-3.2원) <span style="color:#333; font-weight:normal;">(원/달러 환율)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 180px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">?? 프로그램 수급</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">📊 프로그램 수급</div>
         <div style="font-size: 11px; font-weight: bold; color: #d32f2f;">+2,150억 (차익+800) <span style="color:#333; font-weight:normal;">(프로그램 순매매)</span></div>
     </div>
 </div>
@@ -60,7 +60,7 @@ st.markdown(ticker_bar_html, unsafe_allow_html=True)
 
 # 4개의 상단 메인 탭 구성
 main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs(
-    ["?? 평단선 차트", "? 업종·테마 분석", "?? 거래대금 TOP 30", "?? 시간외 톱 30"]
+    ["📈 평단선 차트", "⭐ 업종·테마 분석", "🔥 거래대금 TOP 30", "🌙 시간외 톱 30"]
 )
 
 
@@ -108,7 +108,7 @@ def get_financial_info(code):
         "005930": {
             "mcap": 4320000,
             "op_profit": 656700,
-            "trade_type": "?? 중장기",
+            "trade_type": "🏆 중장기",
             "foreign_net": "+125,400주",
             "inst_net": "+45,200주",
             "prog_net": "+450억 (매수우위)",
@@ -117,7 +117,7 @@ def get_financial_info(code):
         "000660": {
             "mcap": 1370000,
             "op_profit": 120500,
-            "trade_type": "?? 중장기",
+            "trade_type": "🏆 중장기",
             "foreign_net": "+89,100주",
             "inst_net": "-12,400주",
             "prog_net": "+310억 (강한유입)",
@@ -126,7 +126,7 @@ def get_financial_info(code):
         "000990": {
             "mcap": 21500,
             "op_profit": 2100,
-            "trade_type": "?? 스윙",
+            "trade_type": "🌊 스윙",
             "foreign_net": "+12,500주",
             "inst_net": "+3,200주",
             "prog_net": "+45억",
@@ -135,7 +135,7 @@ def get_financial_info(code):
         "010170": {
             "mcap": 2100,
             "op_profit": -45,
-            "trade_type": "? 단타",
+            "trade_type": "⚡ 단타",
             "foreign_net": "+340,000주",
             "inst_net": "+1,200주",
             "prog_net": "+180억 (폭발적)",
@@ -147,7 +147,7 @@ def get_financial_info(code):
         {
             "mcap": 5000,
             "op_profit": 120,
-            "trade_type": "?? 스윙",
+            "trade_type": "🌊 스윙",
             "foreign_net": "+5,000주",
             "inst_net": "+1,200주",
             "prog_net": "+5억",
@@ -171,7 +171,7 @@ with main_tab1:
             placeholder="종목명 또는 코드 입력",
         )
         code, stock_name = resolve_code_or_name(raw_input)
-        st.caption(f"?? **종목:** {stock_name} ({code})")
+        st.caption(f"📌 **종목:** {stock_name} ({code})")
 
     with col2:
         timeframe_options = [
@@ -281,51 +281,51 @@ with main_tab1:
         absolute_stop_loss = int(last_vwap * 0.96)
 
         if 0 <= disparity <= 5.0:
-            status_signal = "?? 최적타점"
+            status_signal = "🔥 최적타점"
         elif disparity > 20.0:
-            status_signal = "?? 진입주의"
+            status_signal = "⚠️ 진입주의"
         elif last_close < absolute_stop_loss:
-            status_signal = "?? 절대손절이탈"
+            status_signal = "🚨 절대손절이탈"
         else:
-            status_signal = "?? 추세유지"
+            status_signal = "📊 추세유지"
 
         f1, f2, f3, f4 = st.columns(4)
-        f1.metric("?? 시가총액", f"{mcap_val:,} 억원")
+        f1.metric("🏢 시가총액", f"{mcap_val:,} 억원")
         f2.metric(
-            "?? 영업이익",
+            "💵 영업이익",
             f"{op_profit:,} 억원",
-            "?? 흑자" if op_profit > 0 else "?? 적자",
+            "🟢 흑자" if op_profit > 0 else "🔴 적자",
         )
-        f3.metric("?? AI 추천 성향", trade_type)
-        f4.metric("? 진단 상태", status_signal)
+        f3.metric("🎯 AI 추천 성향", trade_type)
+        f4.metric("⚡ 진단 상태", status_signal)
 
         s_c1, s_c2, s_c3, s_c4 = st.columns(4)
-        s_c1.metric("?? 외국인 순매수", foreign_net)
-        s_c2.metric("??? 기관 순매수", inst_net)
-        s_c3.metric("?? 실시간 프로그램", prog_net)
-        s_c4.metric("?? 신용잔고율", credit_ratio)
+        s_c1.metric("🌐 외국인 순매수", foreign_net)
+        s_c2.metric("🏛️ 기관 순매수", inst_net)
+        s_c3.metric("💻 실시간 프로그램", prog_net)
+        s_c4.metric("💳 신용잔고율", credit_ratio)
 
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
         m1, m2, m3, m4, m5, m6 = st.columns(6)
         m1.metric("현재가", f"{last_close:,}원")
         m2.metric(f"{selected_timeframe} 평단선", f"{last_vwap:,}원", f"{disparity:+.1f}%")
-        m3.metric("??1차목표(+5%)", f"{target_1st:,}원")
-        m4.metric("??2차목표(+10%)", f"{target_2nd:,}원")
-        m5.metric("??1차손절(-2%)", f"{stop_loss:,}원")
-        m6.metric("??절대손절(-4%)", f"{absolute_stop_loss:,}원")
+        m3.metric("🎯1차목표(+5%)", f"{target_1st:,}원")
+        m4.metric("🚀2차목표(+10%)", f"{target_2nd:,}원")
+        m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
+        m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
 
-        with st.expander("?? 텍스트 요약 및 복사 기능 열기"):
+        with st.expander("📝 텍스트 요약 및 복사 기능 열기"):
             copy_summary = (
                 f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
-                f"? 시가총액: {mcap_val:,}억원 | 영업이익: {op_profit:,}억원\n"
-                f"? 외국인: {foreign_net} | 기관: {inst_net} | 프로그램: {prog_net}\n"
-                f"? 현재가: {last_close:,}원 | 평단선: {last_vwap:,}원 ({disparity:+.2f}%)\n"
-                f"? 매수범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
-                f"? ?? 1차목표(+5%): {target_1st:,}원\n"
-                f"? ?? 2차목표(+10%): {target_2nd:,}원\n"
-                f"? ?? 1차손절(-2%): {stop_loss:,}원\n"
-                f"? ?? 절대사수손절(-4%): {absolute_stop_loss:,}원"
+                f"• 시가총액: {mcap_val:,}억원 | 영업이익: {op_profit:,}억원\n"
+                f"• 외국인: {foreign_net} | 기관: {inst_net} | 프로그램: {prog_net}\n"
+                f"• 현재가: {last_close:,}원 | 평단선: {last_vwap:,}원 ({disparity:+.2f}%)\n"
+                f"• 매수범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
+                f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
+                f"• 🚀 2차목표(+10%): {target_2nd:,}원\n"
+                f"• 🛑 1차손절(-2%): {stop_loss:,}원\n"
+                f"• 🚨 절대사수손절(-4%): {absolute_stop_loss:,}원"
             )
             st.code(copy_summary, language="text")
 
@@ -353,28 +353,28 @@ with main_tab1:
             y=target_1st,
             line_dash="dot",
             line_color="#1f77b4",
-            annotation_text=f"?? 1차 목표가(+5%): {target_1st:,}원",
+            annotation_text=f"🎯 1차 목표가(+5%): {target_1st:,}원",
             annotation_position="top right",
         )
         fig.add_hline(
             y=target_2nd,
             line_dash="dot",
             line_color="#9467bd",
-            annotation_text=f"?? 2차 목표가(+10%): {target_2nd:,}원",
+            annotation_text=f"🚀 2차 목표가(+10%): {target_2nd:,}원",
             annotation_position="top right",
         )
         fig.add_hline(
             y=stop_loss,
             line_dash="dash",
             line_color="#ff7f0e",
-            annotation_text=f"?? 1차 손절가(-2%): {stop_loss:,}원",
+            annotation_text=f"🛑 1차 손절가(-2%): {stop_loss:,}원",
             annotation_position="bottom right",
         )
         fig.add_hline(
             y=absolute_stop_loss,
             line_dash="dash",
             line_color="red",
-            annotation_text=f"?? 절대사수 손절가(-4%): {absolute_stop_loss:,}원",
+            annotation_text=f"🚨 절대사수 손절가(-4%): {absolute_stop_loss:,}원",
             annotation_position="bottom right",
         )
 
@@ -392,7 +392,7 @@ with main_tab1:
 # TAB 2: 업종·테마 분석 대시보드 (세 번째 사진 스타일 완벽 복원)
 # ---------------------------------------------------------
 with main_tab2:
-    st.markdown("### ? 업종·테마 분석 대시보드")
+    st.markdown("### ⭐ 업종·테마 분석 대시보드")
     st.caption(
         "실적(흑자/적자), 매매유형(단타/스윙/중장기), 평단선 괴리율을 기반의 매수타점을 종합 분석합니다."
     )
@@ -409,7 +409,7 @@ with main_tab2:
                     "change": 4.50,
                     "amt": 12500,
                     "op": 231,
-                    "trade_type": "? 단타",
+                    "trade_type": "⚡ 단타",
                     "d_vwap": 1810,
                     "d_disp": "+2.1%",
                     "w_vwap": 1580,
@@ -426,7 +426,7 @@ with main_tab2:
                     "change": 9.80,
                     "amt": 4200,
                     "op": 18,
-                    "trade_type": "?? 스윙",
+                    "trade_type": "🌊 스윙",
                     "d_vwap": 2100,
                     "d_disp": "+16.6%",
                     "w_vwap": 2050,
@@ -449,7 +449,7 @@ with main_tab2:
                     "change": 8.50,
                     "amt": 18200,
                     "op": 780,
-                    "trade_type": "?? 스윙",
+                    "trade_type": "🌊 스윙",
                     "d_vwap": 13950,
                     "d_disp": "+1.8%",
                     "w_vwap": 12100,
@@ -472,7 +472,7 @@ with main_tab2:
                     "change": 5.20,
                     "amt": 5200,
                     "op": -45,
-                    "trade_type": "? 단타",
+                    "trade_type": "⚡ 단타",
                     "d_vwap": 2100,
                     "d_disp": "+2.3%",
                     "w_vwap": 2050,
@@ -495,7 +495,7 @@ with main_tab2:
                     "change": 4.50,
                     "amt": 20600,
                     "op": 656700,
-                    "trade_type": "?? 중장기",
+                    "trade_type": "🏆 중장기",
                     "d_vwap": 71000,
                     "d_disp": "+2.1%",
                     "w_vwap": 66200,
@@ -512,7 +512,7 @@ with main_tab2:
                     "change": 8.90,
                     "amt": 16700,
                     "op": 120500,
-                    "trade_type": "?? 중장기",
+                    "trade_type": "🏆 중장기",
                     "d_vwap": 165000,
                     "d_disp": "+14.2%",
                     "w_vwap": 158000,
@@ -529,7 +529,7 @@ with main_tab2:
                     "change": 7.20,
                     "amt": 606,
                     "op": 2100,
-                    "trade_type": "?? 스윙",
+                    "trade_type": "🌊 스윙",
                     "d_vwap": 47200,
                     "d_disp": "+2.8%",
                     "w_vwap": 41500,
@@ -552,7 +552,7 @@ with main_tab2:
                     "change": 3.10,
                     "amt": 1500,
                     "op": 32,
-                    "trade_type": "? 단타",
+                    "trade_type": "⚡ 단타",
                     "d_vwap": 21000,
                     "d_disp": "+2.3%",
                     "w_vwap": 20500,
@@ -575,7 +575,7 @@ with main_tab2:
                     "change": 6.50,
                     "amt": 1500,
                     "op": 120,
-                    "trade_type": "? 단타",
+                    "trade_type": "⚡ 단타",
                     "d_vwap": 24500,
                     "d_disp": "+2.4%",
                     "w_vwap": 23000,
@@ -598,7 +598,7 @@ with main_tab2:
                     "change": 5.40,
                     "amt": 1450,
                     "op": 780,
-                    "trade_type": "? 단타",
+                    "trade_type": "⚡ 단타",
                     "d_vwap": 130000,
                     "d_disp": "+3.1%",
                     "w_vwap": 125000,
@@ -621,7 +621,7 @@ with main_tab2:
                     "change": 1.50,
                     "amt": 980,
                     "op": 2100,
-                    "trade_type": "?? 중장기",
+                    "trade_type": "🏆 중장기",
                     "d_vwap": 180000,
                     "d_disp": "+1.1%",
                     "w_vwap": 175000,
@@ -683,7 +683,7 @@ with main_tab2:
             theme_list = list(dict.fromkeys(matched)) if matched else theme_list
 
         st.markdown(
-            f"### ?? 인기 테마 목록 ({len(theme_list)}개)",
+            f"### 📊 인기 테마 목록 ({len(theme_list)}개)",
             unsafe_allow_html=True,
         )
 
@@ -697,7 +697,7 @@ with main_tab2:
 
     with col_right:
         if selected_theme and selected_theme in THEME_DATA:
-            st.markdown(f"### ?? {selected_theme}", unsafe_allow_html=True)
+            st.markdown(f"### 📌 {selected_theme}", unsafe_allow_html=True)
 
             theme_sort_mode = st.radio(
                 "정렬 필터",
@@ -744,7 +744,7 @@ with main_tab2:
                     <td style="text-align: center; font-weight: bold;">{idx}</td>
                     <td style="font-weight: bold;">{s_name}<br><span style="color:#1c7ed6; font-size:10px;">{t_type}</span></td>
                     <td style="text-align: center;"><span style="border:1px solid #ddd; padding:2px 6px; border-radius:4px; font-size:10px;">{s_code}</span></td>
-                    <td style="text-align: center; color:{profit_color}; font-weight:bold;">?? {profit_str}</td>
+                    <td style="text-align: center; color:{profit_color}; font-weight:bold;">🟢 {profit_str}</td>
                     <td style="text-align: right; font-weight: bold;">{curr_price:,}원</td>
                     <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change_pct:.2f}%</td>
                     <td style="text-align: right;">{amt:,}백만</td>
@@ -786,7 +786,7 @@ with main_tab2:
 # TAB 3: 전체 거래대금 TOP 30 대시보드 (정렬 기능 포함)
 # ---------------------------------------------------------
 with main_tab3:
-    st.title("?? 전체 거래대금 TOP 30 대시보드")
+    st.title("🔥 전체 거래대금 TOP 30 대시보드")
     st.caption("오늘 시장에서 가장 자금이 많이 몰린 상위 종목들의 평단선 및 타점 분석")
 
     t30_sort_mode = st.radio(
@@ -805,7 +805,7 @@ with main_tab3:
             "amt": 20600,
             "vwap": 71000,
             "w_vwap": 66200,
-            "type": "?? 중장기",
+            "type": "🏆 중장기",
             "prog": "+450억",
         },
         {
@@ -816,7 +816,7 @@ with main_tab3:
             "amt": 16700,
             "vwap": 165000,
             "w_vwap": 158000,
-            "type": "?? 중장기",
+            "type": "🏆 중장기",
             "prog": "+310억",
         },
         {
@@ -827,7 +827,7 @@ with main_tab3:
             "amt": 2584,
             "vwap": 13950,
             "w_vwap": 12100,
-            "type": "?? 스윙",
+            "type": "🌊 스윙",
             "prog": "+94억",
         },
         {
@@ -838,7 +838,7 @@ with main_tab3:
             "amt": 231,
             "vwap": 1810,
             "w_vwap": 1580,
-            "type": "? 단타",
+            "type": "⚡ 단타",
             "prog": "+180억",
         },
         {
@@ -849,7 +849,7 @@ with main_tab3:
             "amt": 1174,
             "vwap": 16572,
             "w_vwap": 15200,
-            "type": "? 단타",
+            "type": "⚡ 단타",
             "prog": "+62억",
         },
     ]
@@ -920,7 +920,7 @@ with main_tab3:
 # TAB 4: 시간외 거래 TOP 30 대시보드 (정렬 기능 포함)
 # ---------------------------------------------------------
 with main_tab4:
-    st.title("?? 시간외 단일가 거래 TOP 30 대시보드")
+    st.title("🌙 시간외 단일가 거래 TOP 30 대시보드")
     st.caption(
         "장 마감 후 시간외 단일가에서 급등하거나 거래량이 폭발한 다음 날 시초가 공략 종목 리스트"
     )
@@ -939,7 +939,7 @@ with main_tab4:
             "price": 1950,
             "change": 9.80,
             "amt": 850,
-            "type": "? 단타급등",
+            "type": "⚡ 단타급등",
             "reason": "재료 호재",
         },
         {
@@ -948,7 +948,7 @@ with main_tab4:
             "price": 14800,
             "change": 4.20,
             "amt": 1200,
-            "type": "?? 스윙",
+            "type": "🌊 스윙",
             "reason": "대규모 수주",
         },
         {
@@ -957,7 +957,7 @@ with main_tab4:
             "price": 35500,
             "change": 5.10,
             "amt": 640,
-            "type": "? 단타",
+            "type": "⚡ 단타",
             "reason": "시간외 매수세",
         },
         {
@@ -966,7 +966,7 @@ with main_tab4:
             "price": 2220,
             "change": 3.20,
             "amt": 410,
-            "type": "? 단타",
+            "type": "⚡ 단타",
             "reason": "구리 가격 급등",
         },
         {
@@ -975,7 +975,7 @@ with main_tab4:
             "price": 20500,
             "change": 3.50,
             "amt": 310,
-            "type": "?? 중장기",
+            "type": "🏆 중장기",
             "reason": "실적 호조",
         },
     ]
