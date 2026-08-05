@@ -202,9 +202,10 @@ with main_tab1:
     if "target_stock" not in st.session_state:
         st.session_state.target_stock = "삼성전자"
 
-    col1, col2 = st.columns([1, 2.5])
+    # 레이아웃을 좌우로 나누어 배치 (왼쪽: 검색 및 종목코드 복사 / 오른쪽: HTS 수급 분석 패널)
+    col_left, col_right = st.columns([1, 2.5])
 
-    with col1:
+    with col_left:
 
         def on_input_change():
             st.session_state.target_stock = st.session_state.stock_input_field
@@ -271,7 +272,7 @@ with main_tab1:
                         use_container_width=True,
                     )
 
-    with col2:
+    with col_right:
         timeframe_options = [
             "일봉",
             "주봉",
@@ -300,7 +301,7 @@ with main_tab1:
         )
 
     # ---------------------------------------------------------
-    # 📌 항목과 수치를 빈 여백 없이 바짝 밀착시킨 HTS 수급 분석 패널
+    # 📌 오른쪽 여백 위치로 이동된 HTS 수급 분석 패널
     # ---------------------------------------------------------
     s_date_dummy = "20240101"
     e_date_dummy = datetime.datetime.now().strftime("%Y%m%d")
