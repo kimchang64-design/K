@@ -217,6 +217,15 @@ with main_tab1:
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
+        # 입력값 변경 콜백 (엔터 또는 입력 즉시 반영)
+        def on_input_change():
+            st.session_state.target_stock = st.session_state.stock_input_field
+
+        # 최근 검색 버튼 클릭 콜백
+        def set_recent_stock(val):
+            st.session_state.target_stock = val
+            st.session_state.stock_input_field = val
+
         # 입력창과 [검색] 버튼을 가로로 배치 (비율 4:1)
         sc1, sc2 = st.columns([4, 1])
 
@@ -224,6 +233,8 @@ with main_tab1:
             input_val = st.text_input(
                 "종목 입력",
                 value=st.session_state.target_stock,
+                key="stock_input_field",
+                on_change=on_input_change,
                 placeholder="종목명 또는 코드",
                 label_visibility="collapsed",
             )
@@ -259,13 +270,13 @@ with main_tab1:
                 st.session_state.search_history[:4]
             ):
                 with history_cols[idx % len(history_cols)]:
-                    if st.button(
+                    st.button(
                         hist_name,
                         key=f"hist_btn_{idx}",
+                        on_click=set_recent_stock,
+                        args=(hist_name,),
                         use_container_width=True,
-                    ):
-                        st.session_state.target_stock = hist_name
-                        st.rerun()
+                    )
 
     with col2:
         timeframe_options = [
