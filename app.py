@@ -206,20 +206,26 @@ with main_tab1:
     # 세션 상태 초기화
     if "search_history" not in st.session_state:
         st.session_state.search_history = ["삼성전자", "SK하이닉스"]
-    if "selected_search_stock" not in st.session_state:
-        st.session_state.selected_search_stock = "삼성전자"
+    if "input_stock_val" not in st.session_state:
+        st.session_state.input_stock_val = "삼성전자"
 
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
+        # 텍스트 입력창 처리
         raw_input = st.text_input(
             "종목 입력",
-            value=st.session_state.selected_search_stock,
+            value=st.session_state.input_stock_val,
             key="vwap_code_input",
             label_visibility="collapsed",
             placeholder="종목명 또는 코드 입력",
         )
-        code, stock_name = resolve_code_or_name(raw_input)
+
+        # 사용자가 직접 입력한 값이 변경되었을 때 동기화
+        if raw_input != st.session_state.input_stock_val:
+            st.session_state.input_stock_val = raw_input
+
+        code, stock_name = resolve_code_or_name(st.session_state.input_stock_val)
 
         # 현재 검색된 종목이 유효하면 최근 검색 기록에 추가
         if stock_name and stock_name not in st.session_state.search_history:
@@ -227,7 +233,8 @@ with main_tab1:
             if len(st.session_state.search_history) > 8:
                 st.session_state.search_history.pop()
 
-        st.caption(f"📌 **종목:** {stock_name} ({code})")
+        # 📌 종목 코드명 옆에 한글 종목명 함께 표시
+        st.caption(f"📌 **종목:** {stock_name} ({code} - {stock_name})")
 
         # 🕒 최근 검색 기록 버튼 영역
         if st.session_state.search_history:
@@ -243,7 +250,7 @@ with main_tab1:
                     if st.button(
                         hist_name, key=f"hist_{idx}", use_container_width=True
                     ):
-                        st.session_state.selected_search_stock = hist_name
+                        st.session_state.input_stock_val = hist_name
                         st.rerun()
 
     with col2:
