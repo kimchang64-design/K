@@ -6,7 +6,10 @@ import streamlit.components.v1 as components
 from pykrx import stock
 
 # 페이지 기본 설정
-st.set_page_config(page_title="주식 분석 포털 - 평단선 & 실시간 선물·프로그램 수급", layout="wide")
+st.set_page_config(
+    page_title="주식 분석 포털 - 평단선 & 주도주/거래대금/시간외",
+    layout="wide",
+)
 
 # 여백 최소화 패치 CSS
 st.markdown(
@@ -55,8 +58,10 @@ ticker_bar_html = """
 """
 st.markdown(ticker_bar_html, unsafe_allow_html=True)
 
-# 상단 탭 구성
-main_tab1, main_tab2 = st.tabs(["📈 평단선 차트", "⭐ 업종·테마 분석"])
+# 4개의 상단 메인 탭 구성
+main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs(
+    ["📈 평단선 차트", "⭐ 업종·주도테마", "🔥 거래대금 TOP 30", "🌙 시간외 톱 30"]
+)
 
 
 # ---------------------------------------------------------
@@ -429,16 +434,18 @@ with main_tab1:
 
 
 # ---------------------------------------------------------
-# TAB 2: 업종·테마 분석 대시보드
+# TAB 2: 업종·주도테마 분석 대시보드
 # ---------------------------------------------------------
 with main_tab2:
-    st.title("⭐ 업종·테마 분석 대시보드")
-    st.caption("테마별 실시간 시세, 영업이익, 외인·기관 및 실시간 프로그램 수급 종합 분석")
+    st.title("⭐ 오늘의 시장 주도 테마 및 업종 분석")
+    st.caption(
+        "테마별 실시간 주도주, 거래대금, 영업이익, 외국인·기관 및 프로그램 수급 종합 분석"
+    )
 
     THEME_DATA = {
         "광케이블/광섬유": {
             "change": "+9.99%",
-            "up_down": "상승 13 / 하락 0",
+            "leader": "대한광통신",
             "stocks": [
                 (
                     "대한광통신",
@@ -490,9 +497,9 @@ with main_tab2:
                 ),
             ],
         },
-        "전선": {
+        "전선/전력인프라": {
             "change": "+8.91%",
-            "up_down": "상승 8 / 하락 0",
+            "leader": "대한전선",
             "stocks": [
                 (
                     "대한전선",
@@ -546,7 +553,7 @@ with main_tab2:
         },
         "반도체 대표주(생산)": {
             "change": "+6.94%",
-            "up_down": "상승 3 / 하락 0",
+            "leader": "SK하이닉스",
             "stocks": [
                 (
                     "삼성전자",
@@ -600,171 +607,252 @@ with main_tab2:
         },
     }
 
-    st.subheader("🔥 인기 업종·테마 Top")
+    st.subheader("🔥 오늘의 시장 주도 테마 TOP 3")
     top_keys = list(THEME_DATA.keys())[:3]
     top_cols = st.columns(len(top_keys))
 
     for i, t_name in enumerate(top_keys):
         t_info = THEME_DATA[t_name]
-        top_stocks_str = ", ".join([s[0] for s in t_info["stocks"][:3]])
         with top_cols[i]:
             st.markdown(
                 f"""
-            <div style="background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div style="background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="background-color: #ffebee; color: #d32f2f; font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{i+1}위</span>
+                    <span style="background-color: #ffebee; color: #d32f2f; font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 12px;">주도 {i+1위}</span>
                     <span style="color: #d32f2f; font-weight: bold; font-size: 15px;">{t_info['change']}</span>
                 </div>
-                <div style="font-weight: bold; font-size: 15px; margin-top: 8px; color: #111;">{t_name}</div>
-                <div style="font-size: 11px; color: #777; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{top_stocks_str}</div>
+                <div style="font-weight: bold; font-size: 16px; margin-top: 8px; color: #111;">{t_name}</div>
+                <div style="font-size: 12px; color: #1971c2; margin-top: 6px; font-weight: bold;">⭐ 대장주: {t_info['leader']}</div>
             </div>
             """,
                 unsafe_allow_html=True,
             )
 
     st.markdown("<br>", unsafe_allow_html=True)
+    selected_theme = st.selectbox(
+        "상세 분석할 테마 선택", list(THEME_DATA.keys())
+    )
 
-    col_left, col_right = st.columns([1, 3.5])
+    if selected_theme:
+        st.subheader(f"📌 [{selected_theme}] 세부 종목 및 평단선 진단")
+        stocks_list = THEME_DATA[selected_theme]["stocks"]
 
-    with col_left:
-        search_mode = st.radio(
-            "검색 모드", ["테마 검색", "종목 검색"], horizontal=True
-        )
-        search_input = st.text_input("🔍 검색어 입력...", "")
+        table_rows_html = ""
+        for idx, item in enumerate(stocks_list, start=1):
+            s_name, s_code = item[0], str(item[1]).zfill(6)
+            curr_price, change_pct = item[2], item[3]
+            trade_amt, op_profit = item[5], item[11]
+            trade_type, prog_amt = item[12], item[13]
 
-        selected_theme = None
-        matched_themes_from_stock = []
+            d_vwap, w_vwap, m_vwap, m3_vwap = item[7], item[8], item[9], item[10]
+            d_disp = ((curr_price - d_vwap) / d_vwap) * 100
 
-        if search_mode == "테마 검색":
-            filtered_themes = [
-                t
-                for t in THEME_DATA.keys()
-                if search_input.strip().lower() in t.lower()
-            ]
-            if filtered_themes:
-                selected_theme = st.radio(
-                    "테마 선택",
-                    filtered_themes,
-                    index=0,
-                    label_visibility="collapsed",
-                )
-            else:
-                st.warning("검색된 테마가 없습니다.")
-        else:
-            query = search_input.strip().lower()
-            if query:
-                for theme_name, theme_info in THEME_DATA.items():
-                    for s in theme_info["stocks"]:
-                        if (
-                            query in s[0].lower()
-                            or query in str(s[1]).zfill(6)
-                        ):
-                            matched_themes_from_stock.append(
-                                (theme_name, s[0])
-                            )
-
-    with col_right:
-        if search_mode == "테마 검색" and selected_theme:
-            themes_to_render = [selected_theme]
-        elif search_mode == "종목 검색" and matched_themes_from_stock:
-            themes_to_render = list(
-                dict.fromkeys([t[0] for t in matched_themes_from_stock])
-            )
-        else:
-            themes_to_render = list(THEME_DATA.keys())[:1]
-
-        for render_theme in themes_to_render:
-            st.subheader(f"📌 {render_theme}")
-            stocks_list = THEME_DATA[render_theme]["stocks"]
-
-            sort_option = st.radio(
-                "정렬 필터",
-                ["전체", "거래대금 상위", "상승 TOP", "프로그램 순매수순"],
-                horizontal=True,
-                key=f"sort_{render_theme}",
+            profit_badge = (
+                f'<span style="color:#0ca678; font-weight:bold;">🟢 흑자</span>'
+                if op_profit > 0
+                else f'<span style="color:#f03e3e; font-weight:bold;">🔴 적자</span>'
             )
 
-            if sort_option == "거래대금 상위":
-                stocks_list = sorted(
-                    stocks_list, key=lambda x: x[5], reverse=True
-                )
-            elif sort_option == "상승 TOP":
-                stocks_list = sorted(
-                    stocks_list, key=lambda x: x[3], reverse=True
-                )
-            elif sort_option == "프로그램 순매수순":
-                stocks_list = sorted(
-                    stocks_list,
-                    key=lambda x: int(
-                        x[13].replace("+", "").replace("억", "").replace(",", "")
-                    ),
-                    reverse=True,
-                )
-
-            table_rows_html = ""
-            for idx, item in enumerate(stocks_list, start=1):
-                s_name, s_code = item[0], str(item[1]).zfill(6)
-                curr_price, change_pct = item[2], item[3]
-                trade_amt, op_profit = item[5], item[11]
-                trade_type, prog_amt = item[12], item[13]
-
-                d_vwap, w_vwap, m_vwap, m3_vwap = (
-                    item[7],
-                    item[8],
-                    item[9],
-                    item[10],
-                )
-                d_disp = ((curr_price - d_vwap) / d_vwap) * 100
-                w_disp = ((curr_price - w_vwap) / w_vwap) * 100
-                m_disp = ((curr_price - m_vwap) / m_vwap) * 100
-                m3_disp = ((curr_price - m3_vwap) / m3_vwap) * 100
-
-                profit_badge = (
-                    f'<span style="color:#0ca678; font-weight:bold;">🟢 흑자 ({op_profit:,}억)</span>'
-                    if op_profit > 0
-                    else f'<span style="color:#f03e3e; font-weight:bold;">🔴 적자 ({op_profit:,}억)</span>'
-                )
-
-                table_rows_html += f"""
-                <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
-                    <td style="text-align: center;">{idx}</td>
-                    <td style="font-weight: bold;">{s_name} <br><span style="color:#1c7ed6; font-size:10px;">{trade_type}</span></td>
-                    <td style="text-align: center;">{s_code}</td>
-                    <td style="text-align: center;">{profit_badge}</td>
-                    <td style="text-align: center; color: #d32f2f; font-weight: bold;">💻 {prog_amt}</td>
-                    <td style="text-align: right; font-weight: bold;">{curr_price:,}원</td>
-                    <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change_pct:.2f}%</td>
-                    <td style="text-align: right;">{trade_amt:,}백만</td>
-                    <td style="text-align: center; background-color: #fff9db;"><b>{d_vwap:,}원</b><br><span style="color:{'#d32f2f' if d_disp>0 else '#1976d2'};">({d_disp:+.1f}%)</span></td>
-                    <td style="text-align: center; background-color: #fff3bf;"><b>{w_vwap:,}원</b><br><span style="color:{'#d32f2f' if w_disp>0 else '#1976d2'};">({w_disp:+.1f}%)</span></td>
-                    <td style="text-align: center; background-color: #ffec99;"><b>{m_vwap:,}원</b><br><span style="color:{'#d32f2f' if m_disp>0 else '#1976d2'};">({m_disp:+.1f}%)</span></td>
-                    <td style="text-align: center; background-color: #e7f5ff;"><b>{m3_vwap:,}원</b><br><span style="color:{'#d32f2f' if m3_disp>0 else '#1976d2'};">({m3_disp:+.1f}%)</span></td>
-                </tr>
-                """
-
-            full_table_html = f"""
-            <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 20px;">
-                <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 1050px;">
-                    <thead>
-                        <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 35px;">
-                            <th style="text-align: center;">순위</th>
-                            <th style="text-align: left;">종목명</th>
-                            <th style="text-align: center;">코드</th>
-                            <th style="text-align: center;">실적</th>
-                            <th style="text-align: center;">실시간 프로그램</th>
-                            <th style="text-align: right;">현재가</th>
-                            <th style="text-align: right;">등락률</th>
-                            <th style="text-align: right;">거래대금</th>
-                            <th style="text-align: center; background-color: #fff9db;">일봉 평단</th>
-                            <th style="text-align: center; background-color: #fff3bf;">주봉 평단</th>
-                            <th style="text-align: center; background-color: #ffec99;">월봉 평단</th>
-                            <th style="text-align: center; background-color: #e7f5ff;">3분봉 평단</th>
-                        </tr>
-                    </thead>
-                    <tbody>{table_rows_html}</tbody>
-                </table>
-            </div>
+            table_rows_html += f"""
+            <tr style="border-bottom: 1px solid #f0f0f0; height: 60px; font-size: 12px;">
+                <td style="text-align: center;">{idx}</td>
+                <td style="font-weight: bold;">{s_name} <br><span style="color:#1c7ed6; font-size:10px;">{trade_type}</span></td>
+                <td style="text-align: center;">{s_code}</td>
+                <td style="text-align: center;">{profit_badge}</td>
+                <td style="text-align: center; color: #d32f2f; font-weight: bold;">💻 {prog_amt}</td>
+                <td style="text-align: right; font-weight: bold;">{curr_price:,}원</td>
+                <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change_pct:.2f}%</td>
+                <td style="text-align: right;">{trade_amt:,}백만</td>
+                <td style="text-align: center; background-color: #fff9db;"><b>{d_vwap:,}원</b><br><span style="color:{'#d32f2f' if d_disp>0 else '#1976d2'};">({d_disp:+.1f}%)</span></td>
+                <td style="text-align: center; background-color: #fff3bf;"><b>{w_vwap:,}원</b></td>
+                <td style="text-align: center; background-color: #ffec99;"><b>{m_vwap:,}원</b></td>
+            </tr>
             """
-            components.html(
-                full_table_html, height=len(stocks_list) * 70 + 50, scrolling=True
-            )
+
+        full_table_html = f"""
+        <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 20px;">
+            <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 950px;">
+                <thead>
+                    <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 35px;">
+                        <th style="text-align: center;">순위</th>
+                        <th style="text-align: left;">종목명</th>
+                        <th style="text-align: center;">코드</th>
+                        <th style="text-align: center;">실적</th>
+                        <th style="text-align: center;">프로그램 수급</th>
+                        <th style="text-align: right;">현재가</th>
+                        <th style="text-align: right;">등락률</th>
+                        <th style="text-align: right;">거래대금</th>
+                        <th style="text-align: center; background-color: #fff9db;">일봉 평단</th>
+                        <th style="text-align: center; background-color: #fff3bf;">주봉 평단</th>
+                        <th style="text-align: center; background-color: #ffec99;">월봉 평단</th>
+                    </tr>
+                </thead>
+                <tbody>{table_rows_html}</tbody>
+            </table>
+        </div>
+        """
+        components.html(
+            full_table_html, height=len(stocks_list) * 65 + 50, scrolling=True
+        )
+
+
+# ---------------------------------------------------------
+# TAB 3: 전체 거래대금 TOP 30 대시보드
+# ---------------------------------------------------------
+with main_tab3:
+    st.title("🔥 전체 거래대금 TOP 30 대시보드")
+    st.caption(
+        "오늘 시장에서 가장 자금이 많이 몰린 상위 종목들의 평단선 및 타점 분석"
+    )
+
+    # 샘플 거래대금 상위 30 데이터 생성 (실전용 확장 리스트)
+    top30_sample = [
+        ("삼성전자", "005930", 72500, +4.50, 20600, 71000, 66200, "🏆 중장기", "+450억"),
+        (
+            "SK하이닉스",
+            "000660",
+            188500,
+            +8.90,
+            16700,
+            165000,
+            158000,
+            "🏆 중장기",
+            "+310억",
+        ),
+        ("대한전선", "001440", 14200, +8.50, 2584, 13950, 12100, "🌊 스윙", "+94억"),
+        ("대한광통신", "010170", 1850, +14.50, 231, 1810, 1580, "⚡ 단타", "+180억"),
+        (
+            "RF머트리얼즈",
+            "327260",
+            33750,
+            +29.80,
+            1174,
+            16572,
+            15200,
+            "⚡ 단타",
+            "+62억",
+        ),
+        ("에코프로비엠", "247540", 215000, +3.20, 1840, 210000, 198000, "🌊 스윙", "+40억"),
+        ("에코프로", "086520", 98000, +2.10, 1520, 96000, 92000, "🌊 스윙", "+25억"),
+        ("셀트리온", "068270", 182000, +1.50, 980, 180000, 175000, "🏆 중장기", "+15억"),
+        ("한미반도체", "042700", 134000, +5.40, 1450, 130000, 125000, "⚡ 단타", "+85억"),
+        ("LG에너지솔루션", "373220", 382000, -0.50, 1120, 385000, 390000, "🏆 중장기", "-30억"),
+    ]
+
+    # 30개까지 채우기 위해 반복 확장 (실전 데이터 연동 시 pykrx 거래대금 상위 API로 대체 가능)
+    full_top30 = (top30_sample * 3)[:30]
+
+    t30_rows = ""
+    for idx, item in enumerate(full_top30, start=1):
+        s_name, s_code = item[0], item[1]
+        price, change, amt, vwap, w_vwap, t_type, prog = (
+            item[2],
+            item[3],
+            item[4],
+            item[5],
+            item[6],
+            item[7],
+            item[8],
+        )
+        disp = ((price - vwap) / vwap) * 100
+
+        t30_rows += f"""
+        <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
+            <td style="text-align: center; font-weight: bold; color: {'#d32f2f' if idx<=3 else '#333'};">{idx}</td>
+            <td style="font-weight: bold;">{s_name} <span style="color:#1c7ed6; font-size:10px;">({t_type})</span></td>
+            <td style="text-align: center;">{s_code}</td>
+            <td style="text-align: right; font-weight: bold;">{price:,}원</td>
+            <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change:.2f}%</td>
+            <td style="text-align: right; font-weight: bold;">{amt:,} 백만</td>
+            <td style="text-align: center; color: #d32f2f; font-weight: bold;">{prog}</td>
+            <td style="text-align: center; background-color: #fff9db;"><b>{vwap:,}원</b> <span style="color:{'#d32f2f' if disp>0 else '#1976d2'};">({disp:+.1f}%)</span></td>
+            <td style="text-align: center; background-color: #fff3bf;"><b>{w_vwap:,}원</b></td>
+        </tr>
+        """
+
+    t30_table = f"""
+    <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 900px;">
+            <thead>
+                <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 35px;">
+                    <th style="text-align: center;">순위</th>
+                    <th style="text-align: left;">종목명</th>
+                    <th style="text-align: center;">코드</th>
+                    <th style="text-align: right;">현재가</th>
+                    <th style="text-align: right;">등락률</th>
+                    <th style="text-align: right;">거래대금</th>
+                    <th style="text-align: center;">프로그램 수급</th>
+                    <th style="text-align: center; background-color: #fff9db;">일봉 평단선</th>
+                    <th style="text-align: center; background-color: #fff3bf;">주봉 평단선</th>
+                </tr>
+            </thead>
+            <tbody>{t30_rows}</tbody>
+        </table>
+    </div>
+    """
+    components.html(t30_table, height=750, scrolling=True)
+
+
+# ---------------------------------------------------------
+# TAB 4: 시간외 거래 TOP 30 대시보드
+# ---------------------------------------------------------
+with main_tab4:
+    st.title("🌙 시간외 단일가 거래 TOP 30 대시보드")
+    st.caption(
+        "장 마감 후 시간외 단일가에서 급등하거나 거래량이 폭발한 다음 날 시초가 공략 종목 리스트"
+    )
+
+    after_hours_sample = [
+        ("대한광통신", "010170", 1950, +9.80, 850, "⚡ 단타급등", "재료 호재"),
+        ("대한전선", "001440", 14800, +4.20, 1200, "🌊 스윙", "대규모 수주"),
+        ("RF머트리얼즈", "327260", 35500, +5.10, 640, "⚡ 단타", "시간외 매수세"),
+        ("KBI메탈", "024840", 2220, +3.20, 410, "⚡ 단타", "구리 가격 급등"),
+        ("LS마린솔루션", "028670", 20500, +3.50, 310, "🏆 중장기", "실적 호조"),
+    ]
+
+    full_after = (after_hours_sample * 6)[:30]
+
+    ah_rows = ""
+    for idx, item in enumerate(full_after, start=1):
+        s_name, s_code = item[0], item[1]
+        price, change, amt, t_type, reason = (
+            item[2],
+            item[3],
+            item[4],
+            item[5],
+            item[6],
+        )
+
+        ah_rows += f"""
+        <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
+            <td style="text-align: center; font-weight: bold; color: {'#d32f2f' if idx<=3 else '#333'};">{idx}</td>
+            <td style="font-weight: bold;">{s_name} <span style="color:#1c7ed6; font-size:10px;">({t_type})</span></td>
+            <td style="text-align: center;">{s_code}</td>
+            <td style="text-align: right; font-weight: bold;">{price:,}원</td>
+            <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change:.2f}%</td>
+            <td style="text-align: right;">{amt:,} 백만</td>
+            <td style="text-align: center; color: #2b8a3e; font-weight: bold;">{reason}</td>
+            <td style="text-align: center;"><span style="background-color: #e7f5ff; color: #1971c2; padding: 3px 8px; border-radius: 4px; font-weight: bold;">시초가 공략 관심</span></td>
+        </tr>
+        """
+
+    ah_table = f"""
+    <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 900px;">
+            <thead>
+                <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 35px;">
+                    <th style="text-align: center;">순위</th>
+                    <th style="text-align: left;">종목명</th>
+                    <th style="text-align: center;">코드</th>
+                    <th style="text-align: right;">시간외 종가</th>
+                    <th style="text-align: right;">시간외 등락률</th>
+                    <th style="text-align: right;">시간외 거래대금</th>
+                    <th style="text-align: center;">특이사항 / 재료</th>
+                    <th style="text-align: center;">전략 가이드</th>
+                </tr>
+            </thead>
+            <tbody>{ah_rows}</tbody>
+        </table>
+    </div>
+    """
+    components.html(ah_table, height=750, scrolling=True)
