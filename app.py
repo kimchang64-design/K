@@ -42,29 +42,17 @@ with main_tab1:
 
     with col2:
         timeframe_options = [
-            "일봉",
-            "주봉",
-            "월봉",
-            "1분봉",
-            "3분봉",
-            "5분봉",
-            "10분봉",
-            "15분봉",
-            "30분봉",
-            "45분봉",
-            "60분봉",
-            "90분봉",
-            "120분봉",
-            "240분봉",
-            "300분봉",
-            "999분봉",
+            "일봉", "주봉", "월봉",
+            "1분봉", "3분봉", "5분봉", "10분봉", "15분봉",
+            "30분봉", "45분봉", "60분봉", "90분봉", "120분봉",
+            "240분봉", "300분봉", "999분봉"
         ]
         selected_timeframe = st.radio(
             "차트 주기 선택 (원클릭 다이렉트 선택)",
             timeframe_options,
             index=0,
             horizontal=True,
-            key="direct_timeframe_select",
+            key="direct_timeframe_select"
         )
 
     if st.session_state.recent_codes:
@@ -213,468 +201,196 @@ with main_tab1:
 
 
 # ---------------------------------------------------------
-# TAB 2: 업종 테마 분석 (실적/매매유형/타점 신호 강화)
+# TAB 2: 업종 테마 분석 (인기 테마 25개 전체 복원 & 추천단가/손절가)
 # ---------------------------------------------------------
 with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
-    st.caption(
-        "실적(흑자/적자), 매매유형(단타/스윙/중장기), 세력평단 괴리율 기반의 매수타점을 종합 분석합니다."
-    )
+    st.caption("25개 인기 테마 시세, 실적, 세력평단 및 [추천 매수단가 / 손절가] 정보 분석")
 
-    # 데이터 구조:
     # (종목명, 코드, 현재가, 전일대비%, 거래량, 거래대금, 시총, 일봉평단, 주봉평단, 월봉평단, 3분봉평단, 영업이익(억), 추천타입)
     THEME_DATA = {
         "광케이블/광섬유": {
-            "change": "+9.99%",
-            "up_down": "상승 13 / 하락 0",
+            "change": "+9.99%", "up_down": "상승 13 / 하락 0",
             "stocks": [
-                (
-                    "대한광통신",
-                    "010170",
-                    1850,
-                    14.50,
-                    12500000,
-                    231,
-                    2100,
-                    1810,
-                    1580,
-                    1450,
-                    1780,
-                    -45,
-                    "⚡ 단타",
-                ),
-                (
-                    "광전자",
-                    "017900",
-                    2450,
-                    9.80,
-                    4200000,
-                    102,
-                    1400,
-                    2100,
-                    2050,
-                    1950,
-                    2350,
-                    18,
-                    "🌊 스윙",
-                ),
-                (
-                    "RF머트리얼즈",
-                    "327260",
-                    33750,
-                    29.80,
-                    3480000,
-                    1174,
-                    3920,
-                    16572,
-                    15200,
-                    13800,
-                    28500,
-                    32,
-                    "⚡ 단타",
-                ),
+                ("대한광통신", "010170", 1850, 14.50, 12500000, 231, 2100, 1810, 1580, 1450, 1780, -45, "⚡ 단타"),
+                ("광전자", "017900", 2450, 9.80, 4200000, 102, 1400, 2100, 2050, 1950, 2350, 18, "🌊 스윙"),
+                ("RF머트리얼즈", "327260", 33750, 29.80, 3480000, 1174, 3920, 16572, 15200, 13800, 28500, 32, "⚡ 단타"),
             ],
         },
         "전선": {
-            "change": "+8.91%",
-            "up_down": "상승 8 / 하락 0",
+            "change": "+8.91%", "up_down": "상승 8 / 하락 0",
             "stocks": [
-                (
-                    "대한전선",
-                    "001440",
-                    14200,
-                    8.50,
-                    18200000,
-                    2584,
-                    18500,
-                    13950,
-                    12100,
-                    11500,
-                    13900,
-                    780,
-                    "🌊 스윙",
-                ),
-                (
-                    "KBI메탈",
-                    "024840",
-                    2150,
-                    12.10,
-                    8900000,
-                    191,
-                    850,
-                    1850,
-                    1780,
-                    1650,
-                    2020,
-                    12,
-                    "⚡ 단타",
-                ),
-                (
-                    "LS마린솔루션",
-                    "028670",
-                    19800,
-                    6.20,
-                    3100000,
-                    613,
-                    5100,
-                    17200,
-                    16500,
-                    15200,
-                    19100,
-                    130,
-                    "🏆 중장기",
-                ),
+                ("대한전선", "001440", 14200, 8.50, 18200000, 2584, 18500, 13950, 12100, 11500, 13900, 780, "🌊 스윙"),
+                ("KBI메탈", "024840", 2150, 12.10, 8900000, 191, 850, 1850, 1780, 1650, 2020, 12, "⚡ 단타"),
+                ("LS마린솔루션", "028670", 19800, 6.20, 3100000, 613, 5100, 17200, 16500, 15200, 19100, 130, "🏆 중장기"),
             ],
         },
         "통신장비": {
-            "change": "+7.51%",
-            "up_down": "상승 44 / 하락 0",
+            "change": "+7.51%", "up_down": "상승 44 / 하락 0",
             "stocks": [
-                (
-                    "이노인스트루먼트",
-                    "215790",
-                    988,
-                    30.00,
-                    8876213,
-                    85,
-                    1923,
-                    760,
-                    720,
-                    680,
-                    910,
-                    -12,
-                    "⚡ 단타",
-                ),
-                (
-                    "CS",
-                    "065770",
-                    1990,
-                    29.98,
-                    723915,
-                    13,
-                    975,
-                    1530,
-                    1480,
-                    1390,
-                    1820,
-                    5,
-                    "⚡ 단타",
-                ),
-                (
-                    "오이솔루션",
-                    "058610",
-                    25150,
-                    29.84,
-                    115747,
-                    29,
-                    2336,
-                    19800,
-                    18900,
-                    17500,
-                    23400,
-                    -88,
-                    "⚡ 단타",
-                ),
-                (
-                    "에이스테크",
-                    "088800",
-                    2260,
-                    25.56,
-                    230131,
-                    4,
-                    1518,
-                    1810,
-                    1720,
-                    1600,
-                    2100,
-                    -210,
-                    "⚡ 단타",
-                ),
-                (
-                    "케이엠더블유",
-                    "032500",
-                    27050,
-                    21.57,
-                    9348459,
-                    243,
-                    7686,
-                    22100,
-                    21000,
-                    19800,
-                    25800,
-                    -150,
-                    "🌊 스윙",
-                ),
-                (
-                    "서진시스템",
-                    "178320",
-                    35000,
-                    16.86,
-                    302016,
-                    109,
-                    9022,
-                    34200,
-                    28200,
-                    26500,
-                    33500,
-                    490,
-                    "🏆 중장기",
-                ),
+                ("이노인스트루먼트", "215790", 988, 30.00, 8876213, 85, 1923, 760, 720, 680, 910, -12, "⚡ 단타"),
+                ("CS", "065770", 1990, 29.98, 723915, 13, 975, 1530, 1480, 1390, 1820, 5, "⚡ 단타"),
+                ("오이솔루션", "058610", 25150, 29.84, 115747, 29, 2336, 19800, 18900, 17500, 23400, -88, "⚡ 단타"),
+                ("에이스테크", "088800", 2260, 25.56, 230131, 4, 1518, 1810, 1720, 1600, 2100, -210, "⚡ 단타"),
+                ("케이엠더블유", "032500", 27050, 21.57, 9348459, 243, 7686, 22100, 21000, 19800, 25800, -150, "🌊 스윙"),
+                ("서진시스템", "178320", 35000, 16.86, 302016, 109, 9022, 34200, 28200, 26500, 33500, 490, "🏆 중장기"),
             ],
         },
         "반도체 대표주(생산)": {
-            "change": "+6.94%",
-            "up_down": "상승 3 / 하락 0",
+            "change": "+6.94%", "up_down": "상승 3 / 하락 0",
             "stocks": [
-                (
-                    "삼성전자",
-                    "005930",
-                    72500,
-                    4.50,
-                    28500000,
-                    20600,
-                    4320000,
-                    71000,
-                    66200,
-                    64000,
-                    71200,
-                    656700,
-                    "🏆 중장기",
-                ),
-                (
-                    "SK하이닉스",
-                    "000660",
-                    188500,
-                    8.90,
-                    8900000,
-                    16700,
-                    1370000,
-                    165000,
-                    158000,
-                    149000,
-                    181000,
-                    120500,
-                    "🏆 중장기",
-                ),
-                (
-                    "DB하이텍",
-                    "000990",
-                    48500,
-                    7.20,
-                    1250000,
-                    606,
-                    21500,
-                    47200,
-                    41500,
-                    39800,
-                    46800,
-                    2100,
-                    "🌊 스윙",
-                ),
+                ("삼성전자", "005930", 72500, 4.50, 28500000, 20600, 4320000, 71000, 66200, 64000, 71200, 656700, "🏆 중장기"),
+                ("SK하이닉스", "000660", 188500, 8.90, 8900000, 16700, 1370000, 165000, 158000, 149000, 181000, 120500, "🏆 중장기"),
+                ("DB하이텍", "000990", 48500, 7.20, 1250000, 606, 21500, 47200, 41500, 39800, 46800, 2100, "🌊 스윙"),
             ],
         },
         "5G(5세대 이동통신)": {
-            "change": "+6.59%",
-            "up_down": "상승 50 / 하락 2",
+            "change": "+6.59%", "up_down": "상승 50 / 하락 2",
             "stocks": [
-                (
-                    "RFHIC",
-                    "218410",
-                    18900,
-                    12.50,
-                    2100000,
-                    396,
-                    4800,
-                    16200,
-                    15500,
-                    14200,
-                    17900,
-                    120,
-                    "🌊 스윙",
-                ),
-                (
-                    "쏠리드",
-                    "050890",
-                    6100,
-                    7.80,
-                    1850000,
-                    112,
-                    3700,
-                    5950,
-                    5100,
-                    4800,
-                    5900,
-                    280,
-                    "🏆 중장기",
-                ),
-                (
-                    "에프알텍",
-                    "083450",
-                    3120,
-                    15.20,
-                    3100000,
-                    96,
-                    820,
-                    2600,
-                    2450,
-                    2300,
-                    2980,
-                    -15,
-                    "⚡ 단타",
-                ),
+                ("RFHIC", "218410", 18900, 12.50, 2100000, 396, 4800, 16200, 15500, 14200, 17900, 120, "🌊 스윙"),
+                ("쏠리드", "050890", 6100, 7.80, 1850000, 112, 3700, 5950, 5100, 4800, 5900, 280, "🏆 중장기"),
+                ("에프알텍", "083450", 3120, 15.20, 3100000, 96, 820, 2600, 2450, 2300, 2980, -15, "⚡ 단타"),
             ],
         },
         "온디바이스 AI": {
-            "change": "+6.57%",
-            "up_down": "상승 18 / 하락 1",
+            "change": "+6.57%", "up_down": "상승 18 / 하락 1",
             "stocks": [
-                (
-                    "삼성전자",
-                    "005930",
-                    72500,
-                    4.50,
-                    28500000,
-                    20600,
-                    4320000,
-                    71000,
-                    66200,
-                    64000,
-                    71200,
-                    656700,
-                    "🏆 중장기",
-                ),
-                (
-                    "제주반도체",
-                    "080220",
-                    24500,
-                    18.20,
-                    14500000,
-                    3550,
-                    8400,
-                    19500,
-                    18200,
-                    16900,
-                    22800,
-                    190,
-                    "⚡ 단타",
-                ),
-                (
-                    "리노공업",
-                    "058470",
-                    210000,
-                    5.40,
-                    620000,
-                    1302,
-                    31900,
-                    192000,
-                    185000,
-                    178000,
-                    205000,
-                    1140,
-                    "🏆 중장기",
-                ),
-                (
-                    "칩스앤미디어",
-                    "094360",
-                    28900,
-                    11.20,
-                    2800000,
-                    809,
-                    5800,
-                    24100,
-                    23000,
-                    21800,
-                    27300,
-                    78,
-                    "🌊 스윙",
-                ),
+                ("삼성전자", "005930", 72500, 4.50, 28500000, 20600, 4320000, 71000, 66200, 64000, 71200, 656700, "🏆 중장기"),
+                ("제주반도체", "080220", 24500, 18.20, 14500000, 3550, 8400, 19500, 18200, 16900, 22800, 190, "⚡ 단타"),
+                ("리노공업", "058470", 210000, 5.40, 620000, 1302, 31900, 192000, 185000, 178000, 205000, 1140, "🏆 중장기"),
+                ("칩스앤미디어", "094360", 28900, 11.20, 2800000, 809, 5800, 24100, 23000, 21800, 27300, 78, "🌊 스윙"),
+            ],
+        },
+        "CXL(컴퓨터 익스프레스 링크)": {
+            "change": "+6.22%", "up_down": "상승 12 / 하락 0",
+            "stocks": [
+                ("네오셈", "253590", 14200, 22.40, 9800000, 1391, 6200, 11500, 10800, 9900, 13500, 125, "⚡ 단타"),
+                ("엑시콘", "092870", 18500, 14.10, 4100000, 758, 3800, 15800, 14900, 13800, 17800, 89, "🌊 스윙"),
             ],
         },
         "HBM(고대역폭메모리)": {
-            "change": "+5.88%",
-            "up_down": "상승 22 / 하락 2",
+            "change": "+5.88%", "up_down": "상승 22 / 하락 2",
             "stocks": [
-                (
-                    "삼성전자",
-                    "005930",
-                    72500,
-                    4.50,
-                    28500000,
-                    20600,
-                    4320000,
-                    71000,
-                    66200,
-                    64000,
-                    71200,
-                    656700,
-                    "🏆 중장기",
-                ),
-                (
-                    "한미반도체",
-                    "042700",
-                    145000,
-                    11.50,
-                    5200000,
-                    7540,
-                    141000,
-                    141000,
-                    121000,
-                    115000,
-                    139000,
-                    3450,
-                    "🌊 스윙",
-                ),
-                (
-                    "피에스케이홀딩스",
-                    "031980",
-                    52000,
-                    8.40,
-                    1800000,
-                    936,
-                    11000,
-                    46500,
-                    43800,
-                    41000,
-                    49800,
-                    680,
-                    "🏆 중장기",
-                ),
+                ("삼성전자", "005930", 72500, 4.50, 28500000, 20600, 4320000, 71000, 66200, 64000, 71200, 656700, "🏆 중장기"),
+                ("한미반도체", "042700", 145000, 11.50, 5200000, 7540, 141000, 141000, 121000, 115000, 139000, 3450, "🌊 스윙"),
+                ("피에스케이홀딩스", "031980", 52000, 8.40, 1800000, 936, 11000, 46500, 43800, 41000, 49800, 680, "🏆 중장기"),
+            ],
+        },
+        "PCB(연성회로기판)": {
+            "change": "+5.40%", "up_down": "상승 15 / 하락 3",
+            "stocks": [
+                ("대덕전자", "353200", 24100, 6.20, 1100000, 265, 12000, 22100, 21200, 20100, 23500, 240, "🌊 스윙"),
+                ("심텍", "222800", 31200, 5.10, 950000, 296, 9900, 29100, 28000, 26800, 30500, 310, "🏆 중장기"),
+            ],
+        },
+        "2차전지(장비)": {
+            "change": "+4.95%", "up_down": "상승 28 / 하락 4",
+            "stocks": [
+                ("피엔티", "137400", 54000, 7.80, 1400000, 756, 12200, 49500, 47200, 45000, 52800, 780, "🏆 중장기"),
+                ("하나기술", "299030", 48500, 4.30, 620000, 300, 4800, 45800, 44100, 42000, 47200, 120, "🌊 스윙"),
+            ],
+        },
+        "로봇(산업용/협동)": {
+            "change": "+4.80%", "up_down": "상승 31 / 하락 2",
+            "stocks": [
+                ("두산로보틱스", "454910", 78000, 9.20, 3200000, 2496, 50500, 71000, 68000, 64000, 76000, -180, "⚡ 단타"),
+                ("레인보우로보틱스", "277810", 162000, 6.10, 1100000, 1782, 31100, 151000, 145000, 138000, 158000, -45, "🌊 스윙"),
+            ],
+        },
+        "바이오시밀러": {
+            "change": "+4.12%", "up_down": "상승 19 / 하락 5",
+            "stocks": [
+                ("셀트리온", "068270", 192000, 3.80, 1500000, 2880, 420000, 184000, 178000, 171000, 189000, 6500, "🏆 중장기"),
+                ("삼성바이오로직스", "207940", 810000, 2.50, 320000, 2592, 576000, 785000, 760000, 735000, 801000, 11000, "🏆 중장기"),
+            ],
+        },
+        "초전도체": {
+            "change": "+3.95%", "up_down": "상승 9 / 하락 1",
+            "stocks": [
+                ("신성델타테크", "065350", 92000, 14.20, 6500000, 5980, 25200, 80100, 75000, 69000, 89500, 320, "⚡ 단타"),
+                ("파워로직스", "047310", 81000, 11.00, 4100000, 3321, 14000, 72500, 68000, 63500, 78800, 140, "⚡ 단타"),
+            ],
+        },
+        "원자력발전": {
+            "change": "+3.80%", "up_down": "상승 25 / 하락 3",
+            "stocks": [
+                ("두산에너빌리티", "034020", 21500, 5.20, 11200000, 2408, 137000, 20200, 19500, 18800, 21100, 1250, "🏆 중장기"),
+                ("우진엔텍", "457550", 24800, 13.50, 5800000, 1438, 2300, 21800, 20500, 19200, 24100, 85, "⚡ 단타"),
+            ],
+        },
+        "방위산업/전쟁": {
+            "change": "+3.65%", "up_down": "상승 20 / 하락 2",
+            "stocks": [
+                ("한화에어로스페이스", "012450", 285000, 6.80, 1800000, 5130, 144000, 265000, 252000, 240000, 280000, 7100, "🏆 중장기"),
+                ("LIG넥스원", "079550", 210000, 4.50, 720000, 1512, 46200, 198000, 191000, 182000, 206000, 1850, "🏆 중장기"),
+            ],
+        },
+        "전력설비/변압기": {
+            "change": "+3.50%", "up_down": "상승 16 / 하락 1",
+            "stocks": [
+                ("HD현대일렉트릭", "267260", 295000, 8.20, 1400000, 4130, 106000, 271000, 258000, 245000, 289000, 3150, "🏆 중장기"),
+                ("제룡전기", "033100", 68000, 10.50, 2100000, 1428, 10900, 61200, 58000, 54500, 66500, 750, "🌊 스윙"),
+            ],
+        },
+        "우주항공산업": {
+            "change": "+3.20%", "up_down": "상승 14 / 하락 2",
+            "stocks": [
+                ("컨코아에어로스페이스", "274500", 12500, 7.80, 1900000, 237, 1800, 11500, 10900, 10200, 12200, -15, "⚡ 단타"),
+                ("AP위성", "211270", 16800, 5.40, 820000, 137, 2500, 15800, 15100, 14200, 16400, 45, "🌊 스윙"),
+            ],
+        },
+        "자율주행": {
+            "change": "+3.10%", "up_down": "상승 22 / 하락 4",
+            "stocks": [
+                ("모트렉스", "118990", 13200, 4.20, 1100000, 145, 3200, 12500, 12000, 11400, 12900, 320, "🌊 스윙"),
+                ("현대오토에버", "307950", 154000, 3.80, 410000, 631, 42200, 148000, 142000, 135000, 151000, 1800, "🏆 중장기"),
+            ],
+        },
+        "의료AI": {
+            "change": "+2.95%", "up_down": "상승 11 / 하락 2",
+            "stocks": [
+                ("루닛", "328130", 52000, 8.90, 2800000, 1456, 14900, 47500, 45000, 42000, 50800, -420, "⚡ 단타"),
+                ("뷰노", "338220", 31500, 6.40, 1200000, 378, 4100, 29200, 28000, 26500, 30800, -150, "⚡ 단타"),
+            ],
+        },
+        "폐배터리 재활용": {
+            "change": "+2.80%", "up_down": "상승 10 / 하락 3",
+            "stocks": [
+                ("성일하이텍", "365340", 68500, 3.50, 450000, 308, 8200, 65800, 63500, 60000, 67200, 110, "🌊 스윙"),
+                ("새빗켐", "107600", 42000, 4.10, 320000, 134, 2500, 40100, 38500, 36200, 41200, 25, "⚡ 단타"),
+            ],
+        },
+        "정밀의료/유전자": {
+            "change": "+2.60%", "up_down": "상승 13 / 하락 4",
+            "stocks": [
+                ("마크로젠", "038290", 22500, 5.10, 620000, 139, 2300, 21200, 20500, 19500, 22100, 60, "🌊 스윙"),
+            ],
+        },
+        "스마트팩토리": {
+            "change": "+2.45%", "up_down": "상승 17 / 하락 3",
+            "stocks": [
+                ("엠아이큐브솔루션", "373170", 15400, 6.20, 890000, 137, 1800, 14400, 13800, 13000, 15100, 15, "⚡ 단타"),
+            ],
+        },
+        "화장품/K-뷰티": {
+            "change": "+2.30%", "up_down": "상승 29 / 하락 6",
+            "stocks": [
+                ("실리콘투", "257720", 45000, 9.10, 5800000, 2610, 27100, 41000, 39000, 36500, 44200, 1250, "🏆 중장기"),
+                ("한국화장품제조", "003350", 62000, 12.40, 2100000, 1302, 2800, 54800, 52000, 48500, 60800, 180, "🌊 스윙"),
+            ],
+        },
+        "엔터테인먼트/K-POP": {
+            "change": "+2.10%", "up_down": "상승 12 / 하락 5",
+            "stocks": [
+                ("JYP Ent.", "035900", 58000, 2.80, 680000, 394, 20600, 56100, 54500, 52000, 57200, 1050, "🏆 중장기"),
+                ("하이브", "352820", 182000, 1.90, 420000, 764, 75800, 178000, 172000, 165000, 180500, 2900, "🏆 중장기"),
             ],
         },
         "분자진단/진단키트": {
-            "change": "+1.95%",
-            "up_down": "상승 18 / 하락 8",
+            "change": "+1.95%", "up_down": "상승 18 / 하락 8",
             "stocks": [
-                (
-                    "씨젠",
-                    "096530",
-                    22800,
-                    3.50,
-                    450000,
-                    102,
-                    11800,
-                    22200,
-                    20800,
-                    19500,
-                    22400,
-                    65,
-                    "🌊 스윙",
-                ),
-                (
-                    "SD바이오센서",
-                    "137310",
-                    10200,
-                    2.10,
-                    320000,
-                    32,
-                    1480,
-                    9800,
-                    9500,
-                    9100,
-                    10100,
-                    -1200,
-                    "⚡ 단타",
-                ),
+                ("씨젠", "096530", 22800, 3.50, 450000, 102, 11800, 22200, 20800, 19500, 22400, 65, "🌊 스윙"),
+                ("SD바이오센서", "137310", 10200, 2.10, 320000, 32, 1480, 9800, 9500, 9100, 10100, -1200, "⚡ 단타"),
             ],
         },
     }
@@ -711,7 +427,7 @@ with main_tab2:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. 검색 및 테마/종목 레이아웃
+    # 2. 검색 및 25개 테마 목록 레이아웃
     col_left, col_right = st.columns([1, 3.2])
 
     with col_left:
@@ -784,7 +500,6 @@ with main_tab2:
                 st.subheader(f"📌 {render_theme}")
                 stocks_list = THEME_DATA[render_theme]["stocks"]
 
-                # 정렬 옵션 (전체/거래대금 상위/상승 TOP/실적 우수)
                 sort_option = st.radio(
                     "정렬 필터",
                     ["전체", "거래대금 상위", "상승 TOP", "영업이익 높은순"],
@@ -805,40 +520,41 @@ with main_tab2:
                     s_code = str(item[1]).zfill(6)
                     curr_price = item[2]
                     change_pct = item[3]
-                    vol_val = item[4]
                     trade_amt = item[5]
-                    mcap_val = item[6]
 
-                    d_vwap = item[7]
-                    w_vwap = item[8]
-                    m_vwap = item[9]
-                    m3_vwap = item[10]
-                    op_profit = item[11]  # 영업이익 수치
-                    trade_type = item[12]  # 단타/스윙/중장기
+                    d_vwap = item[7]   # 일봉
+                    w_vwap = item[8]   # 주봉
+                    m_vwap = item[9]   # 월봉
+                    m3_vwap = item[10] # 3분봉
+                    op_profit = item[11]
+                    trade_type = item[12]
 
                     d_disp = ((curr_price - d_vwap) / d_vwap) * 100
                     w_disp = ((curr_price - w_vwap) / w_vwap) * 100
                     m_disp = ((curr_price - m_vwap) / m_vwap) * 100
                     m3_disp = ((curr_price - m3_vwap) / m3_vwap) * 100
 
-                    change_str = (
-                        f"+{change_pct:.2f}%"
-                        if change_pct > 0
-                        else f"{change_pct:.2f}%"
-                    )
+                    # 💡 주기별 추천 매수단가(평단가~평단+1.5%) & 추천 손절가(평단-2.0%)
+                    # 일봉
+                    d_buy_max = int(d_vwap * 1.015)
+                    d_stop = int(d_vwap * 0.98)
+                    # 주봉
+                    w_buy_max = int(w_vwap * 1.015)
+                    w_stop = int(w_vwap * 0.98)
+                    # 월봉
+                    m_buy_max = int(m_vwap * 1.015)
+                    m_stop = int(m_vwap * 0.98)
+                    # 3분봉
+                    m3_buy_max = int(m3_vwap * 1.015)
+                    m3_stop = int(m3_vwap * 0.98)
 
-                    # 1. 흑자 / 적자 뱃지
+                    change_str = f"+{change_pct:.2f}%" if change_pct > 0 else f"{change_pct:.2f}%"
+
                     if op_profit > 0:
                         profit_badge = f'<span style="background-color:#e6fcf5; color:#0ca678; padding:2px 5px; border-radius:4px; font-weight:bold; font-size:10px;">🟢 흑자 ({op_profit:,}억)</span>'
                     else:
                         profit_badge = f'<span style="background-color:#fff5f5; color:#f03e3e; padding:2px 5px; border-radius:4px; font-weight:bold; font-size:10px;">🔴 적자 ({op_profit:,}억)</span>'
 
-                    # 2. 매매 타점 아이디어 신호 (괴리율 0% ~ +5% 이내일 때 매수타점 형성)
-                    buy_signal_badge = ""
-                    if 0 <= d_disp <= 5.0:
-                        buy_signal_badge = '<div style="margin-top:2px;"><span style="background-color:#fff3bf; color:#d9480f; border:1px solid #fcc419; padding:1px 4px; border-radius:3px; font-weight:bold; font-size:9px;">🔥 손절짧은 매수타점</span></div>'
-
-                    # 3. 추천 매매타입 뱃지
                     if "단타" in trade_type:
                         type_badge = f'<span style="background-color:#ffe3e3; color:#d6336c; padding:2px 5px; border-radius:4px; font-weight:bold; font-size:10px;">{trade_type}</span>'
                     elif "스윙" in trade_type:
@@ -852,85 +568,90 @@ with main_tab2:
                         and query
                         and (query in s_name.lower() or query in s_code)
                     )
-                    row_bg = (
-                        "background-color: #fff0f6;" if is_searched_item else ""
-                    )
+                    row_bg = "background-color: #fff0f6;" if is_searched_item else ""
 
                     table_rows_html += f"""
-                    <tr style="border-bottom: 1px solid #f0f0f0; height: 52px; font-size: 12px; {row_bg}">
+                    <tr style="border-bottom: 1px solid #f0f0f0; height: 62px; font-size: 12px; {row_bg}">
                         <td style="text-align: center; color: #666; width: 30px;">{idx}</td>
-                        <td style="font-weight: bold; color: #111; padding-left: 5px; width: 110px;">
+                        <td style="font-weight: bold; color: #111; padding-left: 5px; width: 100px;">
                             {s_name} {'<span style="color:#d32f2f; font-size:10px;">(검색)</span>' if is_searched_item else ''}
                             <div style="margin-top:2px;">{type_badge}</div>
                         </td>
-                        <td style="text-align: center; width: 80px;">
+                        <td style="text-align: center; width: 75px;">
                             <button onclick="navigator.clipboard.writeText('{s_code}');" 
                                     style="padding: 2px 4px; background-color: #f1f3f5; color: #333; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px;">
                                 📋 {s_code}
                             </button>
                         </td>
-                        <td style="text-align: center; width: 100px;">
+                        <td style="text-align: center; width: 95px;">
                             {profit_badge}
                         </td>
-                        <td style="text-align: right; padding-right: 5px; font-weight: bold; width: 70px;">{curr_price:,}원</td>
-                        <td style="text-align: right; padding-right: 5px; color: #d32f2f; font-weight: bold; width: 65px;">{change_str}</td>
-                        <td style="text-align: right; padding-right: 5px; color: #2b6cb0; font-weight: bold; width: 70px;">{trade_amt:,}백만</td>
+                        <td style="text-align: right; padding-right: 5px; font-weight: bold; width: 65px;">{curr_price:,}원</td>
+                        <td style="text-align: right; padding-right: 5px; color: #d32f2f; font-weight: bold; width: 60px;">{change_str}</td>
+                        <td style="text-align: right; padding-right: 5px; color: #2b6cb0; font-weight: bold; width: 65px;">{trade_amt:,}백만</td>
                         
-                        <!-- 일봉 평단 -->
+                        <!-- 일봉 평단 / 추천매수가 / 손절가 -->
                         <td style="text-align: center; background-color: #fff9db;">
                             <button onclick="navigator.clipboard.writeText('{d_vwap}');" 
                                     style="padding: 2px 4px; background-color: #ffe066; color: #000; border: 1px solid #fcc419; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
                                 📋 {d_vwap:,}
                             </button>
-                            <div style="font-size: 10px; color: {'#d32f2f' if d_disp > 0 else '#1976d2'}; font-weight: bold;">{d_disp:+.1f}%</div>
-                            {buy_signal_badge}
+                            <div style="font-size: 10px; color: {'#d32f2f' if d_disp > 0 else '#1976d2'}; font-weight: bold;">({d_disp:+.1f}%)</div>
+                            <div style="font-size: 9px; color: #2b8a3e; margin-top:2px;">🎯매수: ~{d_buy_max:,}</div>
+                            <div style="font-size: 9px; color: #c92a2a;">🛑손절: {d_stop:,}</div>
                         </td>
                         
-                        <!-- 주봉 평단 -->
+                        <!-- 주봉 평단 / 추천매수가 / 손절가 -->
                         <td style="text-align: center; background-color: #fff3bf;">
                             <button onclick="navigator.clipboard.writeText('{w_vwap}');" 
                                     style="padding: 2px 4px; background-color: #ffd43b; color: #000; border: 1px solid #fab005; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
                                 📋 {w_vwap:,}
                             </button>
-                            <div style="font-size: 10px; color: {'#d32f2f' if w_disp > 0 else '#1976d2'}; font-weight: bold;">{w_disp:+.1f}%</div>
+                            <div style="font-size: 10px; color: {'#d32f2f' if w_disp > 0 else '#1976d2'}; font-weight: bold;">({w_disp:+.1f}%)</div>
+                            <div style="font-size: 9px; color: #2b8a3e; margin-top:2px;">🎯매수: ~{w_buy_max:,}</div>
+                            <div style="font-size: 9px; color: #c92a2a;">🛑손절: {w_stop:,}</div>
                         </td>
 
-                        <!-- 월봉 평단 -->
+                        <!-- 월봉 평단 / 추천매수가 / 손절가 -->
                         <td style="text-align: center; background-color: #ffec99;">
                             <button onclick="navigator.clipboard.writeText('{m_vwap}');" 
                                     style="padding: 2px 4px; background-color: #fcc419; color: #000; border: 1px solid #f59f00; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
                                 📋 {m_vwap:,}
                             </button>
-                            <div style="font-size: 10px; color: {'#d32f2f' if m_disp > 0 else '#1976d2'}; font-weight: bold;">{m_disp:+.1f}%</div>
+                            <div style="font-size: 10px; color: {'#d32f2f' if m_disp > 0 else '#1976d2'}; font-weight: bold;">({m_disp:+.1f}%)</div>
+                            <div style="font-size: 9px; color: #2b8a3e; margin-top:2px;">🎯매수: ~{m_buy_max:,}</div>
+                            <div style="font-size: 9px; color: #c92a2a;">🛑손절: {m_stop:,}</div>
                         </td>
 
-                        <!-- 3분봉 평단 -->
+                        <!-- 3분봉 평단 / 추천매수가 / 손절가 -->
                         <td style="text-align: center; background-color: #e7f5ff;">
                             <button onclick="navigator.clipboard.writeText('{m3_vwap}');" 
                                     style="padding: 2px 4px; background-color: #a5d8ff; color: #000; border: 1px solid #74c0fc; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
                                 📋 {m3_vwap:,}
                             </button>
-                            <div style="font-size: 10px; color: {'#d32f2f' if m3_disp > 0 else '#1976d2'}; font-weight: bold;">{m3_disp:+.1f}%</div>
+                            <div style="font-size: 10px; color: {'#d32f2f' if m3_disp > 0 else '#1976d2'}; font-weight: bold;">({m3_disp:+.1f}%)</div>
+                            <div style="font-size: 9px; color: #2b8a3e; margin-top:2px;">🎯매수: ~{m3_buy_max:,}</div>
+                            <div style="font-size: 9px; color: #c92a2a;">🛑손절: {m3_stop:,}</div>
                         </td>
                     </tr>
                     """
 
                 full_table_html = f"""
                 <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin-bottom: 25px;">
-                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 980px;">
+                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 1020px;">
                         <thead>
                             <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; color: #555; font-size: 11px; height: 38px;">
                                 <th style="text-align: center; width: 30px;">순위</th>
-                                <th style="text-align: left; padding-left: 5px; width: 110px;">종목명 (매매유형)</th>
-                                <th style="text-align: center; width: 80px;">종목코드</th>
-                                <th style="text-align: center; width: 100px;">실적 (영업이익)</th>
-                                <th style="text-align: right; padding-right: 5px; width: 70px;">현재가</th>
-                                <th style="text-align: right; padding-right: 5px; width: 65px;">전일대비</th>
-                                <th style="text-align: right; padding-right: 5px; width: 70px;">거래대금</th>
-                                <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 평단(괴리율)</th>
-                                <th style="text-align: center; background-color: #fff3bf; color: #d9480f;">주봉 평단(괴리율)</th>
-                                <th style="text-align: center; background-color: #ffec99; color: #d9480f;">월봉 평단(괴리율)</th>
-                                <th style="text-align: center; background-color: #e7f5ff; color: #1864ab;">3분봉 평단(괴리율)</th>
+                                <th style="text-align: left; padding-left: 5px; width: 100px;">종목명</th>
+                                <th style="text-align: center; width: 75px;">종목코드</th>
+                                <th style="text-align: center; width: 95px;">실적(영업이익)</th>
+                                <th style="text-align: right; padding-right: 5px; width: 65px;">현재가</th>
+                                <th style="text-align: right; padding-right: 5px; width: 60px;">전일대비</th>
+                                <th style="text-align: right; padding-right: 5px; width: 65px;">거래대금</th>
+                                <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 평단가/가이드</th>
+                                <th style="text-align: center; background-color: #fff3bf; color: #d9480f;">주봉 평단가/가이드</th>
+                                <th style="text-align: center; background-color: #ffec99; color: #d9480f;">월봉 평단가/가이드</th>
+                                <th style="text-align: center; background-color: #e7f5ff; color: #1864ab;">3분봉 평단가/가이드</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -940,7 +661,7 @@ with main_tab2:
                 </div>
                 """
 
-                calc_height = max(180, len(stocks_list) * 60 + 60)
+                calc_height = max(180, len(stocks_list) * 70 + 60)
                 components.html(
                     full_table_html, height=calc_height, scrolling=True
                 )
