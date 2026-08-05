@@ -2,6 +2,7 @@ import datetime
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 from pykrx import stock
 
 # 페이지 기본 설정
@@ -143,7 +144,7 @@ if st.button("차트 및 수치 분석 실행", type="primary"):
         last_vwap = int(df["세력평단"].iloc[-1])
         disparity = ((last_close - last_vwap) / last_vwap) * 100
 
-        # 유튜브 스타일 단일 복사용 텍스트 양식
+        # 요약 텍스트
         copy_summary = f"■ {s_date}~{e_date} [{current_name}({code})]\n• 종가: {last_close:,}원\n• 세력평단: {last_vwap:,}원\n• 괴리율: {disparity:+.2f}%"
 
         st.subheader(f"📊 {current_name} ({code}) 분석 결과 요약")
@@ -154,9 +155,23 @@ if st.button("차트 및 수치 분석 실행", type="primary"):
         mc2.metric("누적 세력평단", f"{last_vwap:,} 원")
         mc3.metric("괴리율", f"{disparity:+.2f} %")
 
-        # 수치 복사 전용 박스 (우측 상단 아이콘으로 1클릭 복사 가능)
-        st.write("📋 **결과 수치 복사하기 (우측 상단 복사 아이콘 클릭):**")
-        st.code(copy_summary, language="text")
+        # 원클릭 복사 버튼 및 수치 박스 (HTML/JS 기반)
+        copy_html = f"""
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; font-family: sans-serif;">
+            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                <button onclick="navigator.clipboard.writeText('{last_vwap}'); alert('세력평단 수치({last_vwap})가 복사되었습니다!');" 
+                        style="padding: 8px 16px; background-color: #ff4b4b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                    📋 세력평단 수치만 복사 ({last_vwap})
+                </button>
+                <button onclick="navigator.clipboard.writeText(document.getElementById('fullSummary').innerText); alert('전체 요약 결과가 복사되었습니다!');" 
+                        style="padding: 8px 16px; background-color: #4bac30; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                    📝 전체 결과 요약 복사
+                </button>
+            </div>
+            <pre id="fullSummary" style="margin: 0; font-family: monospace; font-size: 13px; color: #333; line-height: 1.5;">{copy_summary}</pre>
+        </div>
+        """
+        components.html(copy_html, height=160)
 
         # 차트 시각화
         fig = go.Figure()
