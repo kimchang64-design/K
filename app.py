@@ -11,7 +11,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 여백 최소화 패치 및 최근 검색 기록 가로 스크롤 CSS
+# 여백 최소화 패치 CSS
 st.markdown(
     """
     <style>
@@ -246,23 +246,28 @@ with main_tab1:
             f"""
             <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; padding: 6px 10px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
                 <span style="font-size: 13px; font-weight: bold;">📌 종목: {stock_name} ({code})</span>
-                <button onclick="navigator.clipboard.writeText('{code}');" style="background:#1a73e8; color:white; border:none; padding:3px 8px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
-                    📋 코드 복사 ({code})
-                </button>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        # 🕒 최근 검색 기록 가로 배치 영역 (오른쪽으로 나란히 정렬 및 가로 스크롤 지원)
+        # 📋 코드 단독 복사 버튼
+        code_copy_html = f"""
+        <div style="margin-bottom: 8px;">
+            <button onclick="navigator.clipboard.writeText('{code}');" style="background:#1a73e8; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
+                📋 종목코드 ({code}) 즉시 복사
+            </button>
+        </div>
+        """
+        components.html(code_copy_html, height=35)
+
+        # 🕒 최근 검색 기록 가로 배치 영역
         if st.session_state.search_history:
             st.markdown(
                 "<span style='font-size:11px; color:#666;'>최근 검색 기록 (최대 12개):</span>",
                 unsafe_allow_html=True,
             )
             history_list = st.session_state.search_history[:12]
-            
-            # Streamlit 컬럼을 이용해 모든 최근 검색어를 한 줄에 가로로 배치
             h_cols = st.columns(len(history_list))
             for idx, hist_name in enumerate(history_list):
                 with h_cols[idx]:
@@ -662,37 +667,16 @@ with main_tab2:
                 <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
                     <td style="text-align: center; font-weight: bold;">{idx}</td>
                     <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['trade_type']}</span></td>
-                    <td style="text-align: center;">
-                        {item['code']} 
-                        <button onclick="navigator.clipboard.writeText('{item['code']}');" style="background:#1a73e8; color:white; border:none; padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px;">복사</button>
-                    </td>
+                    <td style="text-align: center; font-weight: bold; color: #1a73e8;">{item['code']}</td>
                     <td style="text-align: center; font-weight: bold;">{item['op_status']}</td>
                     <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
                     <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{item['change']:.2f}%</td>
-                    <td style="text-align: center; background-color: #fff9db;">
-                        <b>{item['d_vwap']:,}원</b> ({item['d_disp']})
-                        <button onclick="navigator.clipboard.writeText('{item['d_vwap']}');" style="background:#e67700; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-                    </td>
-                    <td style="text-align: center; background-color: #f3f0ff;">
-                        <b>{item['w_vwap']:,}원</b>
-                        <button onclick="navigator.clipboard.writeText('{item['w_vwap']}');" style="background:#7950f2; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-                    </td>
-                    <td style="text-align: center; background-color: #e6fcf5;">
-                        <b>{item['m_vwap']:,}원</b>
-                        <button onclick="navigator.clipboard.writeText('{item['m_vwap']}');" style="background:#0ca678; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-                    </td>
-                    <td style="text-align: center; background-color: #fff0f6;">
-                        <b>{item['m3_vwap']:,}원</b>
-                        <button onclick="navigator.clipboard.writeText('{item['m3_vwap']}');" style="background:#d63384; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-                    </td>
-                    <td style="text-align: right; color: #2b8a3e; font-weight: bold;">
-                        {item['target']:,}원 
-                        <button onclick="navigator.clipboard.writeText('{item['target']}');" style="background:#2b8a3e; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-                    </td>
-                    <td style="text-align: right; color: #e03131; font-weight: bold;">
-                        {item['stop']:,}원 
-                        <button onclick="navigator.clipboard.writeText('{item['stop']}');" style="background:#e03131; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-                    </td>
+                    <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원 ({item['d_disp']})</td>
+                    <td style="text-align: center; background-color: #f3f0ff; font-weight: bold;">{item['w_vwap']:,}원</td>
+                    <td style="text-align: center; background-color: #e6fcf5; font-weight: bold;">{item['m_vwap']:,}원</td>
+                    <td style="text-align: center; background-color: #fff0f6; font-weight: bold;">{item['m3_vwap']:,}원</td>
+                    <td style="text-align: right; color: #2b8a3e; font-weight: bold;">{item['target']:,}원</td>
+                    <td style="text-align: right; color: #e03131; font-weight: bold;">{item['stop']:,}원</td>
                 </tr>
                 """
             full_table_html = f"""
@@ -778,38 +762,17 @@ with main_tab3:
         <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
             <td style="text-align: center; font-weight: bold;">{idx}</td>
             <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['type']}</span></td>
-            <td style="text-align: center;">
-                {item['code']} 
-                <button onclick="navigator.clipboard.writeText('{item['code']}');" style="background:#1a73e8; color:white; border:none; padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px;">복사</button>
-            </td>
+            <td style="text-align: center; font-weight: bold; color: #1a73e8;">{item['code']}</td>
             <td style="text-align: center; font-weight: bold;">{item['op_status']}</td>
             <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
             <td style="text-align: right; color: #d32f2f;">+{item['change']:.2f}%</td>
             <td style="text-align: right;">{item['amt']:,} 백만</td>
-            <td style="text-align: center; background-color: #fff9db;">
-                <b>{item['d_vwap']:,}원</b> ({item['d_disp']})
-                <button onclick="navigator.clipboard.writeText('{item['d_vwap']}');" style="background:#e67700; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
-            <td style="text-align: center; background-color: #f3f0ff;">
-                <b>{item['w_vwap']:,}원</b>
-                <button onclick="navigator.clipboard.writeText('{item['w_vwap']}');" style="background:#7950f2; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
-            <td style="text-align: center; background-color: #e6fcf5;">
-                <b>{item['m_vwap']:,}원</b>
-                <button onclick="navigator.clipboard.writeText('{item['m_vwap']}');" style="background:#0ca678; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
-            <td style="text-align: center; background-color: #fff0f6;">
-                <b>{item['m3_vwap']:,}원</b>
-                <button onclick="navigator.clipboard.writeText('{item['m3_vwap']}');" style="background:#d63384; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
-            <td style="text-align: right; color: #2b8a3e; font-weight: bold;">
-                {item['target']:,}원 
-                <button onclick="navigator.clipboard.writeText('{item['target']}');" style="background:#2b8a3e; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
-            <td style="text-align: right; color: #e03131; font-weight: bold;">
-                {item['stop']:,}원 
-                <button onclick="navigator.clipboard.writeText('{item['stop']}');" style="background:#e03131; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
+            <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원 ({item['d_disp']})</td>
+            <td style="text-align: center; background-color: #f3f0ff; font-weight: bold;">{item['w_vwap']:,}원</td>
+            <td style="text-align: center; background-color: #e6fcf5; font-weight: bold;">{item['m_vwap']:,}원</td>
+            <td style="text-align: center; background-color: #fff0f6; font-weight: bold;">{item['m3_vwap']:,}원</td>
+            <td style="text-align: right; color: #2b8a3e; font-weight: bold;">{item['target']:,}원</td>
+            <td style="text-align: right; color: #e03131; font-weight: bold;">{item['stop']:,}원</td>
         </tr>
         """
 
@@ -895,38 +858,17 @@ with main_tab4:
         <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
             <td style="text-align: center; font-weight: bold;">{idx}</td>
             <td style="font-weight: bold;">{item['name']}</td>
-            <td style="text-align: center;">
-                {item['code']} 
-                <button onclick="navigator.clipboard.writeText('{item['code']}');" style="background:#1a73e8; color:white; border:none; padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px;">복사</button>
-            </td>
+            <td style="text-align: center; font-weight: bold; color: #1a73e8;">{item['code']}</td>
             <td style="text-align: center; font-weight: bold;">{item['op_status']}</td>
             <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
             <td style="text-align: right; color: #d32f2f;">+{item['change']:.2f}%</td>
             <td style="text-align: right;">{item['amt']:,} 백만</td>
-            <td style="text-align: center; background-color: #fff9db;">
-                <b>{item['d_vwap']:,}원</b> ({item['d_disp']})
-                <button onclick="navigator.clipboard.writeText('{item['d_vwap']}');" style="background:#e67700; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
-            <td style="text-align: center; background-color: #f3f0ff;">
-                <b>{item['w_vwap']:,}원</b>
-                <button onclick="navigator.clipboard.writeText('{item['w_vwap']}');" style="background:#7950f2; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
-            <td style="text-align: center; background-color: #e6fcf5;">
-                <b>{item['m_vwap']:,}원</b>
-                <button onclick="navigator.clipboard.writeText('{item['m_vwap']}');" style="background:#0ca678; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
-            <td style="text-align: center; background-color: #fff0f6;">
-                <b>{item['m3_vwap']:,}원</b>
-                <button onclick="navigator.clipboard.writeText('{item['m3_vwap']}');" style="background:#d63384; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
-            <td style="text-align: right; color: #2b8a3e; font-weight: bold;">
-                {item['target']:,}원 
-                <button onclick="navigator.clipboard.writeText('{item['target']}');" style="background:#2b8a3e; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
-            <td style="text-align: right; color: #e03131; font-weight: bold;">
-                {item['stop']:,}원 
-                <button onclick="navigator.clipboard.writeText('{item['stop']}');" style="background:#e03131; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
-            </td>
+            <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원 ({item['d_disp']})</td>
+            <td style="text-align: center; background-color: #f3f0ff; font-weight: bold;">{item['w_vwap']:,}원</td>
+            <td style="text-align: center; background-color: #e6fcf5; font-weight: bold;">{item['m_vwap']:,}원</td>
+            <td style="text-align: center; background-color: #fff0f6; font-weight: bold;">{item['m3_vwap']:,}원</td>
+            <td style="text-align: right; color: #2b8a3e; font-weight: bold;">{item['target']:,}원</td>
+            <td style="text-align: right; color: #e03131; font-weight: bold;">{item['stop']:,}원</td>
             <td style="text-align: center; color: #2b8a3e;">{item['reason']}</td>
         </tr>
         """
