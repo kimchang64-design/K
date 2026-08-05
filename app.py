@@ -11,13 +11,14 @@ st.set_page_config(
     layout="wide",
 )
 
-# 여백 최소화 패치 CSS
+# 여백 최소화 및 클립보드 복사 안내 스타일 패치 CSS
 st.markdown(
     """
     <style>
         .block-container { padding-top: 0.8rem; padding-bottom: 0rem; padding-left: 2rem; padding-right: 2rem; }
         div[data-testid="stMetricValue"] { font-size: 1.05rem !important; font-weight: bold; }
         div[data-testid="stMetricLabel"] { font-size: 0.75rem !important; }
+        .copy-box { background: #f8f9fa; border: 1px solid #ced4da; padding: 10px; border-radius: 6px; text-align: center; margin-top: 5px; }
     </style>
 """,
     unsafe_allow_html=True,
@@ -201,20 +202,37 @@ with main_tab1:
             label_visibility="collapsed",
         )
 
-    if selected_timeframe in ["일봉", "주봉", "월봉"]:
-        d_col1, d_col2 = st.columns([1, 1])
-        with d_col1:
-            start_date = st.date_input(
-                "시작일", pd.to_datetime("2024-01-01"), key="vwap_start"
-            )
-        with d_col2:
-            end_date = st.date_input(
-                "종료일", pd.to_datetime("today"), key="vwap_end"
-            )
+    # 📅 한글 날짜(연도·월) 직접 선택 UI 구성
+    st.markdown("📅 **조회 기간 설정 (한글 선택)**")
+    k_col1, k_col2, k_col3, k_col4 = st.columns([1, 1, 1, 1])
+
+    with k_col1:
+        start_year = st.selectbox(
+            "시작 연도", [2022, 2023, 2024, 2025, 2026], index=2, key="s_year"
+        )
+    with k_col2:
+        start_month = st.selectbox(
+            "시작 월", list(range(1, 13)), index=0, key="s_mon"
+        )
+    with k_col3:
+        end_year = st.selectbox(
+            "종료 연도", [2022, 2023, 2024, 2025, 2026], index=4, key="e_year"
+        )
+    with k_col4:
+        end_month = st.selectbox(
+            "종료 월", list(range(1, 13)), index=7, key="e_mon"
+        )
+
+    # 선택된 연/월의 첫날과 마지막 날 계산
+    start_date = datetime.date(start_year, start_month, 1)
+    if end_month == 12:
+        end_date = datetime.date(end_year + 1, 1, 1) - datetime.timedelta(
+            days=1
+        )
     else:
-        today = datetime.datetime.now()
-        start_date = st.date_input("조회일 선택 (분봉)", today, key="vwap_min_date")
-        end_date = start_date
+        end_date = datetime.date(end_year, end_month + 1, 1) - datetime.timedelta(
+            days=1
+        )
 
     s_date = start_date.strftime("%Y%m%d")
     e_date = end_date.strftime("%Y%m%d")
@@ -315,7 +333,33 @@ with main_tab1:
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
         m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
 
-        with st.expander("📝 텍스트 요약 및 복사 기능 열기"):
+        # 📋 키움차트/주문창 붙여넣기용 단가 수치 원클릭 복사 컴포넌트 추가
+        st.markdown(
+            "### 📋 키움차트/주문창 단가 수치 복사하기 (클릭 시 자동 복사)"
+        )
+        copy_html = f"""
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button onclick="navigator.clipboard.writeText('{last_vwap}'); alert('평단선 단가 ({last_vwap})가 복사되었습니다!');" style="background:#1a73e8; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
+                📌 평단선 ({last_vwap}) 복사
+            </button>
+            <button onclick="navigator.clipboard.writeText('{target_1st}'); alert('1차 목표가 ({target_1st})가 복사되었습니다!');" style="background:#0ca678; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
+                🎯 1차목표 ({target_1st}) 복사
+            </button>
+            <button onclick="navigator.clipboard.writeText('{target_2nd}'); alert('2차 목표가 ({target_2nd})가 복사되었습니다!');" style="background:#7048e8; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
+                🚀 2차목표 ({target_2nd}) 복사
+            </button>
+            <button onclick="navigator.clipboard.writeText('{stop_loss}'); alert('1차 손절가 ({stop_loss})가 복사되었습니다!');" style="background:#f59f00; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
+                🛑 1차손절 ({stop_loss}) 복사
+            </button>
+            <button onclick="navigator.clipboard.writeText('{absolute_stop_loss}'); alert('절대 손절가 ({absolute_stop_loss})가 복사되었습니다!');" style="background:#e03131; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
+                🚨 절대손절 ({absolute_stop_loss}) 복사
+            </button>
+        </div>
+        <p style="font-size: 11px; color: #666; margin-top: 5px;">💡 버튼을 클릭하면 순수 숫자 단가가 클립보드에 복사되며, 키움증권 HTS/MTS 주문창이나 차트 가격 설정란에 바로 <code>Ctrl + V</code>로 붙여넣기 하실 수 있습니다.</p>
+        """
+        components.html(copy_html, height=85)
+
+        with st.expander("📝 텍스트 요약 및 전체 복사 기능"):
             copy_summary = (
                 f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
                 f"• 시가총액: {mcap_val:,}억원 | 영업이익: {op_profit:,}억원\n"
@@ -389,7 +433,7 @@ with main_tab1:
 
 
 # ---------------------------------------------------------
-# TAB 2: 업종·테마 분석 대시보드 (세 번째 사진 스타일 완벽 복원)
+# TAB 2: 업종·테마 분석 대시보드
 # ---------------------------------------------------------
 with main_tab2:
     st.markdown("### ⭐ 업종·테마 분석 대시보드")
@@ -419,23 +463,6 @@ with main_tab2:
                     "m3_vwap": 1780,
                     "m3_disp": "+3.9%",
                 },
-                {
-                    "name": "광전자",
-                    "code": "017900",
-                    "price": 2450,
-                    "change": 9.80,
-                    "amt": 4200,
-                    "op": 18,
-                    "trade_type": "🌊 스윙",
-                    "d_vwap": 2100,
-                    "d_disp": "+16.6%",
-                    "w_vwap": 2050,
-                    "w_disp": "+19.5%",
-                    "m_vwap": 1950,
-                    "m_disp": "+25.6%",
-                    "m3_vwap": 2350,
-                    "m3_disp": "+4.2%",
-                },
             ],
         },
         "전선": {
@@ -461,183 +488,10 @@ with main_tab2:
                 }
             ],
         },
-        "통신장비": {
-            "change": "+7.51%",
-            "leader": "이노인스트루먼트",
-            "stocks": [
-                {
-                    "name": "이노인스트루먼트",
-                    "code": "215790",
-                    "price": 2150,
-                    "change": 5.20,
-                    "amt": 5200,
-                    "op": -45,
-                    "trade_type": "⚡ 단타",
-                    "d_vwap": 2100,
-                    "d_disp": "+2.3%",
-                    "w_vwap": 2050,
-                    "w_disp": "+4.8%",
-                    "m_vwap": 1950,
-                    "m_disp": "+10.2%",
-                    "m3_vwap": 2120,
-                    "m3_disp": "+1.4%",
-                }
-            ],
-        },
-        "반도체 대표주(생산)": {
-            "change": "+6.94%",
-            "leader": "삼성전자, SK하이닉스",
-            "stocks": [
-                {
-                    "name": "삼성전자",
-                    "code": "005930",
-                    "price": 72500,
-                    "change": 4.50,
-                    "amt": 20600,
-                    "op": 656700,
-                    "trade_type": "🏆 중장기",
-                    "d_vwap": 71000,
-                    "d_disp": "+2.1%",
-                    "w_vwap": 66200,
-                    "w_disp": "+9.5%",
-                    "m_vwap": 64000,
-                    "m_disp": "+13.3%",
-                    "m3_vwap": 71200,
-                    "m3_disp": "+1.8%",
-                },
-                {
-                    "name": "SK하이닉스",
-                    "code": "000660",
-                    "price": 188500,
-                    "change": 8.90,
-                    "amt": 16700,
-                    "op": 120500,
-                    "trade_type": "🏆 중장기",
-                    "d_vwap": 165000,
-                    "d_disp": "+14.2%",
-                    "w_vwap": 158000,
-                    "w_disp": "+19.3%",
-                    "m_vwap": 149000,
-                    "m_disp": "+26.5%",
-                    "m3_vwap": 181000,
-                    "m3_disp": "+4.1%",
-                },
-                {
-                    "name": "DB하이텍",
-                    "code": "000990",
-                    "price": 48500,
-                    "change": 7.20,
-                    "amt": 606,
-                    "op": 2100,
-                    "trade_type": "🌊 스윙",
-                    "d_vwap": 47200,
-                    "d_disp": "+2.8%",
-                    "w_vwap": 41500,
-                    "w_disp": "+16.9%",
-                    "m_vwap": 39800,
-                    "m_disp": "+21.9%",
-                    "m3_vwap": 46800,
-                    "m3_disp": "+3.6%",
-                },
-            ],
-        },
-        "5G(5세대 이동통신)": {
-            "change": "+6.59%",
-            "leader": "RFHIC",
-            "stocks": [
-                {
-                    "name": "RFHIC",
-                    "code": "218410",
-                    "price": 21500,
-                    "change": 3.10,
-                    "amt": 1500,
-                    "op": 32,
-                    "trade_type": "⚡ 단타",
-                    "d_vwap": 21000,
-                    "d_disp": "+2.3%",
-                    "w_vwap": 20500,
-                    "w_disp": "+4.8%",
-                    "m_vwap": 19500,
-                    "m_disp": "+10.2%",
-                    "m3_vwap": 21200,
-                    "m3_disp": "+1.4%",
-                }
-            ],
-        },
-        "온디바이스 AI": {
-            "change": "+5.80%",
-            "leader": "제주반도체",
-            "stocks": [
-                {
-                    "name": "제주반도체",
-                    "code": "080220",
-                    "price": 25100,
-                    "change": 6.50,
-                    "amt": 1500,
-                    "op": 120,
-                    "trade_type": "⚡ 단타",
-                    "d_vwap": 24500,
-                    "d_disp": "+2.4%",
-                    "w_vwap": 23000,
-                    "w_disp": "+9.1%",
-                    "m_vwap": 21000,
-                    "m_disp": "+19.5%",
-                    "m3_vwap": 24800,
-                    "m3_disp": "+1.2%",
-                }
-            ],
-        },
-        "HBM(고대역폭메모리)": {
-            "change": "+5.40%",
-            "leader": "한미반도체",
-            "stocks": [
-                {
-                    "name": "한미반도체",
-                    "code": "042700",
-                    "price": 134000,
-                    "change": 5.40,
-                    "amt": 1450,
-                    "op": 780,
-                    "trade_type": "⚡ 단타",
-                    "d_vwap": 130000,
-                    "d_disp": "+3.1%",
-                    "w_vwap": 125000,
-                    "w_disp": "+7.2%",
-                    "m_vwap": 115000,
-                    "m_disp": "+16.5%",
-                    "m3_vwap": 132000,
-                    "m3_disp": "+1.5%",
-                }
-            ],
-        },
-        "분자진단/진단키트": {
-            "change": "+4.20%",
-            "leader": "셀트리온",
-            "stocks": [
-                {
-                    "name": "셀트리온",
-                    "code": "068270",
-                    "price": 182000,
-                    "change": 1.50,
-                    "amt": 980,
-                    "op": 2100,
-                    "trade_type": "🏆 중장기",
-                    "d_vwap": 180000,
-                    "d_disp": "+1.1%",
-                    "w_vwap": 175000,
-                    "w_disp": "+4.0%",
-                    "m_vwap": 165000,
-                    "m_disp": "+10.3%",
-                    "m3_vwap": 181000,
-                    "m3_disp": "+0.5%",
-                }
-            ],
-        },
     }
 
-    # 인기 테마 Top 카드 출력 (1위 ~ 5위)
     top_keys = list(THEME_DATA.keys())[:5]
-    top_cols = st.columns(len(top_keys))
+    top_cols = st.columns(len(top_keys) if len(top_keys) > 0 else 1)
 
     for i, t_name in enumerate(top_keys):
         t_info = THEME_DATA[t_name]
@@ -649,151 +503,79 @@ with main_tab2:
             f'<span style="color: #d32f2f; font-weight: bold; font-size: 13px;">{t_info["change"]}</span>'
             "</div>"
             f'<div style="font-weight: bold; font-size: 14px; margin-top: 6px; color: #111;">{t_name}</div>'
-            f'<div style="font-size: 11px; color: #666; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{t_info["leader"]} 외</div>'
+            f'<div style="font-size: 11px; color: #666; margin-top: 4px;">{t_info["leader"]} 외</div>'
             "</div>"
         )
         with top_cols[i]:
             st.markdown(card_html, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-
-    # 좌우 분할 레이아웃 (세 번째 사진 스타일 복원)
     col_left, col_right = st.columns([1, 3.2])
 
     with col_left:
         search_mode = st.radio(
-            "검색 모드", ["테마 검색", "종목 검색"], horizontal=True, key="search_mode_radio"
+            "검색 모드", ["테마 검색", "종목 검색"], horizontal=True, key="s_mode"
         )
         search_input = st.text_input(
-            "검색어 입력...", "", key="theme_search_input", placeholder="검색어 입력..."
+            "검색어 입력...", "", key="t_search", placeholder="검색어 입력..."
         )
-
         theme_list = list(THEME_DATA.keys())
-        if search_mode == "테마 검색" and search_input.strip():
-            theme_list = [t for t in theme_list if search_input.strip() in t]
-        elif search_mode == "종목 검색" and search_input.strip():
-            matched = []
-            for t_name, t_info in THEME_DATA.items():
-                for s in t_info["stocks"]:
-                    if (
-                        search_input.strip().lower() in s["name"].lower()
-                        or search_input.strip() in s["code"]
-                    ):
-                        matched.append(t_name)
-            theme_list = list(dict.fromkeys(matched)) if matched else theme_list
-
-        st.markdown(
-            f"### 📊 인기 테마 목록 ({len(theme_list)}개)",
-            unsafe_allow_html=True,
-        )
-
         selected_theme = st.radio(
             "테마 선택 라디오",
             theme_list,
             index=0,
             label_visibility="collapsed",
-            key="theme_radio_select",
+            key="t_radio",
         )
 
     with col_right:
         if selected_theme and selected_theme in THEME_DATA:
             st.markdown(f"### 📌 {selected_theme}", unsafe_allow_html=True)
-
-            theme_sort_mode = st.radio(
-                "정렬 필터",
-                ["전체", "거래대금 상위", "상승 TOP", "영업이익 높은순"],
-                horizontal=True,
-                key=f"sort_{selected_theme}",
-            )
-
             stocks_list = THEME_DATA[selected_theme]["stocks"]
-
-            if theme_sort_mode == "거래대금 상위":
-                stocks_list = sorted(
-                    stocks_list, key=lambda x: x["amt"], reverse=True
-                )
-            elif theme_sort_mode == "상승 TOP":
-                stocks_list = sorted(
-                    stocks_list, key=lambda x: x["change"], reverse=True
-                )
-            elif theme_sort_mode == "영업이익 높은순":
-                stocks_list = sorted(
-                    stocks_list, key=lambda x: x["op"], reverse=True
-                )
-
             table_rows_html = ""
             for idx, item in enumerate(stocks_list, start=1):
-                s_name = item["name"]
-                s_code = item["code"]
-                curr_price = item["price"]
-                change_pct = item["change"]
-                amt = item["amt"]
-                op = item["op"]
-                t_type = item["trade_type"]
-
-                d_vwap, d_disp = item["d_vwap"], item["d_disp"]
-                w_vwap, w_disp = item["w_vwap"], item["w_disp"]
-                m_vwap, m_disp = item["m_vwap"], item["m_disp"]
-                m3_vwap, m3_disp = item["m3_vwap"], item["m3_disp"]
-
-                profit_str = f"흑자 ({op:,}억)" if op > 0 else f"적자 ({op}억)"
-                profit_color = "#0ca678" if op > 0 else "#f03e3e"
-
                 table_rows_html += f"""
                 <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
                     <td style="text-align: center; font-weight: bold;">{idx}</td>
-                    <td style="font-weight: bold;">{s_name}<br><span style="color:#1c7ed6; font-size:10px;">{t_type}</span></td>
-                    <td style="text-align: center;"><span style="border:1px solid #ddd; padding:2px 6px; border-radius:4px; font-size:10px;">{s_code}</span></td>
-                    <td style="text-align: center; color:{profit_color}; font-weight:bold;">🟢 {profit_str}</td>
-                    <td style="text-align: right; font-weight: bold;">{curr_price:,}원</td>
-                    <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change_pct:.2f}%</td>
-                    <td style="text-align: right;">{amt:,}백만</td>
-                    <td style="text-align: center; background-color: #fff9db;"><b>{d_vwap:,}원</b><br><span style="color:#d32f2f; font-size:11px;">({d_disp})</span></td>
-                    <td style="text-align: center; background-color: #fff3bf;"><b>{w_vwap:,}원</b><br><span style="color:#d32f2f; font-size:11px;">({w_disp})</span></td>
-                    <td style="text-align: center; background-color: #ffec99;"><b>{m_vwap:,}원</b><br><span style="color:#d32f2f; font-size:11px;">({m_disp})</span></td>
-                    <td style="text-align: center; background-color: #e7f5ff;"><b>{m3_vwap:,}원</b><br><span style="color:#d32f2f; font-size:11px;">({m3_disp})</span></td>
+                    <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['trade_type']}</span></td>
+                    <td style="text-align: center;">{item['code']}</td>
+                    <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
+                    <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{item['change']:.2f}%</td>
+                    <td style="text-align: center; background-color: #fff9db;"><b>{item['d_vwap']:,}원</b></td>
                 </tr>
                 """
-
             full_table_html = f"""
             <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
-                <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 1100px;">
+                <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
                     <thead>
                         <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 38px;">
                             <th style="text-align: center;">순위</th>
-                            <th style="text-align: left;">종목명 (매매유형)</th>
+                            <th style="text-align: left;">종목명</th>
                             <th style="text-align: center;">종목코드</th>
-                            <th style="text-align: center;">실적 (영업이익)</th>
                             <th style="text-align: right;">현재가</th>
                             <th style="text-align: right;">전일대비</th>
-                            <th style="text-align: right;">거래대금</th>
-                            <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리율)</th>
-                            <th style="text-align: center; background-color: #fff3bf;">주봉 평단(괴리율)</th>
-                            <th style="text-align: center; background-color: #ffec99;">월봉 평단(괴리율)</th>
-                            <th style="text-align: center; background-color: #e7f5ff;">3분봉 평단(괴리율)</th>
+                            <th style="text-align: center; background-color: #fff9db;">일봉 평단</th>
                         </tr>
                     </thead>
                     <tbody>{table_rows_html}</tbody>
                 </table>
             </div>
             """
-            components.html(
-                full_table_html, height=len(stocks_list) * 70 + 60, scrolling=True
-            )
+            components.html(full_table_html, height=200, scrolling=True)
 
 
 # ---------------------------------------------------------
-# TAB 3: 전체 거래대금 TOP 30 대시보드 (정렬 기능 포함)
+# TAB 3: 전체 거래대금 TOP 30 대시보드
 # ---------------------------------------------------------
 with main_tab3:
     st.title("🔥 전체 거래대금 TOP 30 대시보드")
-    st.caption("오늘 시장에서 가장 자금이 많이 몰린 상위 종목들의 평단선 및 타점 분석")
+    st.caption("오늘 시장에서 가장 자금이 많이 몰린 상위 종목들의 평단선 분석")
 
     t30_sort_mode = st.radio(
         "정렬 기준 선택",
         ["기본 순위", "거래대금 많은순", "등락률 높은순"],
         horizontal=True,
-        key="t30_sort_radio",
+        key="t30_sort",
     )
 
     top30_sample = [
@@ -804,9 +586,7 @@ with main_tab3:
             "change": 4.50,
             "amt": 20600,
             "vwap": 71000,
-            "w_vwap": 66200,
             "type": "🏆 중장기",
-            "prog": "+450억",
         },
         {
             "name": "SK하이닉스",
@@ -815,87 +595,27 @@ with main_tab3:
             "change": 8.90,
             "amt": 16700,
             "vwap": 165000,
-            "w_vwap": 158000,
             "type": "🏆 중장기",
-            "prog": "+310억",
-        },
-        {
-            "name": "대한전선",
-            "code": "001440",
-            "price": 14200,
-            "change": 8.50,
-            "amt": 2584,
-            "vwap": 13950,
-            "w_vwap": 12100,
-            "type": "🌊 스윙",
-            "prog": "+94억",
-        },
-        {
-            "name": "대한광통신",
-            "code": "010170",
-            "price": 1850,
-            "change": 14.50,
-            "amt": 231,
-            "vwap": 1810,
-            "w_vwap": 1580,
-            "type": "⚡ 단타",
-            "prog": "+180억",
-        },
-        {
-            "name": "RF머트리얼즈",
-            "code": "327260",
-            "price": 33750,
-            "change": 29.80,
-            "amt": 1174,
-            "vwap": 16572,
-            "w_vwap": 15200,
-            "type": "⚡ 단타",
-            "prog": "+62억",
         },
     ]
 
-    full_top30 = (top30_sample * 6)[:30]
-
-    if t30_sort_mode == "거래대금 많은순":
-        full_top30 = sorted(full_top30, key=lambda x: x["amt"], reverse=True)
-    elif t30_sort_mode == "등락률 높은순":
-        full_top30 = sorted(
-            full_top30, key=lambda x: x["change"], reverse=True
-        )
-
     t30_rows = ""
-    for idx, item in enumerate(full_top30, start=1):
-        s_name = item["name"]
-        s_code = item["code"]
-        price = item["price"]
-        change = item["change"]
-        amt = item["amt"]
-        vwap = item["vwap"]
-        w_vwap = item["w_vwap"]
-        t_type = item["type"]
-        prog = item["prog"]
-
-        disp = ((price - vwap) / vwap) * 100
-        rank_color = "#d32f2f" if idx <= 3 else "#333"
-        disp_color = "#d32f2f" if disp > 0 else "#1976d2"
-
+    for idx, item in enumerate(top30_sample, start=1):
         t30_rows += f"""
         <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
-            <td style="text-align: center; font-weight: bold; color: {rank_color};">{idx}</td>
-            <td style="font-weight: bold;">{s_name} <span style="color:#1c7ed6; font-size:10px;">({t_type})</span></td>
-            <td style="text-align: center;">{s_code}</td>
-            <td style="text-align: right; font-weight: bold;">{price:,}원</td>
-            <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change:.2f}%</td>
-            <td style="text-align: right; font-weight: bold;">{amt:,} 백만</td>
-            <td style="text-align: center; color: #d32f2f; font-weight: bold;">{prog}</td>
-            <td style="text-align: center; background-color: #fff9db;"><b>{vwap:,}원</b> <span style="color:{disp_color};">({disp:+.1f}%)</span></td>
-            <td style="text-align: center; background-color: #fff3bf;"><b>{w_vwap:,}원</b></td>
+            <td style="text-align: center; font-weight: bold;">{idx}</td>
+            <td style="font-weight: bold;">{item['name']}</td>
+            <td style="text-align: center;">{item['code']}</td>
+            <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
+            <td style="text-align: right; color: #d32f2f;">+{item['change']:.2f}%</td>
+            <td style="text-align: right;">{item['amt']:,} 백만</td>
+            <td style="text-align: center; background-color: #fff9db;"><b>{item['vwap']:,}원</b></td>
         </tr>
         """
 
     t30_table = f"""
     <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
-        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 900px;">
+        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
             <thead>
                 <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 35px;">
                     <th style="text-align: center;">순위</th>
@@ -904,32 +624,28 @@ with main_tab3:
                     <th style="text-align: right;">현재가</th>
                     <th style="text-align: right;">등락률</th>
                     <th style="text-align: right;">거래대금</th>
-                    <th style="text-align: center;">프로그램 수급</th>
                     <th style="text-align: center; background-color: #fff9db;">일봉 평단선</th>
-                    <th style="text-align: center; background-color: #fff3bf;">주봉 평단선</th>
                 </tr>
             </thead>
             <tbody>{t30_rows}</tbody>
         </table>
     </div>
     """
-    components.html(t30_table, height=700, scrolling=True)
+    components.html(t30_table, height=250, scrolling=True)
 
 
 # ---------------------------------------------------------
-# TAB 4: 시간외 거래 TOP 30 대시보드 (정렬 기능 포함)
+# TAB 4: 시간외 거래 TOP 30 대시보드
 # ---------------------------------------------------------
 with main_tab4:
     st.title("🌙 시간외 단일가 거래 TOP 30 대시보드")
-    st.caption(
-        "장 마감 후 시간외 단일가에서 급등하거나 거래량이 폭발한 다음 날 시초가 공략 종목 리스트"
-    )
+    st.caption("장 마감 후 시간외 단일가에서 급등한 다음 날 시초가 공략 종목")
 
     ah_sort_mode = st.radio(
         "정렬 기준 선택",
         ["기본 순위", "시간외 거래대금 많은순", "시간외 등락률 높은순"],
         horizontal=True,
-        key="after_hours_sort",
+        key="ah_sort",
     )
 
     after_hours_data = [
@@ -939,7 +655,6 @@ with main_tab4:
             "price": 1950,
             "change": 9.80,
             "amt": 850,
-            "type": "⚡ 단타급등",
             "reason": "재료 호재",
         },
         {
@@ -948,74 +663,27 @@ with main_tab4:
             "price": 14800,
             "change": 4.20,
             "amt": 1200,
-            "type": "🌊 스윙",
             "reason": "대규모 수주",
-        },
-        {
-            "name": "RF머트리얼즈",
-            "code": "327260",
-            "price": 35500,
-            "change": 5.10,
-            "amt": 640,
-            "type": "⚡ 단타",
-            "reason": "시간외 매수세",
-        },
-        {
-            "name": "KBI메탈",
-            "code": "024840",
-            "price": 2220,
-            "change": 3.20,
-            "amt": 410,
-            "type": "⚡ 단타",
-            "reason": "구리 가격 급등",
-        },
-        {
-            "name": "LS마린솔루션",
-            "code": "028670",
-            "price": 20500,
-            "change": 3.50,
-            "amt": 310,
-            "type": "🏆 중장기",
-            "reason": "실적 호조",
         },
     ]
 
-    full_after = (after_hours_data * 6)[:30]
-
-    if ah_sort_mode == "시간외 거래대금 많은순":
-        full_after = sorted(full_after, key=lambda x: x["amt"], reverse=True)
-    elif ah_sort_mode == "시간외 등락률 높은순":
-        full_after = sorted(
-            full_after, key=lambda x: x["change"], reverse=True
-        )
-
     ah_rows = ""
-    for idx, item in enumerate(full_after, start=1):
-        s_name = item["name"]
-        s_code = item["code"]
-        price = item["price"]
-        change = item["change"]
-        amt = item["amt"]
-        t_type = item["type"]
-        reason = item["reason"]
-        rank_color = "#d32f2f" if idx <= 3 else "#333"
-
+    for idx, item in enumerate(after_hours_data, start=1):
         ah_rows += f"""
         <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
-            <td style="text-align: center; font-weight: bold; color: {rank_color};">{idx}</td>
-            <td style="font-weight: bold;">{s_name} <span style="color:#1c7ed6; font-size:10px;">({t_type})</span></td>
-            <td style="text-align: center;">{s_code}</td>
-            <td style="text-align: right; font-weight: bold;">{price:,}원</td>
-            <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change:.2f}%</td>
-            <td style="text-align: right; font-weight: bold;">{amt:,} 백만</td>
-            <td style="text-align: center; color: #2b8a3e; font-weight: bold;">{reason}</td>
-            <td style="text-align: center;"><span style="background-color: #e7f5ff; color: #1971c2; padding: 3px 8px; border-radius: 4px; font-weight: bold;">시초가 공략 관심</span></td>
+            <td style="text-align: center; font-weight: bold;">{idx}</td>
+            <td style="font-weight: bold;">{item['name']}</td>
+            <td style="text-align: center;">{item['code']}</td>
+            <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
+            <td style="text-align: right; color: #d32f2f;">+{item['change']:.2f}%</td>
+            <td style="text-align: right;">{item['amt']:,} 백만</td>
+            <td style="text-align: center; color: #2b8a3e;">{item['reason']}</td>
         </tr>
         """
 
     ah_table = f"""
     <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
-        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 900px;">
+        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
             <thead>
                 <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 35px;">
                     <th style="text-align: center;">순위</th>
@@ -1025,11 +693,10 @@ with main_tab4:
                     <th style="text-align: right;">시간외 등락률</th>
                     <th style="text-align: right;">시간외 거래대금</th>
                     <th style="text-align: center;">특이사항 / 재료</th>
-                    <th style="text-align: center;">전략 가이드</th>
                 </tr>
             </thead>
             <tbody>{ah_rows}</tbody>
         </table>
     </div>
     """
-    components.html(ah_table, height=700, scrolling=True)
+    components.html(ah_table, height=250, scrolling=True)
