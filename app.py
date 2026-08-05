@@ -7,7 +7,7 @@ from pykrx import stock
 
 # 페이지 기본 설정
 st.set_page_config(
-    page_title="주식 분석 포털 - 평단선 & 주도주/거래대금/시간외",
+    page_title="주식 분석 포털 - 세력 평단가 & 주도주/거래대금/시간외",
     layout="wide",
 )
 
@@ -58,9 +58,9 @@ ticker_bar_html = """
 """
 st.markdown(ticker_bar_html, unsafe_allow_html=True)
 
-# 4개의 상단 메인 탭 구성
+# 4개의 상단 메인 탭 구성 (원래의 '세력 평단가(VWAP) 차트' 명칭 복구)
 main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs(
-    ["📈 평단선 차트", "⭐ 업종·주도테마", "🔥 거래대금 TOP 30", "🌙 시간외 톱 30"]
+    ["📈 세력 평단가(VWAP) 차트", "⭐ 업종·테마 분석", "🔥 거래대금 TOP 30", "🌙 시간외 톱 30"]
 )
 
 
@@ -202,7 +202,7 @@ def get_financial_info(code):
 
 
 # ---------------------------------------------------------
-# TAB 1: 평단선 차트
+# TAB 1: 세력 평단가(VWAP) 차트
 # ---------------------------------------------------------
 with main_tab1:
     col1, col2 = st.columns([1, 2.5])
@@ -354,7 +354,7 @@ with main_tab1:
 
         m1, m2, m3, m4, m5, m6 = st.columns(6)
         m1.metric("현재가", f"{last_close:,}원")
-        m2.metric(f"{selected_timeframe} 평단선", f"{last_vwap:,}원", f"{disparity:+.1f}%")
+        m2.metric(f"{selected_timeframe} 세력 평단가", f"{last_vwap:,}원", f"{disparity:+.1f}%")
         m3.metric("🎯1차목표(+5%)", f"{target_1st:,}원")
         m4.metric("🚀2차목표(+10%)", f"{target_2nd:,}원")
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
@@ -365,7 +365,7 @@ with main_tab1:
                 f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
                 f"• 시가총액: {mcap_val:,}억원 | 영업이익: {op_profit:,}억원\n"
                 f"• 외국인: {foreign_net} | 기관: {inst_net} | 프로그램: {prog_net}\n"
-                f"• 현재가: {last_close:,}원 | 평단선: {last_vwap:,}원 ({disparity:+.2f}%)\n"
+                f"• 현재가: {last_close:,}원 | 세력 평단가: {last_vwap:,}원 ({disparity:+.2f}%)\n"
                 f"• 매수범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
                 f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
                 f"• 🚀 2차목표(+10%): {target_2nd:,}원\n"
@@ -389,7 +389,7 @@ with main_tab1:
                 x=df.index,
                 y=df["평단가"],
                 mode="lines",
-                name=f"누적 평단선 ({selected_timeframe})",
+                name=f"누적 세력 평단가 ({selected_timeframe})",
                 line=dict(color="#ff7f0e", width=2.5),
             )
         )
@@ -424,7 +424,7 @@ with main_tab1:
         )
 
         fig.update_layout(
-            title=f"{stock_name} ({code}) - {selected_timeframe} 평단선 및 매매 가이드 라인",
+            title=f"{stock_name} ({code}) - {selected_timeframe} 세력 평단가 및 매매 가이드 라인",
             margin=dict(l=20, r=20, t=35, b=20),
             hovermode="x unified",
             template="plotly_white",
@@ -434,10 +434,10 @@ with main_tab1:
 
 
 # ---------------------------------------------------------
-# TAB 2: 업종·주도테마 분석 대시보드 (정렬 버튼 추가 완료)
+# TAB 2: 업종·테마 분석 대시보드 (정렬 버튼 포함)
 # ---------------------------------------------------------
 with main_tab2:
-    st.title("⭐ 오늘의 시장 주도 테마 및 업종 분석")
+    st.title("⭐ 업종·테마 분석 대시보드")
     st.caption(
         "테마별 실시간 주도주, 거래대금, 영업이익, 외국인·기관 및 프로그램 수급 종합 분석"
     )
@@ -634,7 +634,7 @@ with main_tab2:
         )
 
     if selected_theme:
-        st.subheader(f"📌 [{selected_theme}] 세부 종목 및 평단선 진단")
+        st.subheader(f"📌 [{selected_theme}] 세부 종목 및 세력 평단가 진단")
         stocks_list = THEME_DATA[selected_theme]["stocks"]
 
         if theme_sort_mode == "거래대금 많은순":
@@ -712,12 +712,12 @@ with main_tab2:
 
 
 # ---------------------------------------------------------
-# TAB 3: 전체 거래대금 TOP 30 대시보드 (정렬 버튼 추가 완료)
+# TAB 3: 전체 거래대금 TOP 30 대시보드 (정렬 버튼 포함)
 # ---------------------------------------------------------
 with main_tab3:
     st.title("🔥 전체 거래대금 TOP 30 대시보드")
     st.caption(
-        "오늘 시장에서 가장 자금이 많이 몰린 상위 종목들의 평단선 및 타점 분석"
+        "오늘 시장에서 가장 자금이 많이 몰린 상위 종목들의 세력 평단가 및 타점 분석"
     )
 
     t30_sort_mode = st.radio(
@@ -891,8 +891,8 @@ with main_tab3:
                     <th style="text-align: right;">등락률</th>
                     <th style="text-align: right;">거래대금</th>
                     <th style="text-align: center;">프로그램 수급</th>
-                    <th style="text-align: center; background-color: #fff9db;">일봉 평단선</th>
-                    <th style="text-align: center; background-color: #fff3bf;">주봉 평단선</th>
+                    <th style="text-align: center; background-color: #fff9db;">일봉 세력 평단가</th>
+                    <th style="text-align: center; background-color: #fff3bf;">주봉 세력 평단가</th>
                 </tr>
             </thead>
             <tbody>{t30_rows}</tbody>
