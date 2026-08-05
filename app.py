@@ -65,7 +65,7 @@ main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs(
 
 
 # ---------------------------------------------------------
-# 공통 함수 (한글 종목명 및 코드 매핑 강화)
+# 공통 함수 (한글 종목명 및 대원전선 등 매핑 강화)
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_stock_ticker_map():
@@ -88,6 +88,7 @@ def get_stock_ticker_map():
         "한미반도체": "042700",
         "대한전선": "001440",
         "대한광통신": "010170",
+        "대원전선": "006340",
         "광전자": "017900",
         "RF머트리얼즈": "327260",
         "DB하이텍": "000990",
@@ -125,6 +126,7 @@ def resolve_code_or_name(user_input):
     if user_input in name_map:
         return name_map[user_input], user_input
 
+    # 부분 일치 검색
     for name, code in name_map.items():
         if user_input.lower() in name.lower():
             return code, name
@@ -159,6 +161,18 @@ def get_financial_info(code):
             "news": [
                 "[클릭 e종목] SK하이닉스, AI 서버용 고부가 제품 독점 수혜",
                 "SK하이닉스, 장중 신고가 경신… \"메모리 슈퍼사이클 진입\"",
+            ],
+        },
+        "006340": {
+            "mcap": 18000,
+            "op_profit": 420,
+            "trade_type": "🌊 스윙",
+            "foreign_net": "+18,500주",
+            "inst_net": "+5,100주",
+            "prog_net": "+30억",
+            "credit_ratio": "1.50%",
+            "news": [
+                "대원전선, 전력망 교체 슈퍼사이클 수혜 기대감에 매수세 유입",
             ],
         },
         "096530": {
@@ -198,35 +212,32 @@ with main_tab1:
     # 세션 상태 초기화
     if "search_history" not in st.session_state:
         st.session_state.search_history = ["삼성전자", "SK하이닉스"]
-    if "active_stock" not in st.session_state:
-        st.session_state.active_stock = "삼성전자"
+    if "target_stock" not in st.session_state:
+        st.session_state.target_stock = "삼성전자"
 
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
-        # 입력창 값 변경 콜백
-        def on_text_change():
-            st.session_state.active_stock = st.session_state.text_input_box
+        # 검색 폼을 사용하여 엔터나 검색 버튼 입력 시에만 확실하게 반영되도록 분리
+        with st.form(key="search_form", clear_on_submit=False):
+            input_val = st.text_input(
+                "종목 입력",
+                value=st.session_state.target_stock,
+                placeholder="종목명 또는 코드 입력",
+                label_visibility="collapsed",
+            )
+            submit_btn = st.form_submit_button(
+                "🔍 검색", use_container_width=True
+            )
 
-        # 최근 검색 버튼 클릭 콜백
-        def set_active_stock(val):
-            st.session_state.active_stock = val
-            st.session_state.text_input_box = val
-
-        raw_input = st.text_input(
-            "종목 입력",
-            value=st.session_state.active_stock,
-            key="text_input_box",
-            on_change=on_text_change,
-            label_visibility="collapsed",
-            placeholder="종목명 또는 코드 입력",
-        )
+        if submit_btn and input_val:
+            st.session_state.target_stock = input_val
 
         code, stock_name = resolve_code_or_name(
-            st.session_state.active_stock
+            st.session_state.target_stock
         )
 
-        # 최근 검색 기록에 추가 (중복 방지 및 최신순 유지)
+        # 최근 검색 기록 관리
         if stock_name and stock_name not in st.session_state.search_history:
             st.session_state.search_history.insert(0, stock_name)
             if len(st.session_state.search_history) > 8:
@@ -245,13 +256,13 @@ with main_tab1:
                 st.session_state.search_history[:4]
             ):
                 with history_cols[idx % len(history_cols)]:
-                    st.button(
+                    if st.button(
                         hist_name,
                         key=f"hist_btn_{idx}",
-                        on_click=set_active_stock,
-                        args=(hist_name,),
                         use_container_width=True,
-                    )
+                    ):
+                        st.session_state.target_stock = hist_name
+                        st.rerun()
 
     with col2:
         timeframe_options = [
@@ -434,7 +445,7 @@ with main_tab1:
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
         m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
 
-        # 📋 확인창 없는 단가 복사 버튼 (안내 문구 없음)
+        # 📋 확인창 없는 단가 복사 버튼
         st.markdown(
             "### 📋 키움차트/주문창 단가 수치 복사하기 (클릭 시 확인창 없이 즉시 복사)"
         )
