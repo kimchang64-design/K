@@ -113,6 +113,11 @@ def get_financial_info(code):
             "inst_net": "+45,200주",
             "prog_net": "+450억 (매수우위)",
             "credit_ratio": "0.32%",
+            "news": [
+                "[특징주] 삼성전자, 하반기 HBM4 공급 기대감에 4%대 강세",
+                "외인·기관 동반 순매수… 삼성전자 반도체 업황 개선 뚜렷",
+                "증권가 \"삼성전자 목표주가 상향… 메모리 반도체 실적 호조\"",
+            ],
         },
         "000660": {
             "mcap": 1370000,
@@ -122,6 +127,10 @@ def get_financial_info(code):
             "inst_net": "-12,400주",
             "prog_net": "+310억 (강한유입)",
             "credit_ratio": "0.45%",
+            "news": [
+                "[클릭 e종목] SK하이닉스, AI 서버용 고부가 제품 독점 수혜",
+                "SK하이닉스, 장중 신고가 경신… \"메모리 슈퍼사이클 진입\"",
+            ],
         },
         "000990": {
             "mcap": 21500,
@@ -131,6 +140,9 @@ def get_financial_info(code):
             "inst_net": "+3,200주",
             "prog_net": "+45억",
             "credit_ratio": "1.21%",
+            "news": [
+                "DB하이텍, 파운드리 가동률 회복 및 실적 턴어라운드 부각",
+            ],
         },
         "010170": {
             "mcap": 2100,
@@ -140,6 +152,10 @@ def get_financial_info(code):
             "inst_net": "+1,200주",
             "prog_net": "+180억 (폭발적)",
             "credit_ratio": "3.85%",
+            "news": [
+                "[급등주] 대한광통신, 글로벌 통신망 투자 확대 소식에 매수세 집중",
+                "광케이블 테마 순환매… 대한광통신 상한가 기대감",
+            ],
         },
     }
     return sample_financials.get(
@@ -152,6 +168,9 @@ def get_financial_info(code):
             "inst_net": "+1,200주",
             "prog_net": "+5억",
             "credit_ratio": "1.00%",
+            "news": [
+                f"[{stock.get_market_ticker_name(code) if code else '관련주'} 실시간 뉴스] 장내 수급 유입 및 테마 상승세 지속"
+            ],
         },
     )
 
@@ -201,7 +220,7 @@ with main_tab1:
             label_visibility="collapsed",
         )
 
-    # 📅 연도, 월, 일까지 완벽하게 선택 가능한 한글 날짜 설정 UI
+    # 📅 연도, 월, 일 완벽 선택 가능한 한글 날짜 설정 UI
     st.markdown("📅 **조회 기간 설정 (연도·월·일 상세 선택)**")
     d_cols = st.columns(6)
 
@@ -298,6 +317,7 @@ with main_tab1:
         inst_net = f_info["inst_net"]
         prog_net = f_info["prog_net"]
         credit_ratio = f_info["credit_ratio"]
+        news_list = f_info.get("news", [])
 
         target_1st = int(last_vwap * 1.05)
         target_2nd = int(last_vwap * 1.10)
@@ -330,6 +350,19 @@ with main_tab1:
         s_c3.metric("💻 실시간 프로그램", prog_net)
         s_c4.metric("💳 신용잔고율", credit_ratio)
 
+        # 📰 실시간 상승 이유 및 뉴스 요약 섹션 추가 (다른 기능 손상 없음)
+        st.markdown(
+            f"""
+            <div style="background-color: #f1f3f5; border-left: 4px solid #1a73e8; padding: 10px 15px; border-radius: 0 6px 6px 0; margin: 10px 0;">
+                <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 5px;">📰 [{stock_name}] 실시간 상승 이유 및 주요 뉴스 속보</div>
+                <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #333;">
+                    {''.join([f"<li>{news}</li>" for news in news_list])}
+                </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
         m1, m2, m3, m4, m5, m6 = st.columns(6)
@@ -340,7 +373,7 @@ with main_tab1:
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
         m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
 
-        # 📋 확인창 없이 곧바로 복사되는 단가 복사 버튼 (키움차트/주문창 붙여넣기용)
+        # 📋 확인창 없는 단가 복사 버튼
         st.markdown(
             "### 📋 키움차트/주문창 단가 수치 복사하기 (클릭 시 확인창 없이 즉시 복사)"
         )
