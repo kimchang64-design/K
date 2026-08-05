@@ -613,20 +613,19 @@ with main_tab2:
 
     for i, t_name in enumerate(top_keys):
         t_info = THEME_DATA[t_name]
+        rank_num = i + 1
+        card_html = (
+            '<div style="background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">'
+            f'<div style="display: flex; justify-content: space-between; align-items: center;">'
+            f'<span style="background-color: #ffebee; color: #d32f2f; font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 12px;">주도 {rank_num}위</span>'
+            f'<span style="color: #d32f2f; font-weight: bold; font-size: 15px;">{t_info["change"]}</span>'
+            "</div>"
+            f'<div style="font-weight: bold; font-size: 16px; margin-top: 8px; color: #111;">{t_name}</div>'
+            f'<div style="font-size: 12px; color: #1971c2; margin-top: 6px; font-weight: bold;">⭐ 대장주: {t_info["leader"]}</div>'
+            "</div>"
+        )
         with top_cols[i]:
-            st.markdown(
-                f"""
-            <div style="background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="background-color: #ffebee; color: #d32f2f; font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 12px;">주도 {i+1위}</span>
-                    <span style="color: #d32f2f; font-weight: bold; font-size: 15px;">{t_info['change']}</span>
-                </div>
-                <div style="font-weight: bold; font-size: 16px; margin-top: 8px; color: #111;">{t_name}</div>
-                <div style="font-size: 12px; color: #1971c2; margin-top: 6px; font-weight: bold;">⭐ 대장주: {t_info['leader']}</div>
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
+            st.markdown(card_html, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     selected_theme = st.selectbox(
@@ -648,9 +647,9 @@ with main_tab2:
             d_disp = ((curr_price - d_vwap) / d_vwap) * 100
 
             profit_badge = (
-                f'<span style="color:#0ca678; font-weight:bold;">🟢 흑자</span>'
+                '<span style="color:#0ca678; font-weight:bold;">🟢 흑자</span>'
                 if op_profit > 0
-                else f'<span style="color:#f03e3e; font-weight:bold;">🔴 적자</span>'
+                else '<span style="color:#f03e3e; font-weight:bold;">🔴 적자</span>'
             )
 
             table_rows_html += f"""
@@ -705,7 +704,6 @@ with main_tab3:
         "오늘 시장에서 가장 자금이 많이 몰린 상위 종목들의 평단선 및 타점 분석"
     )
 
-    # 샘플 거래대금 상위 30 데이터 생성 (실전용 확장 리스트)
     top30_sample = [
         ("삼성전자", "005930", 72500, +4.50, 20600, 71000, 66200, "🏆 중장기", "+450억"),
         (
@@ -739,7 +737,6 @@ with main_tab3:
         ("LG에너지솔루션", "373220", 382000, -0.50, 1120, 385000, 390000, "🏆 중장기", "-30억"),
     ]
 
-    # 30개까지 채우기 위해 반복 확장 (실전 데이터 연동 시 pykrx 거래대금 상위 API로 대체 가능)
     full_top30 = (top30_sample * 3)[:30]
 
     t30_rows = ""
@@ -755,17 +752,19 @@ with main_tab3:
             item[8],
         )
         disp = ((price - vwap) / vwap) * 100
+        rank_color = "#d32f2f" if idx <= 3 else "#333"
+        disp_color = "#d32f2f" if disp > 0 else "#1976d2"
 
         t30_rows += f"""
         <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
-            <td style="text-align: center; font-weight: bold; color: {'#d32f2f' if idx<=3 else '#333'};">{idx}</td>
+            <td style="text-align: center; font-weight: bold; color: {rank_color};">{idx}</td>
             <td style="font-weight: bold;">{s_name} <span style="color:#1c7ed6; font-size:10px;">({t_type})</span></td>
             <td style="text-align: center;">{s_code}</td>
             <td style="text-align: right; font-weight: bold;">{price:,}원</td>
             <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change:.2f}%</td>
             <td style="text-align: right; font-weight: bold;">{amt:,} 백만</td>
             <td style="text-align: center; color: #d32f2f; font-weight: bold;">{prog}</td>
-            <td style="text-align: center; background-color: #fff9db;"><b>{vwap:,}원</b> <span style="color:{'#d32f2f' if disp>0 else '#1976d2'};">({disp:+.1f}%)</span></td>
+            <td style="text-align: center; background-color: #fff9db;"><b>{vwap:,}원</b> <span style="color:{disp_color};">({disp:+.1f}%)</span></td>
             <td style="text-align: center; background-color: #fff3bf;"><b>{w_vwap:,}원</b></td>
         </tr>
         """
@@ -822,10 +821,11 @@ with main_tab4:
             item[5],
             item[6],
         )
+        rank_color = "#d32f2f" if idx <= 3 else "#333"
 
         ah_rows += f"""
         <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
-            <td style="text-align: center; font-weight: bold; color: {'#d32f2f' if idx<=3 else '#333'};">{idx}</td>
+            <td style="text-align: center; font-weight: bold; color: {rank_color};">{idx}</td>
             <td style="font-weight: bold;">{s_name} <span style="color:#1c7ed6; font-size:10px;">({t_type})</span></td>
             <td style="text-align: center;">{s_code}</td>
             <td style="text-align: right; font-weight: bold;">{price:,}원</td>
