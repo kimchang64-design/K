@@ -32,7 +32,7 @@ with main_tab1:
     if "recent_codes" not in st.session_state:
         st.session_state.recent_codes = []
 
-    col1, col2, col3 = st.columns([1.2, 1, 1])
+    col1, col2 = st.columns([1, 2.5])
 
     with col1:
         code = st.text_input("종목코드 (6자리)", "005930", key="vwap_code_input")
@@ -41,38 +41,20 @@ with main_tab1:
             st.caption(f"📌 **종목명:** {stock_name} ({code})")
 
     with col2:
-        time_type = st.radio(
-            "차트 주기 구분", ["일/주/월봉", "분봉"], horizontal=True, key="time_type"
+        # 드롭다운 없이 원클릭으로 바로 선택하는 차트 주기 목록
+        timeframe_options = [
+            "일봉", "주봉", "월봉",
+            "1분봉", "3분봉", "5분봉", "10분봉", "15분봉",
+            "30분봉", "45분봉", "60분봉", "90분봉", "120분봉",
+            "240분봉", "300분봉", "999분봉"
+        ]
+        selected_timeframe = st.radio(
+            "차트 주기 선택 (원클릭 다이렉트 선택)",
+            timeframe_options,
+            index=0,  # 기본값: 일봉
+            horizontal=True,
+            key="direct_timeframe_select"
         )
-
-    with col3:
-        if time_type == "일/주/월봉":
-            day_type = st.selectbox(
-                "봉 단위 선택", ["일봉", "주봉", "월봉"], index=0, key="day_type"
-            )
-            selected_timeframe = day_type
-        else:
-            min_type = st.selectbox(
-                "분봉 단위 선택",
-                [
-                    "1분봉",
-                    "3분봉",
-                    "5분봉",
-                    "10분봉",
-                    "15분봉",
-                    "30분봉",
-                    "45분봉",
-                    "60분봉",
-                    "90분봉",
-                    "120분봉",
-                    "240분봉",
-                    "300분봉",
-                    "999분봉",
-                ],
-                index=0,
-                key="min_type",
-            )
-            selected_timeframe = min_type
 
     if st.session_state.recent_codes:
         st.write("🔍 **최근 검색 종목:**")
@@ -85,7 +67,8 @@ with main_tab1:
             ):
                 code = r_code
 
-    if time_type == "일/주/월봉":
+    # 날짜 선택
+    if selected_timeframe in ["일봉", "주봉", "월봉"]:
         c1, c2 = st.columns(2)
         with c1:
             start_date = st.date_input(
@@ -226,7 +209,6 @@ with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
     st.caption("주도 업종/테마 순위 및 테마별 세부 구성 종목의 상세 시세를 분석합니다.")
 
-    # 각 종목 구조: (종목명, 코드, 현재가, 전일대비%, 거래량, 거래대금, 시총, 일봉평단, 주봉평단, 월봉평단, 3분봉평단)
     THEME_DATA = {
         "광케이블/광섬유": {
             "change": "+9.99%",
