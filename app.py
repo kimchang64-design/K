@@ -25,14 +25,44 @@ main_tab1, main_tab2 = st.tabs(["📈 세력 평단가(VWAP) 차트", "⭐ 업�
 
 
 # ---------------------------------------------------------
-# 공통 함수
+# 공통 함수 (한글 종목명 자동 변환 지원)
 # ---------------------------------------------------------
-def get_stock_name(code):
+@st.cache_data(ttl=3600)
+def get_stock_ticker_map():
+    """KRX 전체 상장 종목의 (종목명: 종목코드) 딕셔너리 생성"""
     try:
-        name = stock.get_market_ticker_name(code)
-        return name if name else code
+        today_str = datetime.datetime.now().strftime("%Y%m%d")
+        tickers = stock.get_market_ticker_list(today_str, market="ALL")
+        name_map = {}
+        for t in tickers:
+            name = stock.get_market_ticker_name(t)
+            if name:
+                name_map[name.strip()] = t
+        return name_map
     except Exception:
-        return code
+        return {}
+
+
+def resolve_code_or_name(user_input):
+    """사용자가 입력한 값이 한글 종목명이면 코드로 변환, 아니면 그대로 반환"""
+    user_input = user_input.strip()
+    # 이미 6자리 코드인 경우
+    if user_input.isdigit() and len(user_input) == 6:
+        return user_input, stock.get_market_ticker_name(user_input)
+
+    # 한글 종목명인 경우 맵에서 검색
+    name_map = get_stock_ticker_map()
+    if user_input in name_map:
+        code = name_map[user_input]
+        return code, user_input
+
+    # 부분 일치 검색 지원 (예: "삼성" 입력 시 "삼성전자" 매칭)
+    for name, code in name_map.items():
+        if user_input in name:
+            return code, name
+
+    # 기본값으로 입력된 값 반환
+    return user_input, stock.get_market_ticker_name(user_input)
 
 
 def get_financial_info(code):
@@ -61,20 +91,23 @@ def get_financial_info(code):
 
 
 # ---------------------------------------------------------
-# TAB 1: 세력 평단가(VWAP) 차트 (모든 목표/손절 점선 라인 반영)
+# TAB 1: 세력 평단가(VWAP) 차트 (한글 검색 지원)
 # ---------------------------------------------------------
 with main_tab1:
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
-        code = st.text_input(
-            "종목코드 (6자리)",
-            "005930",
+        raw_input = st.text_input(
+            "종목 입력",
+            "삼성전자",
             key="vwap_code_input",
             label_visibility="collapsed",
-            placeholder="종목코드 입력 (예: 005930)",
+            placeholder="종목명 또는 코드 입력 (예: 삼성전자)",
         )
-        stock_name = get_stock_name(code)
+        # 한글 입력인지 6자리 코드인지 자동 판별
+        code, stock_name = resolve_code_or_name(raw_input)
+        if not stock_name:
+            stock_name = code
         st.caption(f"📌 **종목:** {stock_name} ({code})")
 
     with col2:
@@ -133,12 +166,10 @@ with main_tab1:
             )
 
     if run_btn:
-        current_name = get_stock_name(code)
-
         s_date = start_date.strftime("%Y%m%d")
         e_date = end_date.strftime("%Y%m%d")
 
-        with st.spinner("계산 중..."):
+        with st.spinner("데이터 계산 중..."):
             if selected_timeframe == "일봉":
                 df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "d")
             elif selected_timeframe == "주봉":
@@ -173,7 +204,9 @@ with main_tab1:
                     df = df.dropna()
 
         if df is None or df.empty:
-            st.error("거래 데이터가 없습니다.")
+            st.error(
+                "거래 데이터가 없습니다. 종목명/코드를 다시 확인하시거나 휴일 여부를 확인해주세요."
+            )
         else:
             df["TPV"] = df["종가"] * df["거래량"]
             cum_volume = df["거래량"].cumsum()
@@ -190,7 +223,6 @@ with main_tab1:
             op_profit = f_info["op_profit"]
             trade_type = f_info["trade_type"]
 
-            # 💡 주기별 맞춤형 목표가 / 손절가 산출
             target_1st = int(last_vwap * 1.05)
             target_2nd = int(last_vwap * 1.10)
             buy_limit = int(last_vwap * 1.015)
@@ -206,7 +238,7 @@ with main_tab1:
             else:
                 status_signal = "📊 추세유지"
 
-            # 상단 메트릭 표시
+            # 상단 지표 출력
             m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
             m1.metric("현재가", f"{last_close:,}원")
             m2.metric(f"{selected_timeframe} 세력평단", f"{last_vwap:,}원", f"{disparity:+.1f}%")
@@ -218,7 +250,7 @@ with main_tab1:
 
             with st.expander("📝 텍스트 요약 및 복사 기능 열기"):
                 copy_summary = (
-                    f"■ [{current_name}({code}) - {selected_timeframe}]\n"
+                    f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
                     f"• 현재가: {last_close:,}원 | 세력평단: {last_vwap:,}원 ({disparity:+.2f}%)\n"
                     f"• 매수범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
                     f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
@@ -228,7 +260,7 @@ with main_tab1:
                 )
                 st.code(copy_summary, language="text")
 
-            # 💡 Plotly 차트 구성 (모든 가이드 라인 점선 표시)
+            # 차트 출력
             fig = go.Figure()
             fig.add_trace(
                 go.Scatter(
@@ -249,7 +281,6 @@ with main_tab1:
                 )
             )
 
-            # 1차 목표가 점선
             fig.add_hline(
                 y=target_1st,
                 line_dash="dot",
@@ -257,7 +288,6 @@ with main_tab1:
                 annotation_text=f"🎯 1차 목표가(+5%): {target_1st:,}원",
                 annotation_position="top right",
             )
-            # 2차 목표가 점선
             fig.add_hline(
                 y=target_2nd,
                 line_dash="dot",
@@ -265,7 +295,6 @@ with main_tab1:
                 annotation_text=f"🚀 2차 목표가(+10%): {target_2nd:,}원",
                 annotation_position="top right",
             )
-            # 1차 손절가 점선
             fig.add_hline(
                 y=stop_loss,
                 line_dash="dash",
@@ -273,7 +302,6 @@ with main_tab1:
                 annotation_text=f"🛑 1차 손절가(-2%): {stop_loss:,}원",
                 annotation_position="bottom right",
             )
-            # 🚨 절대사수 손절가 점선
             fig.add_hline(
                 y=absolute_stop_loss,
                 line_dash="dash",
@@ -283,7 +311,7 @@ with main_tab1:
             )
 
             fig.update_layout(
-                title=f"{current_name} ({code}) - {selected_timeframe} 세력평단 및 매매 가이드 라인",
+                title=f"{stock_name} ({code}) - {selected_timeframe} 세력평단 및 매매 가이드 라인",
                 margin=dict(l=20, r=20, t=35, b=20),
                 hovermode="x unified",
                 template="plotly_white",
@@ -298,36 +326,6 @@ with main_tab1:
 with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
     st.caption("인기 테마별 종목 전략 가이드")
-
-    THEME_DATA = {
-        "반도체 대표주(생산)": {
-            "change": "+6.94%",
-            "stocks": [
-                (
-                    "삼성전자",
-                    "005930",
-                    72500,
-                    4.50,
-                    71000,
-                    66200,
-                    64000,
-                    71200,
-                    656700,
-                ),
-                (
-                    "SK하이닉스",
-                    "000660",
-                    188500,
-                    8.90,
-                    165000,
-                    158000,
-                    149000,
-                    181000,
-                    120500,
-                ),
-            ],
-        }
-    }
     st.info(
-        "💡 상단 '📈 세력 평단가(VWAP) 차트' 탭에서 원하는 종목코드와 주기를 선택하여 상세 가이드 라인을 확인하세요."
+        "💡 상단 '📈 세력 평단가(VWAP) 차트' 탭에서 한글 종목명('삼성전자', 'SK하이닉스' 등)이나 코드를 입력해 확인하세요."
     )
