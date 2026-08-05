@@ -383,19 +383,18 @@ with main_tab1:
         df["평단가"] = df["TPV"].cumsum() / cum_volume.replace(0, pd.NA)
         df["평단가"] = df["평단가"].ffill()
 
-        # 📌 HTS 분석 지표 계산 (양봉 거래량 vs 음봉 거래량 기반 가상 산출)
+        # 📌 HTS 분석 지표 계산 (안전하게 수정됨)
         df["가격변화"] = df["종가"].diff().fillna(0)
         df["매수거래량"] = df.apply(lambda r: r["거래량"] if r["가격변화"] >= 0 else r["거래량"] * 0.4, axis=1)
         df["매도거래량"] = df.apply(lambda r: r["거래량"] * 0.6 if r["가격변화"] < 0 else r["거래량"] * 0.2, axis=1)
         
-        # 순매수 수량(증감) = 매수거래량 - 매도거래량
         df["순매수증감"] = df["매수거래량"] - df["매도거래량"]
         df["누적순매수증감"] = df["순매수증감"].cumsum()
 
         # 최근일 기준 지표 추출
         last_row = df.iloc[-1]
         total_vol = int(last_row["거래량"])
-        cum_buy_inc = int(last_row["매수거래량"].cumsum().iloc[-1] if "매수거래량" in df else total_vol * 0.6)
+        cum_buy_inc = int(df["매수거래량"].sum())
         net_buy_qty = int(last_row["순매수증감"])
         ratio_buy = (last_row["매수거래량"] / total_vol * 100) if total_vol > 0 else 0.0
         ratio_net = (net_buy_qty / total_vol * 100) if total_vol > 0 else 0.0
@@ -403,7 +402,6 @@ with main_tab1:
         last_close = int(df["종가"].iloc[-1])
         last_vwap = int(df["평단가"].iloc[-1])
         
-        # 세력 매수/매도 평단가 가상 산출
         buy_vwap = int(last_vwap * 1.0035)
         sell_vwap = int(last_vwap * 0.9812)
         disparity = ((last_close - last_vwap) / last_vwap) * 100
@@ -463,7 +461,7 @@ with main_tab1:
 
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
-        # 📌 첨부하신 HTS 화면과 동일한 형태의 분석 지표 패널 구성 (클릭 시 복사 지원)
+        # 📌 HTS 분석 지표 패널 구성
         hts_panel_html = f"""
         <div style="background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
             <div style="font-weight: bold; font-size: 13px; color: #333; margin-bottom: 10px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px;">
@@ -539,7 +537,7 @@ with main_tab1:
                 line=dict(color="#ff7f0e", width=2.5),
             )
         )
-        # 3. 순매수 증감 추세선 (보조 축 활용)
+        # 3. 순매수 증감 추세선
         fig.add_trace(
             go.Scatter(
                 x=hover_x,
