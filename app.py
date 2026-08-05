@@ -89,7 +89,7 @@ def get_financial_info(code):
 
 
 # ---------------------------------------------------------
-# TAB 1: 세력 평단가(VWAP) 차트
+# TAB 1: 세력 평단가(VWAP) 차트 (실시간 자동 갱신 + 점선 가이드)
 # ---------------------------------------------------------
 with main_tab1:
     col1, col2 = st.columns([1, 2.5])
@@ -298,13 +298,11 @@ with main_tab1:
 
 
 # ---------------------------------------------------------
-# TAB 2: 업종·테마 분석 (복구 완료)
+# TAB 2: 업종·테마 분석 (2번 사진의 기능 완벽 복구)
 # ---------------------------------------------------------
 with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
-    st.caption(
-        "25개 인기 테마 시세, 실적, 세력평단 및 [목표가 / 손절가 / 절대손절가] 종합 분석"
-    )
+    st.caption("인기 테마 시세, 실적, 세력평단 및 종합 매매전략 분석")
 
     THEME_DATA = {
         "광케이블/광섬유": {
@@ -443,6 +441,21 @@ with main_tab2:
                     120500,
                     "🏆 중장기",
                 ),
+                (
+                    "DB하이텍",
+                    "000990",
+                    48500,
+                    7.20,
+                    1250000,
+                    606,
+                    21500,
+                    47200,
+                    41500,
+                    39800,
+                    46800,
+                    2100,
+                    "🌊 스윙",
+                ),
             ],
         },
         "온디바이스 AI": {
@@ -519,7 +532,32 @@ with main_tab2:
         },
     }
 
-    col_left, col_right = st.columns([1, 3.2])
+    # Top 1~5 인기 테마 카드 표시
+    st.subheader("🔥 인기 업종·테마 Top")
+    top_keys = list(THEME_DATA.keys())[:5]
+    top_cols = st.columns(len(top_keys))
+
+    for i, t_name in enumerate(top_keys):
+        t_info = THEME_DATA[t_name]
+        top_stocks_str = ", ".join([s[0] for s in t_info["stocks"][:3]])
+        with top_cols[i]:
+            st.markdown(
+                f"""
+            <div style="background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="background-color: #ffebee; color: #d32f2f; font-weight: bold; padding: 2px 8px; border-radius: 4px; font-size: 12px;">{i+1}위</span>
+                    <span style="color: #d32f2f; font-weight: bold; font-size: 15px;">{t_info['change']}</span>
+                </div>
+                <div style="font-weight: bold; font-size: 15px; margin-top: 8px; color: #111;">{t_name}</div>
+                <div style="font-size: 11px; color: #777; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{top_stocks_str}</div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_left, col_right = st.columns([1, 3.5])
 
     with col_left:
         search_mode = st.radio(
@@ -572,20 +610,43 @@ with main_tab2:
             st.subheader(f"📌 {render_theme}")
             stocks_list = THEME_DATA[render_theme]["stocks"]
 
+            sort_option = st.radio(
+                "정렬 필터",
+                ["전체", "거래대금 상위", "상승 TOP", "영업이익 높은순"],
+                horizontal=True,
+                key=f"sort_{render_theme}",
+            )
+
+            if sort_option == "거래대금 상위":
+                stocks_list = sorted(
+                    stocks_list, key=lambda x: x[5], reverse=True
+                )
+            elif sort_option == "상승 TOP":
+                stocks_list = sorted(
+                    stocks_list, key=lambda x: x[3], reverse=True
+                )
+            elif sort_option == "영업이익 높은순":
+                stocks_list = sorted(
+                    stocks_list, key=lambda x: x[11], reverse=True
+                )
+
             table_rows_html = ""
             for idx, item in enumerate(stocks_list, start=1):
                 s_name, s_code = item[0], str(item[1]).zfill(6)
                 curr_price, change_pct = item[2], item[3]
-                d_vwap, op_profit = item[7], item[11]
+                trade_amt, op_profit = item[5], item[11]
+                trade_type = item[12]
 
-                d_target = int(d_vwap * 1.05)
-                d_stop = int(d_vwap * 0.98)
-                d_abs_stop = int(d_vwap * 0.96)
-                change_str = (
-                    f"+{change_pct:.2f}%"
-                    if change_pct > 0
-                    else f"{change_pct:.2f}%"
+                d_vwap, w_vwap, m_vwap, m3_vwap = (
+                    item[7],
+                    item[8],
+                    item[9],
+                    item[10],
                 )
+                d_disp = ((curr_price - d_vwap) / d_vwap) * 100
+                w_disp = ((curr_price - w_vwap) / w_vwap) * 100
+                m_disp = ((curr_price - m_vwap) / m_vwap) * 100
+                m3_disp = ((curr_price - m3_vwap) / m3_vwap) * 100
 
                 profit_badge = (
                     f'<span style="color:#0ca678; font-weight:bold;">🟢 흑자 ({op_profit:,}억)</span>'
@@ -594,29 +655,37 @@ with main_tab2:
                 )
 
                 table_rows_html += f"""
-                <tr style="border-bottom: 1px solid #f0f0f0; height: 60px; font-size: 12px;">
+                <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
                     <td style="text-align: center;">{idx}</td>
-                    <td style="font-weight: bold;">{s_name} ({s_code})</td>
+                    <td style="font-weight: bold;">{s_name} <br><span style="color:#1c7ed6; font-size:10px;">{trade_type}</span></td>
+                    <td style="text-align: center;">{s_code}</td>
                     <td style="text-align: center;">{profit_badge}</td>
                     <td style="text-align: right; font-weight: bold;">{curr_price:,}원</td>
-                    <td style="text-align: right; color: #d32f2f; font-weight: bold;">{change_str}</td>
-                    <td style="text-align: center; background-color: #fff9db;">
-                        <b>평단: {d_vwap:,}원</b> | 🎯목표: {d_target:,}원 | 🛑1차손절: {d_stop:,}원 | <span style="color:#d6336c; font-weight:bold;">🚨절대손절: {d_abs_stop:,}원</span>
-                    </td>
+                    <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change_pct:.2f}%</td>
+                    <td style="text-align: right;">{trade_amt:,}백만</td>
+                    <td style="text-align: center; background-color: #fff9db;"><b>{d_vwap:,}원</b><br><span style="color:{'#d32f2f' if d_disp>0 else '#1976d2'};">({d_disp:+.1f}%)</span></td>
+                    <td style="text-align: center; background-color: #fff3bf;"><b>{w_vwap:,}원</b><br><span style="color:{'#d32f2f' if w_disp>0 else '#1976d2'};">({w_disp:+.1f}%)</span></td>
+                    <td style="text-align: center; background-color: #ffec99;"><b>{m_vwap:,}원</b><br><span style="color:{'#d32f2f' if m_disp>0 else '#1976d2'};">({m_disp:+.1f}%)</span></td>
+                    <td style="text-align: center; background-color: #e7f5ff;"><b>{m3_vwap:,}원</b><br><span style="color:{'#d32f2f' if m3_disp>0 else '#1976d2'};">({m3_disp:+.1f}%)</span></td>
                 </tr>
                 """
 
             full_table_html = f"""
             <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 20px;">
-                <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+                <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 1000px;">
                     <thead>
                         <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 35px;">
-                            <th style="text-align: center; width: 40px;">순위</th>
-                            <th style="text-align: left; width: 110px;">종목명</th>
-                            <th style="text-align: center; width: 90px;">실적</th>
-                            <th style="text-align: right; width: 80px;">현재가</th>
-                            <th style="text-align: right; width: 70px;">전일대비</th>
-                            <th style="text-align: center;">일봉 세력평단 및 🚨 절대사수 손절 가이드</th>
+                            <th style="text-align: center;">순위</th>
+                            <th style="text-align: left;">종목명</th>
+                            <th style="text-align: center;">종목코드</th>
+                            <th style="text-align: center;">실적</th>
+                            <th style="text-align: right;">현재가</th>
+                            <th style="text-align: right;">전일대비</th>
+                            <th style="text-align: right;">거래대금</th>
+                            <th style="text-align: center; background-color: #fff9db;">일봉 평단</th>
+                            <th style="text-align: center; background-color: #fff3bf;">주봉 평단</th>
+                            <th style="text-align: center; background-color: #ffec99;">월봉 평단</th>
+                            <th style="text-align: center; background-color: #e7f5ff;">3분봉 평단</th>
                         </tr>
                     </thead>
                     <tbody>{table_rows_html}</tbody>
@@ -624,5 +693,5 @@ with main_tab2:
             </div>
             """
             components.html(
-                full_table_html, height=len(stocks_list) * 65 + 50, scrolling=True
+                full_table_html, height=len(stocks_list) * 70 + 50, scrolling=True
             )
