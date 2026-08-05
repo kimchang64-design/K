@@ -11,7 +11,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 여백 최소화 패치 CSS
+# 여백 최소화 패치 및 최근 검색 기록 가로 스크롤 CSS
 st.markdown(
     """
     <style>
@@ -254,24 +254,25 @@ with main_tab1:
             unsafe_allow_html=True,
         )
 
+        # 🕒 최근 검색 기록 가로 배치 영역 (오른쪽으로 나란히 정렬 및 가로 스크롤 지원)
         if st.session_state.search_history:
             st.markdown(
                 "<span style='font-size:11px; color:#666;'>최근 검색 기록 (최대 12개):</span>",
                 unsafe_allow_html=True,
             )
             history_list = st.session_state.search_history[:12]
-            for i in range(0, len(history_list), 4):
-                row_items = history_list[i : i + 4]
-                row_cols = st.columns(len(row_items))
-                for idx, hist_name in enumerate(row_items):
-                    with row_cols[idx]:
-                        st.button(
-                            hist_name,
-                            key=f"hist_btn_{i + idx}",
-                            on_click=set_recent_stock,
-                            args=(hist_name,),
-                            use_container_width=True,
-                        )
+            
+            # Streamlit 컬럼을 이용해 모든 최근 검색어를 한 줄에 가로로 배치
+            h_cols = st.columns(len(history_list))
+            for idx, hist_name in enumerate(history_list):
+                with h_cols[idx]:
+                    st.button(
+                        hist_name,
+                        key=f"hist_btn_{idx}",
+                        on_click=set_recent_stock,
+                        args=(hist_name,),
+                        use_container_width=True,
+                    )
 
     with col2:
         timeframe_options = [
