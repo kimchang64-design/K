@@ -9,6 +9,16 @@ st.set_page_config(page_title="세력 평단가 차트", layout="wide")
 
 st.title("📈 세력 평단가(VWAP) 분석 대시보드")
 
+
+# 종목명 가져오는 함수
+def get_stock_name(code):
+    try:
+        name = stock.get_market_ticker_name(code)
+        return name if name else code
+    except Exception:
+        return code
+
+
 # 최근 검색 종목 저장소 초기화 (세션 상태)
 if "recent_codes" not in st.session_state:
     st.session_state.recent_codes = []
@@ -17,6 +27,11 @@ if "recent_codes" not in st.session_state:
 col1, col2 = st.columns([1, 1])
 with col1:
     code = st.text_input("종목코드 (6자리)", "005930")
+    # 한글 종목명 자동 표시
+    stock_name = get_stock_name(code)
+    if stock_name != code:
+        st.caption(f"📌 **종목명:** {stock_name} ({code})")
+
 with col2:
     timeframe = st.selectbox(
         "차트 주기 선택",
@@ -40,13 +55,15 @@ with col2:
         index=12,  # 기본값: 일봉
     )
 
-# 최근 검색 종목 표시
+# 최근 검색 종목 표시 (종목명 포함)
 if st.session_state.recent_codes:
     st.write("🔍 **최근 검색 종목:**")
-    cols = st.columns(len(st.session_state.recent_codes) + 1)
-    for idx, recent_code in enumerate(st.session_state.recent_codes):
-        if cols[idx].button(f"📌 {recent_code}", key=f"recent_{recent_code}"):
-            code = recent_code
+    cols = st.columns(min(len(st.session_state.recent_codes), 5))
+    for idx, recent_item in enumerate(st.session_state.recent_codes[:5]):
+        r_code = recent_item["code"]
+        r_name = recent_item["name"]
+        if cols[idx].button(f"📌 {r_name} ({r_code})", key=f"recent_{r_code}"):
+            code = r_code
 
 # 2. 날짜 선택
 if timeframe in ["일봉", "주봉", "월봉"]:
@@ -62,10 +79,14 @@ else:
 
 # 차트 그리기 버튼
 if st.button("차트 및 수치 분석 실행", type="primary"):
-    # 최근 검색 기록 업데이트 (최대 5개 유지)
-    if code not in st.session_state.recent_codes:
-        st.session_state.recent_codes.insert(0, code)
-        st.session_state.recent_codes = st.session_state.recent_codes[:5]
+    current_name = get_stock_name(code)
+
+    # 최근 검색 기록 업데이트
+    new_entry = {"code": code, "name": current_name}
+    st.session_state.recent_codes = [
+        item for item in st.session_state.recent_codes if item["code"] != code
+    ]
+    st.session_state.recent_codes.insert(0, new_entry)
 
     s_date = start_date.strftime("%Y%m%d")
     e_date = end_date.strftime("%Y%m%d")
@@ -117,29 +138,30 @@ if st.button("차트 및 수치 분석 실행", type="primary"):
         df["세력평단"] = df["TPV"].cumsum() / cum_volume.replace(0, pd.NA)
         df["세력평단"] = df["세력평단"].ffill()
 
-        # 최근(마지막) 수치 데이터 추출
+        # 최근 수치 데이터 추출
         last_close = int(df["종가"].iloc[-1])
         last_vwap = int(df["세력평단"].iloc[-1])
         disparity = ((last_close - last_vwap) / last_vwap) * 100
 
-        # 복사용 텍스트 양식 생성
-        copy_text = f"[{code}] 종가: {last_close:,}원 | 세력평단: {last_vwap:,}원 | 괴리율: {disparity:+.2f}%"
+        # 유튜브 스타일 단일 복사용 텍스트 양식
+        copy_summary = f"■ {s_date}~{e_date} [{current_name}({code})]\n• 종가: {last_close:,}원\n• 세력평단: {last_vwap:,}원\n• 괴리율: {disparity:+.2f}%"
 
-        st.subheader(f"📊 {code} 분석 결과 요약")
+        st.subheader(f"📊 {current_name} ({code}) 분석 결과 요약")
 
-        # 수치 요약 카드 (3개 컬럼)
+        # 수치 요약 카드
         mc1, mc2, mc3 = st.columns(3)
         mc1.metric("현재가 / 종가", f"{last_close:,} 원")
         mc2.metric("누적 세력평단", f"{last_vwap:,} 원")
         mc3.metric("괴리율", f"{disparity:+.2f} %")
 
-        # 복사 코드 박스
-        st.code(copy_text, language="text")
+        # 수치 복사 전용 박스 (우측 상단 아이콘으로 1클릭 복사 가능)
+        st.write("📋 **결과 수치 복사하기 (우측 상단 복사 아이콘 클릭):**")
+        st.code(copy_summary, language="text")
 
         # 차트 시각화
         fig = go.Figure()
 
-        # 주가 선 (검은색/분홍색 계열)
+        # 주가 선
         fig.add_trace(
             go.Scatter(
                 x=df.index,
@@ -150,7 +172,7 @@ if st.button("차트 및 수치 분석 실행", type="primary"):
             )
         )
 
-        # 세력 평단선 (주황색/노란색 계열)
+        # 세력 평단선
         fig.add_trace(
             go.Scatter(
                 x=df.index,
@@ -162,7 +184,7 @@ if st.button("차트 및 수치 분석 실행", type="primary"):
         )
 
         fig.update_layout(
-            title=f"{code} - {timeframe} 세력평단 차트",
+            title=f"{current_name} ({code}) - {timeframe} 세력평단 차트",
             xaxis_title="시간/날짜",
             yaxis_title="가격(원)",
             hovermode="x unified",
