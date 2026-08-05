@@ -300,7 +300,7 @@ with main_tab1:
         )
 
     # ---------------------------------------------------------
-    # 📌 요청하신 하늘색 박스 위치 (조회 기간 설정 바로 위)에 배치된 HTS 수급 분석 패널
+    # 📌 요청하신 하늘색 박스 위치(조회 기간 설정 바로 위)에 배치된 HTS 수급 분석 패널
     # ---------------------------------------------------------
     s_date_dummy = "20240101"
     e_date_dummy = datetime.datetime.now().strftime("%Y%m%d")
@@ -327,8 +327,8 @@ with main_tab1:
         t_vol, c_buy, n_qty, r_buy, r_net, v_val, b_vwap, s_vwap = 1599258, 285894, -109492, 17.88, -6.85, 198465, 199134, 195719
 
     hts_top_panel_html = f"""
-    <div style="background: #ffffff; border: 1px solid #b2f2bb; border-radius: 8px; padding: 12px 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-        <div style="font-weight: bold; font-size: 13px; color: #2b8a3e; margin-bottom: 8px; border-bottom: 2px solid #2b8a3e; padding-bottom: 4px;">
+    <div style="background: #ffffff; border: 1px solid #1a73e8; border-radius: 8px; padding: 12px 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 8px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px;">
             📊 HTS 기준 [{stock_name}] 수급 및 평단 분석 결과 <span style="font-size:11px; color:#666; font-weight:normal;">(글자 클릭 시 확인창 없이 즉시 복사)</span>
         </div>
         <div style="display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 10px; font-size: 12px;">
