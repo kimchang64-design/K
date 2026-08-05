@@ -4,22 +4,42 @@ import plotly.graph_objects as go
 import streamlit as st
 from pykrx import stock
 
-st.title("📈 세력 평단가(VWAP) 차트 (일봉 / 3분봉)")
+st.title("📈 세력 평단가(VWAP) 차트")
 
 # 1. 설정 옵션 선택
 col1, col2 = st.columns(2)
 with col1:
     code = st.text_input("종목코드 (6자리)", "005930")
 with col2:
-    chart_type = st.radio("차트 주기 선택", ["일봉", "3분봉"], horizontal=True)
+    # requested 주기 전체 옵션 (0분봉은 최소 단위인 1분봉으로 대체 적용)
+    timeframe = st.selectbox(
+        "차트 주기 선택",
+        [
+            "1분봉",
+            "3분봉",
+            "5분봉",
+            "10분봉",
+            "15분봉",
+            "30분봉",
+            "45분봉",
+            "60분봉",
+            "90분봉",
+            "120분봉",
+            "240분봉",
+            "300분봉",
+            "일봉",
+            "주봉",
+            "월봉",
+        ],
+    )
 
 # 2. 날짜 선택
-if chart_type == "일봉":
-    start_date = st.date_input("시작일 (바닥)", pd.to_datetime("2024-01-01"))
+if timeframe in ["일봉", "주봉", "월봉"]:
+    start_date = st.date_input("시작일", pd.to_datetime("2024-01-01"))
     end_date = st.date_input("종료일", pd.to_datetime("today"))
 else:
     today = datetime.datetime.now()
-    start_date = st.date_input("조회일 선택 (3분봉)", today)
+    start_date = st.date_input("조회일 선택 (분봉)", today)
     end_date = start_date
 
 if st.button("차트 그리기"):
@@ -27,22 +47,33 @@ if st.button("차트 그리기"):
     e_date = end_date.strftime("%Y%m%d")
 
     with st.spinner("데이터를 불러오는 중입니다..."):
-        if chart_type == "일봉":
-            df = stock.get_market_ohlcv_by_date(s_date, e_date, code)
+        if timeframe == "일봉":
+            df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "d")
+        elif timeframe == "주봉":
+            df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "w")
+        elif timeframe == "월봉":
+            df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
         else:
             # 1분봉 데이터 수집
             df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
+
             if not df.empty:
-                # 3분봉 리샘플링
-                df = df.resample("3T").agg(
-                    {
-                        "시가": "first",
-                        "고가": "max",
-                        "저가": "min",
-                        "종가": "last",
-                        "거래량": "sum",
-                    }
-                )
+                # 선택한 주기 분 단위 파싱 (예: "90분봉" -> "90T")
+                minutes = timeframe.replace("분봉", "") + "T"
+
+                if minutes == "1T":
+                    # 1분봉은 리샘플링 없이 그대로 활용
+                    pass
+                else:
+                    df = df.resample(minutes).agg(
+                        {
+                            "시가": "first",
+                            "고가": "max",
+                            "저가": "min",
+                            "종가": "last",
+                            "거래량": "sum",
+                        }
+                    )
                 df = df.dropna()
 
     if df is None or df.empty:
@@ -84,7 +115,7 @@ if st.button("차트 그리기"):
         )
 
         fig.update_layout(
-            title=f"{code} - {chart_type} 세력평단 차트",
+            title=f"{code} - {timeframe} 세력평단 차트",
             xaxis_title="시간/날짜",
             yaxis_title="가격(원)",
             hovermode="x unified",
