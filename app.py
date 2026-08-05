@@ -793,7 +793,7 @@ with main_tab3:
 
 
 # ---------------------------------------------------------
-# TAB 4: 시간외 거래 TOP 30 대시보드
+# TAB 4: 시간외 거래 TOP 30 대시보드 (정렬 버튼 추가 완료)
 # ---------------------------------------------------------
 with main_tab4:
     st.title("🌙 시간외 단일가 거래 TOP 30 대시보드")
@@ -801,26 +801,42 @@ with main_tab4:
         "장 마감 후 시간외 단일가에서 급등하거나 거래량이 폭발한 다음 날 시초가 공략 종목 리스트"
     )
 
-    after_hours_sample = [
-        ("대한광통신", "010170", 1950, +9.80, 850, "⚡ 단타급등", "재료 호재"),
-        ("대한전선", "001440", 14800, +4.20, 1200, "🌊 스윙", "대규모 수주"),
-        ("RF머트리얼즈", "327260", 35500, +5.10, 640, "⚡ 단타", "시간외 매수세"),
-        ("KBI메탈", "024840", 2220, +3.20, 410, "⚡ 단타", "구리 가격 급등"),
-        ("LS마린솔루션", "028670", 20500, +3.50, 310, "🏆 중장기", "실적 호조"),
+    # 정렬 방식 선택 버튼 추가
+    sort_mode = st.radio(
+        "정렬 기준 선택",
+        ["기본 순위", "시간외 거래대금 많은순", "시간외 등락률 높은순"],
+        horizontal=True,
+        key="after_hours_sort",
+    )
+
+    after_hours_data = [
+        {"name": "대한광통신", "code": "010170", "price": 1950, "change": 9.80, "amt": 850, "type": "⚡ 단타급등", "reason": "재료 호재"},
+        {"name": "대한전선", "code": "001440", "price": 14800, "change": 4.20, "amt": 1200, "type": "🌊 스윙", "reason": "대규모 수주"},
+        {"name": "RF머트리얼즈", "code": "327260", "price": 35500, "change": 5.10, "amt": 640, "type": "⚡ 단타", "reason": "시간외 매수세"},
+        {"name": "KBI메탈", "code": "024840", "price": 2220, "change": 3.20, "amt": 410, "type": "⚡ 단타", "reason": "구리 가격 급등"},
+        {"name": "LS마린솔루션", "code": "028670", "price": 20500, "change": 3.50, "amt": 310, "type": "🏆 중장기", "reason": "실적 호조"},
+        {"name": "제주반도체", "code": "080220", "price": 25100, "change": 6.50, "amt": 1500, "type": "⚡ 단타", "reason": "AI 반도체 부각"},
+        {"name": "두산로보틱스", "code": "454910", "price": 79500, "change": 2.10, "amt": 920, "type": "⚡ 단타", "reason": "로봇 수주"},
     ]
 
-    full_after = (after_hours_sample * 6)[:30]
+    # 30개 항목으로 확장
+    full_after = (after_hours_data * 5)[:30]
+
+    # 사용자가 선택한 정렬 기준에 따라 리스트 재정렬
+    if sort_mode == "시간외 거래대금 많은순":
+        full_after = sorted(full_after, key=lambda x: x["amt"], reverse=True)
+    elif sort_mode == "시간외 등락률 높은순":
+        full_after = sorted(full_after, key=lambda x: x["change"], reverse=True)
 
     ah_rows = ""
     for idx, item in enumerate(full_after, start=1):
-        s_name, s_code = item[0], item[1]
-        price, change, amt, t_type, reason = (
-            item[2],
-            item[3],
-            item[4],
-            item[5],
-            item[6],
-        )
+        s_name = item["name"]
+        s_code = item["code"]
+        price = item["price"]
+        change = item["change"]
+        amt = item["amt"]
+        t_type = item["type"]
+        reason = item["reason"]
         rank_color = "#d32f2f" if idx <= 3 else "#333"
 
         ah_rows += f"""
@@ -830,7 +846,7 @@ with main_tab4:
             <td style="text-align: center;">{s_code}</td>
             <td style="text-align: right; font-weight: bold;">{price:,}원</td>
             <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change:.2f}%</td>
-            <td style="text-align: right;">{amt:,} 백만</td>
+            <td style="text-align: right; font-weight: bold;">{amt:,} 백만</td>
             <td style="text-align: center; color: #2b8a3e; font-weight: bold;">{reason}</td>
             <td style="text-align: center;"><span style="background-color: #e7f5ff; color: #1971c2; padding: 3px 8px; border-radius: 4px; font-weight: bold;">시초가 공략 관심</span></td>
         </tr>
@@ -855,4 +871,4 @@ with main_tab4:
         </table>
     </div>
     """
-    components.html(ah_table, height=750, scrolling=True)
+    components.html(ah_table, height=700, scrolling=True)
