@@ -493,6 +493,10 @@ with main_tab1:
         fig = go.Figure()
         
         hover_x = [d.strftime("%Y-%m-%d") for d in df.index]
+        
+        # 📌 툴팁(호버)에서 평단가 가격이 명확히 보이도록 커스텀 호버텍스트 구성
+        hover_close = [f"종가: {int(val):,}원" for val in df["종가"]]
+        hover_vwap = [f"누적 평단가: {int(val):,}원" if pd.notna(val) else "누적 평단가: -" for val in df["평단가"]]
 
         fig.add_trace(
             go.Scatter(
@@ -500,6 +504,8 @@ with main_tab1:
                 y=df["종가"],
                 mode="lines",
                 name="종가",
+                text=hover_close,
+                hovertemplate="<b>%{x}</b><br>%{text}<extra>종가</extra>",
                 line=dict(color="#1f77b4", width=1.5),
             )
         )
@@ -509,6 +515,8 @@ with main_tab1:
                 y=df["평단가"],
                 mode="lines",
                 name=f"누적 평단가 ({selected_timeframe})",
+                text=hover_vwap,
+                hovertemplate="<b>%{x}</b><br>%{text}<extra>평단가</extra>",
                 line=dict(color="#ff7f0e", width=2.5),
             )
         )
@@ -558,9 +566,9 @@ with main_tab1:
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # 📌 툴팁 복사 대안: 최근 주요 일자별 상세 수치 카드 및 즉시 복사 테이블 영역
-        st.markdown("### 📋 최근 날짜별 상세 수치 복사 (클릭 시 즉시 복사)")
-        recent_df = df.tail(5).iloc[::-1] # 최근 5일 데이터 역순
+        # 📌 날짜별 상세 수치 카드 (글자 클릭 시 즉시 클립보드 복사 기능 포함)
+        st.markdown("### 📋 최근 날짜별 상세 수치 복사 (원하시는 가격 글자를 클릭하면 즉시 복사됩니다)")
+        recent_df = df.tail(10).iloc[::-1] # 최근 10일 데이터 역순
         
         card_rows_html = ""
         for dt_idx, row in recent_df.iterrows():
@@ -573,10 +581,10 @@ with main_tab1:
             card_rows_html += f"""
             <tr style="border-bottom: 1px solid #f0f0f0; height: 40px; font-size: 12px;">
                 <td style="text-align: center; font-weight: bold; color: #333;">{d_str}</td>
-                <td onclick="navigator.clipboard.writeText('{c_val}');" style="text-align: right; font-weight: bold; color: #1f77b4; cursor: pointer;" title="클릭 시 복사">{c_val:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{v_val}');" style="text-align: right; font-weight: bold; color: #ff7f0e; cursor: pointer; background: #fff9db;" title="클릭 시 복사">{v_val:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{t1_val}');" style="text-align: right; font-weight: bold; color: #2b8a3e; cursor: pointer;" title="클릭 시 복사">{t1_val:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{s1_val}');" style="text-align: right; font-weight: bold; color: #e03131; cursor: pointer;" title="클릭 시 복사">{s1_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{c_val}');" style="text-align: right; font-weight: bold; color: #1f77b4; cursor: pointer;" title="클릭 시 즉시 복사">{c_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{v_val}');" style="text-align: right; font-weight: bold; color: #ff7f0e; cursor: pointer; background: #fff9db;" title="클릭 시 즉시 복사">{v_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{t1_val}');" style="text-align: right; font-weight: bold; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t1_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{s1_val}');" style="text-align: right; font-weight: bold; color: #e03131; cursor: pointer;" title="클릭 시 즉시 복사">{s1_val:,}원</td>
             </tr>
             """
             
@@ -587,7 +595,7 @@ with main_tab1:
                     <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 32px;">
                         <th style="text-align: center;">날짜</th>
                         <th style="text-align: right; color: #1f77b4;">종가 (클릭 복사)</th>
-                        <th style="text-align: right; color: #ff7f0e; background: #fff9db;">평단가 (클릭 복사)</th>
+                        <th style="text-align: right; color: #ff7f0e; background: #fff9db;">누적 평단가 (클릭 복사)</th>
                         <th style="text-align: right; color: #2b8a3e;">1차목표 +5% (클릭 복사)</th>
                         <th style="text-align: right; color: #e03131;">1차손절 -2% (클릭 복사)</th>
                     </tr>
@@ -596,7 +604,7 @@ with main_tab1:
             </table>
         </div>
         """
-        components.html(recent_table_html, height=210)
+        components.html(recent_table_html, height=280)
 
 
 # ---------------------------------------------------------
