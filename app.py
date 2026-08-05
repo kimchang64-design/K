@@ -197,7 +197,6 @@ def get_financial_info(code):
 # TAB 1: 평단선 차트
 # ---------------------------------------------------------
 with main_tab1:
-    # 세션 상태 초기화 (최대 12개 저장)
     if "search_history" not in st.session_state:
         st.session_state.search_history = ["삼성전자", "SK하이닉스"]
     if "target_stock" not in st.session_state:
@@ -238,21 +237,27 @@ with main_tab1:
             st.session_state.target_stock
         )
 
-        # 최근 검색 기록 관리 (최대 12개 유지)
         if stock_name and stock_name not in st.session_state.search_history:
             st.session_state.search_history.insert(0, stock_name)
             if len(st.session_state.search_history) > 12:
                 st.session_state.search_history.pop()
 
-        st.caption(f"📌 **종목:** {stock_name} ({code} - {stock_name})")
+        # 📌 종목명·코드 및 즉시 복사 버튼 영역
+        st.markdown(
+            f"""
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; padding: 6px 10px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
+                <span style="font-size: 13px; font-weight: bold;">📌 종목: {stock_name} ({code})</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-        # 🕒 최근 검색 기록 버튼 영역 (최대 12개 표시)
+        # 🕒 최근 검색 기록 버튼 영역 (최대 12개)
         if st.session_state.search_history:
             st.markdown(
                 "<span style='font-size:11px; color:#666;'>최근 검색 기록 (최대 12개):</span>",
                 unsafe_allow_html=True,
             )
-            # 4개씩 3줄로 나누어 예쁘게 배치
             history_list = st.session_state.search_history[:12]
             for i in range(0, len(history_list), 4):
                 row_items = history_list[i : i + 4]
@@ -295,7 +300,7 @@ with main_tab1:
             label_visibility="collapsed",
         )
 
-    # 📅 연도, 월, 일 완벽 선택 가능한 한글 날짜 설정 UI
+    # 📅 연도, 월, 일 상세 선택 UI
     st.markdown("📅 **조회 기간 설정 (연도·월·일 상세 선택)**")
     d_cols = st.columns(6)
 
@@ -401,7 +406,7 @@ with main_tab1:
         absolute_stop_loss = int(last_vwap * 0.96)
 
         if 0 <= disparity <= 5.0:
-            status_signal = "🔥 최적타점"
+            status_signal = "🔥 최적타점 (손절짧은매수타점)"
         elif disparity > 20.0:
             status_signal = "⚠️ 진입주의"
         elif last_close < absolute_stop_loss:
@@ -416,7 +421,7 @@ with main_tab1:
             f"{op_profit:,} 억원",
             "🟢 흑자" if op_profit > 0 else "🔴 적자",
         )
-        f3.metric("🎯 AI 추천 성향", trade_type)
+        f3.metric("🎯 매매 성향", trade_type)
         f4.metric("⚡ 진단 상태", status_signal)
 
         s_c1, s_c2, s_c3, s_c4 = st.columns(4)
@@ -425,7 +430,7 @@ with main_tab1:
         s_c3.metric("💻 실시간 프로그램", prog_net)
         s_c4.metric("💳 신용잔고율", credit_ratio)
 
-        # 📰 실시간 상승 이유 및 뉴스 속보 섹션
+        # 📰 실시간 뉴스 속보 섹션
         st.markdown(
             f"""
             <div style="background-color: #f1f3f5; border-left: 4px solid #1a73e8; padding: 10px 15px; border-radius: 0 6px 6px 0; margin: 10px 0;">
@@ -442,20 +447,24 @@ with main_tab1:
 
         m1, m2, m3, m4, m5, m6 = st.columns(6)
         m1.metric("현재가", f"{last_close:,}원")
-        m2.metric(f"{selected_timeframe} 평단선", f"{last_vwap:,}원", f"{disparity:+.1f}%")
+        m2.metric(
+            f"{selected_timeframe} 평단가",
+            f"{last_vwap:,}원",
+            f"괴리율 {disparity:+.1f}%",
+        )
         m3.metric("🎯1차목표(+5%)", f"{target_1st:,}원")
         m4.metric("🚀2차목표(+10%)", f"{target_2nd:,}원")
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
         m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
 
-        # 📋 확인창 없는 단가 복사 버튼
+        # 📋 확인창 없는 단가 복사 버튼 (코드명 옆 및 하단 제공)
         st.markdown(
             "### 📋 키움차트/주문창 단가 수치 복사하기 (클릭 시 확인창 없이 즉시 복사)"
         )
         copy_html = f"""
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <button onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#1a73e8; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
-                📌 평단선 ({last_vwap}) 복사
+                📌 평단가 ({last_vwap}) 복사
             </button>
             <button onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#0ca678; color:white; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold;">
                 🎯 1차목표 ({target_1st}) 복사
@@ -476,14 +485,13 @@ with main_tab1:
         with st.expander("📝 텍스트 요약 및 전체 복사 기능"):
             copy_summary = (
                 f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
-                f"• 시가총액: {mcap_val:,}억원 | 영업이익: {op_profit:,}억원\n"
-                f"• 외국인: {foreign_net} | 기관: {inst_net} | 프로그램: {prog_net}\n"
-                f"• 현재가: {last_close:,}원 | 평단선: {last_vwap:,}원 ({disparity:+.2f}%)\n"
-                f"• 매수범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
+                f"• 매매성향: {trade_type} | 괴리율: {disparity:+.2f}%\n"
+                f"• 현재가: {last_close:,}원 | 평단가: {last_vwap:,}원\n"
+                f"• 매수타점범위: {last_vwap:,}원 ~ {buy_limit:,}원 (손절짧은타점)\n"
                 f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
                 f"• 🚀 2차목표(+10%): {target_2nd:,}원\n"
                 f"• 🛑 1차손절(-2%): {stop_loss:,}원\n"
-                f"• 🚨 절대사수손절(-4%): {absolute_stop_loss:,}원"
+                f"• 🚨 절대손절(-4%): {absolute_stop_loss:,}원"
             )
             st.code(copy_summary, language="text")
 
@@ -502,7 +510,7 @@ with main_tab1:
                 x=df.index,
                 y=df["평단가"],
                 mode="lines",
-                name=f"누적 평단선 ({selected_timeframe})",
+                name=f"누적 평단가 ({selected_timeframe})",
                 line=dict(color="#ff7f0e", width=2.5),
             )
         )
@@ -559,7 +567,7 @@ with main_tab1:
 with main_tab2:
     st.markdown("### ⭐ 업종·테마 분석 대시보드")
     st.caption(
-        "실적(흑자/적자), 매매유형(단타/스윙/중장기), 평단선 괴리율을 기반의 매수타점을 종합 분석합니다."
+        "실적, 매매유형(단타/스윙/중장기), 평단가 및 괴리율 기반 매수타점 종합 분석"
     )
 
     THEME_DATA = {
@@ -577,13 +585,7 @@ with main_tab2:
                     "trade_type": "⚡ 단타",
                     "d_vwap": 1810,
                     "d_disp": "+2.1%",
-                    "w_vwap": 1580,
-                    "w_disp": "+17.1%",
-                    "m_vwap": 1450,
-                    "m_disp": "+27.5%",
-                    "m3_vwap": 1780,
-                    "m3_disp": "+3.9%",
-                },
+                }
             ],
         },
         "전선": {
@@ -600,12 +602,6 @@ with main_tab2:
                     "trade_type": "🌊 스윙",
                     "d_vwap": 13950,
                     "d_disp": "+1.8%",
-                    "w_vwap": 12100,
-                    "w_disp": "+17.3%",
-                    "m_vwap": 11500,
-                    "m_disp": "+23.4%",
-                    "m3_vwap": 13900,
-                    "m3_disp": "+2.1%",
                 }
             ],
         },
@@ -662,7 +658,7 @@ with main_tab2:
                     <td style="text-align: center;">{item['code']}</td>
                     <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
                     <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{item['change']:.2f}%</td>
-                    <td style="text-align: center; background-color: #fff9db;"><b>{item['d_vwap']:,}원</b></td>
+                    <td style="text-align: center; background-color: #fff9db;"><b>{item['d_vwap']:,}원</b> ({item['d_disp']})</td>
                 </tr>
                 """
             full_table_html = f"""
@@ -675,7 +671,7 @@ with main_tab2:
                             <th style="text-align: center;">종목코드</th>
                             <th style="text-align: right;">현재가</th>
                             <th style="text-align: right;">전일대비</th>
-                            <th style="text-align: center; background-color: #fff9db;">일봉 평단</th>
+                            <th style="text-align: center; background-color: #fff9db;">일봉 평단가 (괴리율)</th>
                         </tr>
                     </thead>
                     <tbody>{table_rows_html}</tbody>
@@ -690,7 +686,9 @@ with main_tab2:
 # ---------------------------------------------------------
 with main_tab3:
     st.title("🔥 전체 거래대금 TOP 30 대시보드")
-    st.caption("오늘 시장에서 가장 자금이 많이 몰린 상위 종목들의 평단선 분석")
+    st.caption(
+        "시장 주도 상위 종목 평단가, 괴리율 및 매매 성향(중장기/스윙) 분석"
+    )
 
     t30_sort_mode = st.radio(
         "정렬 기준 선택",
@@ -707,6 +705,7 @@ with main_tab3:
             "change": 4.50,
             "amt": 20600,
             "vwap": 71000,
+            "disp": "+2.1%",
             "type": "🏆 중장기",
         },
         {
@@ -716,6 +715,7 @@ with main_tab3:
             "change": 8.90,
             "amt": 16700,
             "vwap": 165000,
+            "disp": "+14.2%",
             "type": "🏆 중장기",
         },
     ]
@@ -725,12 +725,12 @@ with main_tab3:
         t30_rows += f"""
         <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
             <td style="text-align: center; font-weight: bold;">{idx}</td>
-            <td style="font-weight: bold;">{item['name']}</td>
+            <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['type']}</span></td>
             <td style="text-align: center;">{item['code']}</td>
             <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
             <td style="text-align: right; color: #d32f2f;">+{item['change']:.2f}%</td>
             <td style="text-align: right;">{item['amt']:,} 백만</td>
-            <td style="text-align: center; background-color: #fff9db;"><b>{item['vwap']:,}원</b></td>
+            <td style="text-align: center; background-color: #fff9db;"><b>{item['vwap']:,}원</b> ({item['disp']})</td>
         </tr>
         """
 
@@ -745,7 +745,7 @@ with main_tab3:
                     <th style="text-align: right;">현재가</th>
                     <th style="text-align: right;">등락률</th>
                     <th style="text-align: right;">거래대금</th>
-                    <th style="text-align: center; background-color: #fff9db;">일봉 평단선</th>
+                    <th style="text-align: center; background-color: #fff9db;">일봉 평단가 (괴리율)</th>
                 </tr>
             </thead>
             <tbody>{t30_rows}</tbody>
@@ -760,7 +760,9 @@ with main_tab3:
 # ---------------------------------------------------------
 with main_tab4:
     st.title("🌙 시간외 단일가 거래 TOP 30 대시보드")
-    st.caption("장 마감 후 시간외 단일가에서 급등한 다음 날 시초가 공략 종목")
+    st.caption(
+        "장 마감 후 시간외 단일가 급등 종목 시초가 공략 및 평단가 비교"
+    )
 
     ah_sort_mode = st.radio(
         "정렬 기준 선택",
@@ -776,7 +778,9 @@ with main_tab4:
             "price": 1950,
             "change": 9.80,
             "amt": 850,
-            "reason": "재료 호재",
+            "vwap": 1810,
+            "disp": "+7.7%",
+            "reason": "재료 호재 (단타/스윙)",
         },
         {
             "name": "대한전선",
@@ -784,7 +788,9 @@ with main_tab4:
             "price": 14800,
             "change": 4.20,
             "amt": 1200,
-            "reason": "대규모 수주",
+            "vwap": 13950,
+            "disp": "+6.1%",
+            "reason": "대규모 수주 (스윙)",
         },
     ]
 
@@ -798,6 +804,7 @@ with main_tab4:
             <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
             <td style="text-align: right; color: #d32f2f;">+{item['change']:.2f}%</td>
             <td style="text-align: right;">{item['amt']:,} 백만</td>
+            <td style="text-align: center; background-color: #fff9db;"><b>{item['vwap']:,}원</b> ({item['disp']})</td>
             <td style="text-align: center; color: #2b8a3e;">{item['reason']}</td>
         </tr>
         """
@@ -813,7 +820,8 @@ with main_tab4:
                     <th style="text-align: right;">시간외 종가</th>
                     <th style="text-align: right;">시간외 등락률</th>
                     <th style="text-align: right;">시간외 거래대금</th>
-                    <th style="text-align: center;">특이사항 / 재료</th>
+                    <th style="text-align: center; background-color: #fff9db;">일봉 평단가 (괴리율)</th>
+                    <th style="text-align: center;">특이사항 / 성향</th>
                 </tr>
             </thead>
             <tbody>{ah_rows}</tbody>
