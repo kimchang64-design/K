@@ -242,18 +242,18 @@ with main_tab1:
             if len(st.session_state.search_history) > 12:
                 st.session_state.search_history.pop()
 
-        st.markdown(
-            f"""
-            <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; padding: 6px 10px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
-                <span style="font-size: 13px; font-weight: bold;">📌 종목: {stock_name} ({code})</span>
-                <button onclick="navigator.clipboard.writeText('{code}');" style="background:#1a73e8; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
-                    📋 코드 복사 ({code})
-                </button>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        # 📌 종목명·코드 바로 오른쪽에 복사 버튼 배치
+        code_copy_html = f"""
+        <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; padding: 6px 10px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
+            <span style="font-size: 13px; font-weight: bold;">📌 종목: {stock_name} ({code})</span>
+            <button onclick="navigator.clipboard.writeText('{code}');" style="background:#1a73e8; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
+                📋 코드 복사 ({code})
+            </button>
+        </div>
+        """
+        components.html(code_copy_html, height=42)
 
+        # 🕒 최근 검색 기록 가로 배치 영역
         if st.session_state.search_history:
             st.markdown(
                 "<span style='font-size:11px; color:#666;'>최근 검색 기록 (최대 12개):</span>",
@@ -428,12 +428,11 @@ with main_tab1:
         s_c3.metric("💻 실시간 프로그램", prog_net)
         s_c4.metric("💳 신용잔고율", credit_ratio)
 
-        # 📰 뉴스란 (원상복구 단독 배치)
         st.markdown(
             f"""
-            <div style="background-color: #f1f3f5; border-left: 4px solid #1a73e8; padding: 10px 15px; border-radius: 0 6px 6px 0; margin: 10px 0; height: 115px; overflow-y: auto;">
-                <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 5px;">📰 [{stock_name}] 실시간 상승 이유 및 뉴스 속보</div>
-                <ul style="margin: 0; padding-left: 20px; font-size: 11px; color: #333;">
+            <div style="background-color: #f1f3f5; border-left: 4px solid #1a73e8; padding: 10px 15px; border-radius: 0 6px 6px 0; margin: 10px 0;">
+                <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 5px;">📰 [{stock_name}] 실시간 상승 이유 및 주요 뉴스 속보</div>
+                <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #333;">
                     {''.join([f"<li>{news}</li>" for news in news_list])}
                 </ul>
             </div>
