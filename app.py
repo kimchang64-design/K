@@ -428,37 +428,18 @@ with main_tab1:
         s_c3.metric("💻 실시간 프로그램", prog_net)
         s_c4.metric("💳 신용잔고율", credit_ratio)
 
-        # 📰 뉴스란(좌)과 💡 52주 신고가 매매 아이디어(우) 나란히 배치
-        news_col, idea_col = st.columns([1.5, 1])
-
-        with news_col:
-            st.markdown(
-                f"""
-                <div style="background-color: #f1f3f5; border-left: 4px solid #1a73e8; padding: 10px 15px; border-radius: 0 6px 6px 0; margin: 10px 0; height: 135px; overflow-y: auto;">
-                    <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 5px;">📰 [{stock_name}] 실시간 상승 이유 및 뉴스 속보</div>
-                    <ul style="margin: 0; padding-left: 20px; font-size: 11px; color: #333;">
-                        {''.join([f"<li>{news}</li>" for news in news_list])}
-                    </ul>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        with idea_col:
-            st.markdown(
-                f"""
-                <div style="background-color: #fff9db; border-left: 4px solid #f59f00; padding: 10px 15px; border-radius: 0 6px 6px 0; margin: 10px 0; height: 135px; overflow-y: auto;">
-                    <div style="font-weight: bold; font-size: 13px; color: #e67700; margin-bottom: 4px;">💡 52주 신고가 & 매매 아이디어 포인트</div>
-                    <ul style="margin: 0; padding-left: 18px; font-size: 11px; color: #333;">
-                        <li><b>돌파 관점:</b> 52주 신고가 경신 종목은 매물대가 없어 상방 탄력 극대화</li>
-                        <li><b>수급 체크:</b> 외인·기관 양매수 동반 유입 시 추세 지속 확률 높음</li>
-                        <li><b>타점 전략:</b> 평단선 근접 눌림목 또는 돌파 후 첫 3분봉 지지 공략</li>
-                        <li><b>리스크 관리:</b> 이격도 과열 시 추격매수 자제 및 1차 손절가(-2%) 준수</li>
-                    </ul>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        # 📰 뉴스란 (원상복구 단독 배치)
+        st.markdown(
+            f"""
+            <div style="background-color: #f1f3f5; border-left: 4px solid #1a73e8; padding: 10px 15px; border-radius: 0 6px 6px 0; margin: 10px 0; height: 115px; overflow-y: auto;">
+                <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 5px;">📰 [{stock_name}] 실시간 상승 이유 및 뉴스 속보</div>
+                <ul style="margin: 0; padding-left: 20px; font-size: 11px; color: #333;">
+                    {''.join([f"<li>{news}</li>" for news in news_list])}
+                </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
