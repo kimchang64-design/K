@@ -25,18 +25,17 @@ main_tab1, main_tab2 = st.tabs(["📈 세력 평단가(VWAP) 차트", "⭐ 업�
 
 
 # ---------------------------------------------------------
-# 공통 함수 (한글 종목명 자동 변환 지원)
+# 공통 함수 (안전한 한글 종목 매핑 지원)
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_stock_ticker_map():
-    """KRX 전체 상장 종목의 (종목명: 종목코드) 딕셔너리 생성"""
     try:
         today_str = datetime.datetime.now().strftime("%Y%m%d")
         tickers = stock.get_market_ticker_list(today_str, market="ALL")
         name_map = {}
         for t in tickers:
             name = stock.get_market_ticker_name(t)
-            if name:
+            if name and isinstance(name, str):
                 name_map[name.strip()] = t
         return name_map
     except Exception:
@@ -44,25 +43,24 @@ def get_stock_ticker_map():
 
 
 def resolve_code_or_name(user_input):
-    """사용자가 입력한 값이 한글 종목명이면 코드로 변환, 아니면 그대로 반환"""
     user_input = user_input.strip()
-    # 이미 6자리 코드인 경우
     if user_input.isdigit() and len(user_input) == 6:
-        return user_input, stock.get_market_ticker_name(user_input)
+        try:
+            name = stock.get_market_ticker_name(user_input)
+            name_str = str(name).strip() if name else user_input
+            return user_input, name_str
+        except Exception:
+            return user_input, user_input
 
-    # 한글 종목명인 경우 맵에서 검색
     name_map = get_stock_ticker_map()
     if user_input in name_map:
-        code = name_map[user_input]
-        return code, user_input
+        return name_map[user_input], user_input
 
-    # 부분 일치 검색 지원 (예: "삼성" 입력 시 "삼성전자" 매칭)
     for name, code in name_map.items():
         if user_input in name:
             return code, name
 
-    # 기본값으로 입력된 값 반환
-    return user_input, stock.get_market_ticker_name(user_input)
+    return "005930", "삼성전자"
 
 
 def get_financial_info(code):
@@ -91,7 +89,7 @@ def get_financial_info(code):
 
 
 # ---------------------------------------------------------
-# TAB 1: 세력 평단가(VWAP) 차트 (한글 검색 지원)
+# TAB 1: 세력 평단가(VWAP) 차트
 # ---------------------------------------------------------
 with main_tab1:
     col1, col2 = st.columns([1, 2.5])
@@ -102,12 +100,9 @@ with main_tab1:
             "삼성전자",
             key="vwap_code_input",
             label_visibility="collapsed",
-            placeholder="종목명 또는 코드 입력 (예: 삼성전자)",
+            placeholder="종목명 또는 코드 입력",
         )
-        # 한글 입력인지 6자리 코드인지 자동 판별
         code, stock_name = resolve_code_or_name(raw_input)
-        if not stock_name:
-            stock_name = code
         st.caption(f"📌 **종목:** {stock_name} ({code})")
 
     with col2:
@@ -204,9 +199,7 @@ with main_tab1:
                     df = df.dropna()
 
         if df is None or df.empty:
-            st.error(
-                "거래 데이터가 없습니다. 종목명/코드를 다시 확인하시거나 휴일 여부를 확인해주세요."
-            )
+            st.error("거래 데이터가 없습니다. 종목명이나 날짜를 다시 확인해주세요.")
         else:
             df["TPV"] = df["종가"] * df["거래량"]
             cum_volume = df["거래량"].cumsum()
@@ -238,7 +231,6 @@ with main_tab1:
             else:
                 status_signal = "📊 추세유지"
 
-            # 상단 지표 출력
             m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
             m1.metric("현재가", f"{last_close:,}원")
             m2.metric(f"{selected_timeframe} 세력평단", f"{last_vwap:,}원", f"{disparity:+.1f}%")
@@ -260,7 +252,6 @@ with main_tab1:
                 )
                 st.code(copy_summary, language="text")
 
-            # 차트 출력
             fig = go.Figure()
             fig.add_trace(
                 go.Scatter(
@@ -327,5 +318,5 @@ with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
     st.caption("인기 테마별 종목 전략 가이드")
     st.info(
-        "💡 상단 '📈 세력 평단가(VWAP) 차트' 탭에서 한글 종목명('삼성전자', 'SK하이닉스' 등)이나 코드를 입력해 확인하세요."
+        "💡 상단 '📈 세력 평단가(VWAP) 차트' 탭에서 한글 종목명이나 코드를 입력해 확인하세요."
     )
