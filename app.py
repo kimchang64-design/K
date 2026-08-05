@@ -197,7 +197,7 @@ def get_financial_info(code):
 # TAB 1: 평단선 차트
 # ---------------------------------------------------------
 with main_tab1:
-    # 세션 상태 초기화
+    # 세션 상태 초기화 (최대 12개 저장)
     if "search_history" not in st.session_state:
         st.session_state.search_history = ["삼성전자", "SK하이닉스"]
     if "target_stock" not in st.session_state:
@@ -238,32 +238,34 @@ with main_tab1:
             st.session_state.target_stock
         )
 
-        # 최근 검색 기록 관리
+        # 최근 검색 기록 관리 (최대 12개 유지)
         if stock_name and stock_name not in st.session_state.search_history:
             st.session_state.search_history.insert(0, stock_name)
-            if len(st.session_state.search_history) > 8:
+            if len(st.session_state.search_history) > 12:
                 st.session_state.search_history.pop()
 
         st.caption(f"📌 **종목:** {stock_name} ({code} - {stock_name})")
 
-        # 🕒 최근 검색 기록 버튼 영역
+        # 🕒 최근 검색 기록 버튼 영역 (최대 12개 표시)
         if st.session_state.search_history:
             st.markdown(
-                "<span style='font-size:11px; color:#666;'>최근 검색 기록:</span>",
+                "<span style='font-size:11px; color:#666;'>최근 검색 기록 (최대 12개):</span>",
                 unsafe_allow_html=True,
             )
-            history_cols = st.columns(min(len(st.session_state.search_history), 4))
-            for idx, hist_name in enumerate(
-                st.session_state.search_history[:4]
-            ):
-                with history_cols[idx % len(history_cols)]:
-                    st.button(
-                        hist_name,
-                        key=f"hist_btn_{idx}",
-                        on_click=set_recent_stock,
-                        args=(hist_name,),
-                        use_container_width=True,
-                    )
+            # 4개씩 3줄로 나누어 예쁘게 배치
+            history_list = st.session_state.search_history[:12]
+            for i in range(0, len(history_list), 4):
+                row_items = history_list[i : i + 4]
+                row_cols = st.columns(len(row_items))
+                for idx, hist_name in enumerate(row_items):
+                    with row_cols[idx]:
+                        st.button(
+                            hist_name,
+                            key=f"hist_btn_{i + idx}",
+                            on_click=set_recent_stock,
+                            args=(hist_name,),
+                            use_container_width=True,
+                        )
 
     with col2:
         timeframe_options = [
@@ -542,7 +544,6 @@ with main_tab1:
             height=360,
         )
 
-        # 📅 X축 날짜 형식을 영문(Feb 2026)에서 숫자 형식(YYYY-MM)으로 강제 변환
         fig.update_xaxes(
             tickformat="%Y-%m",
             dtick="M1",
