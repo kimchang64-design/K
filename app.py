@@ -144,14 +144,30 @@ with main_tab1:
             last_vwap = int(df["세력평단"].iloc[-1])
             disparity = ((last_close - last_vwap) / last_vwap) * 100
 
-            copy_summary = f"■ {s_date}~{e_date} [{current_name}({code})]\n• 종가: {last_close:,}원\n• 세력평단: {last_vwap:,}원\n• 괴리율: {disparity:+.2f}%"
+            # 💡 가격 분석 라인 산출
+            target_1st = int(last_vwap * 1.05)   # +5%
+            target_2nd = int(last_vwap * 1.10)   # +10%
+            buy_limit = int(last_vwap * 1.015)   # ~ +1.5%
+            stop_loss = int(last_vwap * 0.98)    # -2%
 
-            st.subheader(f"📊 {current_name} ({code}) 분석 결과 요약")
+            copy_summary = (
+                f"■ {s_date}~{e_date} [{current_name}({code}) {selected_timeframe}]\n"
+                f"• 현재가/종가: {last_close:,}원\n"
+                f"• 세력평단: {last_vwap:,}원 (괴리율 {disparity:+.2f}%)\n"
+                f"• 🎯 매수추천범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
+                f"• 🎯 1차 목표가(+5%): {target_1st:,}원\n"
+                f"• 🚀 2차 목표가(+10%): {target_2nd:,}원\n"
+                f"• 🛑 추천 손절가(-2%): {stop_loss:,}원"
+            )
 
-            mc1, mc2, mc3 = st.columns(3)
+            st.subheader(f"📊 {current_name} ({code}) - {selected_timeframe} 분석 요약")
+
+            mc1, mc2, mc3, mc4, mc5 = st.columns(5)
             mc1.metric("현재가 / 종가", f"{last_close:,} 원")
-            mc2.metric("누적 세력평단", f"{last_vwap:,} 원")
-            mc3.metric("괴리율", f"{disparity:+.2f} %")
+            mc2.metric("누적 세력평단", f"{last_vwap:,} 원", f"{disparity:+.2f}%")
+            mc3.metric("🎯 1차 목표가 (+5%)", f"{target_1st:,} 원")
+            mc4.metric("🚀 2차 목표가 (+10%)", f"{target_2nd:,} 원")
+            mc5.metric("🛑 추천 손절가 (-2%)", f"{stop_loss:,} 원")
 
             copy_html = f"""
             <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; font-family: sans-serif;">
@@ -162,13 +178,13 @@ with main_tab1:
                     </button>
                     <button onclick="navigator.clipboard.writeText(document.getElementById('fullSummary').innerText);" 
                             style="padding: 8px 16px; background-color: #4bac30; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
-                        📝 전체 결과 요약 복사
+                        📝 전체 전략 요약 복사
                     </button>
                 </div>
                 <pre id="fullSummary" style="margin: 0; font-family: monospace; font-size: 13px; color: #333; line-height: 1.5;">{copy_summary}</pre>
             </div>
             """
-            components.html(copy_html, height=160)
+            components.html(copy_html, height=210)
 
             fig = go.Figure()
             fig.add_trace(
@@ -201,13 +217,12 @@ with main_tab1:
 
 
 # ---------------------------------------------------------
-# TAB 2: 업종 테마 분석 (인기 테마 25개 전체 복원 & 추천단가/손절가)
+# TAB 2: 업종 테마 분석 (목표가/매수가/손절가 통합)
 # ---------------------------------------------------------
 with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
-    st.caption("25개 인기 테마 시세, 실적, 세력평단 및 [추천 매수단가 / 손절가] 정보 분석")
+    st.caption("25개 인기 테마 시세, 실적, 세력평단 및 [목표가 / 매수단가 / 손절가] 종합 분석")
 
-    # (종목명, 코드, 현재가, 전일대비%, 거래량, 거래대금, 시총, 일봉평단, 주봉평단, 월봉평단, 3분봉평단, 영업이익(억), 추천타입)
     THEME_DATA = {
         "광케이블/광섬유": {
             "change": "+9.99%", "up_down": "상승 13 / 하락 0",
@@ -534,17 +549,20 @@ with main_tab2:
                     m_disp = ((curr_price - m_vwap) / m_vwap) * 100
                     m3_disp = ((curr_price - m3_vwap) / m3_vwap) * 100
 
-                    # 💡 주기별 추천 매수단가(평단가~평단+1.5%) & 추천 손절가(평단-2.0%)
-                    # 일봉
+                    # 💡 주기별 목표가(+5%) / 추천매수가(~+1.5%) / 손절가(-2%)
+                    d_target = int(d_vwap * 1.05)
                     d_buy_max = int(d_vwap * 1.015)
                     d_stop = int(d_vwap * 0.98)
-                    # 주봉
+
+                    w_target = int(w_vwap * 1.05)
                     w_buy_max = int(w_vwap * 1.015)
                     w_stop = int(w_vwap * 0.98)
-                    # 월봉
+
+                    m_target = int(m_vwap * 1.05)
                     m_buy_max = int(m_vwap * 1.015)
                     m_stop = int(m_vwap * 0.98)
-                    # 3분봉
+
+                    m3_target = int(m3_vwap * 1.05)
                     m3_buy_max = int(m3_vwap * 1.015)
                     m3_stop = int(m3_vwap * 0.98)
 
@@ -571,7 +589,7 @@ with main_tab2:
                     row_bg = "background-color: #fff0f6;" if is_searched_item else ""
 
                     table_rows_html += f"""
-                    <tr style="border-bottom: 1px solid #f0f0f0; height: 62px; font-size: 12px; {row_bg}">
+                    <tr style="border-bottom: 1px solid #f0f0f0; height: 70px; font-size: 12px; {row_bg}">
                         <td style="text-align: center; color: #666; width: 30px;">{idx}</td>
                         <td style="font-weight: bold; color: #111; padding-left: 5px; width: 100px;">
                             {s_name} {'<span style="color:#d32f2f; font-size:10px;">(검색)</span>' if is_searched_item else ''}
@@ -590,47 +608,51 @@ with main_tab2:
                         <td style="text-align: right; padding-right: 5px; color: #d32f2f; font-weight: bold; width: 60px;">{change_str}</td>
                         <td style="text-align: right; padding-right: 5px; color: #2b6cb0; font-weight: bold; width: 65px;">{trade_amt:,}백만</td>
                         
-                        <!-- 일봉 평단 / 추천매수가 / 손절가 -->
+                        <!-- 일봉 가이드라인 -->
                         <td style="text-align: center; background-color: #fff9db;">
                             <button onclick="navigator.clipboard.writeText('{d_vwap}');" 
                                     style="padding: 2px 4px; background-color: #ffe066; color: #000; border: 1px solid #fcc419; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
                                 📋 {d_vwap:,}
                             </button>
                             <div style="font-size: 10px; color: {'#d32f2f' if d_disp > 0 else '#1976d2'}; font-weight: bold;">({d_disp:+.1f}%)</div>
-                            <div style="font-size: 9px; color: #2b8a3e; margin-top:2px;">🎯매수: ~{d_buy_max:,}</div>
+                            <div style="font-size: 9px; color: #1c7ed6; margin-top:2px;">🎯목표: {d_target:,}</div>
+                            <div style="font-size: 9px; color: #2b8a3e;">🛒매수: ~{d_buy_max:,}</div>
                             <div style="font-size: 9px; color: #c92a2a;">🛑손절: {d_stop:,}</div>
                         </td>
                         
-                        <!-- 주봉 평단 / 추천매수가 / 손절가 -->
+                        <!-- 주봉 가이드라인 -->
                         <td style="text-align: center; background-color: #fff3bf;">
                             <button onclick="navigator.clipboard.writeText('{w_vwap}');" 
                                     style="padding: 2px 4px; background-color: #ffd43b; color: #000; border: 1px solid #fab005; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
                                 📋 {w_vwap:,}
                             </button>
                             <div style="font-size: 10px; color: {'#d32f2f' if w_disp > 0 else '#1976d2'}; font-weight: bold;">({w_disp:+.1f}%)</div>
-                            <div style="font-size: 9px; color: #2b8a3e; margin-top:2px;">🎯매수: ~{w_buy_max:,}</div>
+                            <div style="font-size: 9px; color: #1c7ed6; margin-top:2px;">🎯목표: {w_target:,}</div>
+                            <div style="font-size: 9px; color: #2b8a3e;">🛒매수: ~{w_buy_max:,}</div>
                             <div style="font-size: 9px; color: #c92a2a;">🛑손절: {w_stop:,}</div>
                         </td>
 
-                        <!-- 월봉 평단 / 추천매수가 / 손절가 -->
+                        <!-- 월봉 가이드라인 -->
                         <td style="text-align: center; background-color: #ffec99;">
                             <button onclick="navigator.clipboard.writeText('{m_vwap}');" 
                                     style="padding: 2px 4px; background-color: #fcc419; color: #000; border: 1px solid #f59f00; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
                                 📋 {m_vwap:,}
                             </button>
                             <div style="font-size: 10px; color: {'#d32f2f' if m_disp > 0 else '#1976d2'}; font-weight: bold;">({m_disp:+.1f}%)</div>
-                            <div style="font-size: 9px; color: #2b8a3e; margin-top:2px;">🎯매수: ~{m_buy_max:,}</div>
+                            <div style="font-size: 9px; color: #1c7ed6; margin-top:2px;">🎯목표: {m_target:,}</div>
+                            <div style="font-size: 9px; color: #2b8a3e;">🛒매수: ~{m_buy_max:,}</div>
                             <div style="font-size: 9px; color: #c92a2a;">🛑손절: {m_stop:,}</div>
                         </td>
 
-                        <!-- 3분봉 평단 / 추천매수가 / 손절가 -->
+                        <!-- 3분봉 가이드라인 -->
                         <td style="text-align: center; background-color: #e7f5ff;">
                             <button onclick="navigator.clipboard.writeText('{m3_vwap}');" 
                                     style="padding: 2px 4px; background-color: #a5d8ff; color: #000; border: 1px solid #74c0fc; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
                                 📋 {m3_vwap:,}
                             </button>
                             <div style="font-size: 10px; color: {'#d32f2f' if m3_disp > 0 else '#1976d2'}; font-weight: bold;">({m3_disp:+.1f}%)</div>
-                            <div style="font-size: 9px; color: #2b8a3e; margin-top:2px;">🎯매수: ~{m3_buy_max:,}</div>
+                            <div style="font-size: 9px; color: #1c7ed6; margin-top:2px;">🎯목표: {m3_target:,}</div>
+                            <div style="font-size: 9px; color: #2b8a3e;">🛒매수: ~{m3_buy_max:,}</div>
                             <div style="font-size: 9px; color: #c92a2a;">🛑손절: {m3_stop:,}</div>
                         </td>
                     </tr>
@@ -638,7 +660,7 @@ with main_tab2:
 
                 full_table_html = f"""
                 <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin-bottom: 25px;">
-                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 1020px;">
+                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 1050px;">
                         <thead>
                             <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; color: #555; font-size: 11px; height: 38px;">
                                 <th style="text-align: center; width: 30px;">순위</th>
@@ -648,10 +670,10 @@ with main_tab2:
                                 <th style="text-align: right; padding-right: 5px; width: 65px;">현재가</th>
                                 <th style="text-align: right; padding-right: 5px; width: 60px;">전일대비</th>
                                 <th style="text-align: right; padding-right: 5px; width: 65px;">거래대금</th>
-                                <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 평단가/가이드</th>
-                                <th style="text-align: center; background-color: #fff3bf; color: #d9480f;">주봉 평단가/가이드</th>
-                                <th style="text-align: center; background-color: #ffec99; color: #d9480f;">월봉 평단가/가이드</th>
-                                <th style="text-align: center; background-color: #e7f5ff; color: #1864ab;">3분봉 평단가/가이드</th>
+                                <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 전략 가이드</th>
+                                <th style="text-align: center; background-color: #fff3bf; color: #d9480f;">주봉 전략 가이드</th>
+                                <th style="text-align: center; background-color: #ffec99; color: #d9480f;">월봉 전략 가이드</th>
+                                <th style="text-align: center; background-color: #e7f5ff; color: #1864ab;">3분봉 전략 가이드</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -661,7 +683,7 @@ with main_tab2:
                 </div>
                 """
 
-                calc_height = max(180, len(stocks_list) * 70 + 60)
+                calc_height = max(180, len(stocks_list) * 78 + 60)
                 components.html(
                     full_table_html, height=calc_height, scrolling=True
                 )
