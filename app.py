@@ -6,7 +6,7 @@ import streamlit.components.v1 as components
 from pykrx import stock
 
 # 페이지 기본 설정
-st.set_page_config(page_title="주식 분석 포털 - VWAP & 실시간 선물·프로그램 수급", layout="wide")
+st.set_page_config(page_title="주식 분석 포털 - 평단선 & 실시간 선물·프로그램 수급", layout="wide")
 
 # 여백 최소화 패치 CSS
 st.markdown(
@@ -20,49 +20,47 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------
-# [추가 보강] 최상단 글로벌, 국내 지수 및 실시간 선물지수 티커 바
-# ---------------------------------------------------------
+# 상단 티커 바
 ticker_bar_html = """
 <div style="display: flex; gap: 10px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px;">
-    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 130px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇰🇷 KOSPI</div>
-        <div style="font-size: 13px; font-weight: bold; color: #d32f2f;">2,755.20 <span style="font-size:10px;">(+0.85%)</span></div>
-    </div>
-    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 130px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇰🇷 KOSDAQ</div>
-        <div style="font-size: 13px; font-weight: bold; color: #d32f2f;">872.40 <span style="font-size:10px;">(+1.12%)</span></div>
-    </div>
-    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 140px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">📈 KOSPI200 선물</div>
-        <div style="font-size: 13px; font-weight: bold; color: #d32f2f;">362.85 <span style="font-size:10px;">(+0.92%)</span></div>
-    </div>
-    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 120px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">⚡ 시장 베이시스</div>
-        <div style="font-size: 13px; font-weight: bold; color: #1971c2;">+0.65 (콘탱고)</div>
-    </div>
-    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 130px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇺🇸 NASDAQ</div>
-        <div style="font-size: 13px; font-weight: bold; color: #d32f2f;">17,928.30 <span style="font-size:10px;">(+1.45%)</span></div>
-    </div>
-    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 130px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">💱 원/달러 환율</div>
-        <div style="font-size: 13px; font-weight: bold; color: #1971c2;">1,372.50원 <span style="font-size:10px;">(-3.2원)</span></div>
+    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇰🇷 국내 지수</div>
+        <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">2,755.20 (+0.85%) <span style="color:#333; font-weight:normal;">(코스피)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">📊 프로그램 순매매</div>
-        <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">+2,150억 (차익+800)</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇰🇷 코스닥 지수</div>
+        <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">872.40 (+1.12%) <span style="color:#333; font-weight:normal;">(코스닥)</span></div>
+    </div>
+    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 160px; text-align: center;">
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">📈 파생 시장</div>
+        <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">362.85 (+0.92%) <span style="color:#333; font-weight:normal;">(선물지수)</span></div>
+    </div>
+    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">⚡ 베이시스 상태</div>
+        <div style="font-size: 12px; font-weight: bold; color: #1971c2;">+0.65 (콘탱고) <span style="color:#333; font-weight:normal;">(시장 베이시스)</span></div>
+    </div>
+    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 160px; text-align: center;">
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇺🇸 미국 증시</div>
+        <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">17,928.30 (+1.45%) <span style="color:#333; font-weight:normal;">(나스닥)</span></div>
+    </div>
+    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">💱 외환 시장</div>
+        <div style="font-size: 12px; font-weight: bold; color: #1971c2;">1,372.50원 (-3.2원) <span style="color:#333; font-weight:normal;">(원/달러 환율)</span></div>
+    </div>
+    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 180px; text-align: center;">
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">📊 프로그램 수급</div>
+        <div style="font-size: 11px; font-weight: bold; color: #d32f2f;">+2,150억 (차익+800) <span style="color:#333; font-weight:normal;">(프로그램 순매매)</span></div>
     </div>
 </div>
 """
 st.markdown(ticker_bar_html, unsafe_allow_html=True)
 
 # 상단 탭 구성
-main_tab1, main_tab2 = st.tabs(["📈 세력 평단가(VWAP) 차트", "⭐ 업종·테마 분석"])
+main_tab1, main_tab2 = st.tabs(["📈 평단선 차트", "⭐ 업종·테마 분석"])
 
 
 # ---------------------------------------------------------
-# 공통 함수 (한글 종목명 자동 변환 지원)
+# 공통 함수
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_stock_ticker_map():
@@ -199,7 +197,7 @@ def get_financial_info(code):
 
 
 # ---------------------------------------------------------
-# TAB 1: 세력 평단가(VWAP) 차트 (실시간 프로그램 수급 포함)
+# TAB 1: 평단선 차트
 # ---------------------------------------------------------
 with main_tab1:
     col1, col2 = st.columns([1, 2.5])
@@ -300,11 +298,11 @@ with main_tab1:
         df["TPV"] = df["종가"] * df["거래량"]
         cum_volume = df["거래량"].cumsum()
 
-        df["세력평단"] = df["TPV"].cumsum() / cum_volume.replace(0, pd.NA)
-        df["세력평단"] = df["세력평단"].ffill()
+        df["평단가"] = df["TPV"].cumsum() / cum_volume.replace(0, pd.NA)
+        df["평단가"] = df["평단가"].ffill()
 
         last_close = int(df["종가"].iloc[-1])
-        last_vwap = int(df["세력평단"].iloc[-1])
+        last_vwap = int(df["평단가"].iloc[-1])
         disparity = ((last_close - last_vwap) / last_vwap) * 100
 
         f_info = get_financial_info(code)
@@ -331,7 +329,6 @@ with main_tab1:
         else:
             status_signal = "📊 추세유지"
 
-        # 1단 카드: 시총, 영업이익, 성향, 상태
         f1, f2, f3, f4 = st.columns(4)
         f1.metric("🏢 시가총액", f"{mcap_val:,} 억원")
         f2.metric(
@@ -342,7 +339,6 @@ with main_tab1:
         f3.metric("🎯 AI 추천 성향", trade_type)
         f4.metric("⚡ 진단 상태", status_signal)
 
-        # 실시간 외인·기관 및 프로그램 매매 지표 카드
         s_c1, s_c2, s_c3, s_c4 = st.columns(4)
         s_c1.metric("🌐 외국인 순매수", foreign_net)
         s_c2.metric("🏛️ 기관 순매수", inst_net)
@@ -351,10 +347,9 @@ with main_tab1:
 
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
-        # 2단 카드: 가격 지표
         m1, m2, m3, m4, m5, m6 = st.columns(6)
         m1.metric("현재가", f"{last_close:,}원")
-        m2.metric(f"{selected_timeframe} 세력평단", f"{last_vwap:,}원", f"{disparity:+.1f}%")
+        m2.metric(f"{selected_timeframe} 평단선", f"{last_vwap:,}원", f"{disparity:+.1f}%")
         m3.metric("🎯1차목표(+5%)", f"{target_1st:,}원")
         m4.metric("🚀2차목표(+10%)", f"{target_2nd:,}원")
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
@@ -365,7 +360,7 @@ with main_tab1:
                 f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
                 f"• 시가총액: {mcap_val:,}억원 | 영업이익: {op_profit:,}억원\n"
                 f"• 외국인: {foreign_net} | 기관: {inst_net} | 프로그램: {prog_net}\n"
-                f"• 현재가: {last_close:,}원 | 세력평단: {last_vwap:,}원 ({disparity:+.2f}%)\n"
+                f"• 현재가: {last_close:,}원 | 평단선: {last_vwap:,}원 ({disparity:+.2f}%)\n"
                 f"• 매수범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
                 f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
                 f"• 🚀 2차목표(+10%): {target_2nd:,}원\n"
@@ -387,9 +382,9 @@ with main_tab1:
         fig.add_trace(
             go.Scatter(
                 x=df.index,
-                y=df["세력평단"],
+                y=df["평단가"],
                 mode="lines",
-                name=f"누적 세력평단 ({selected_timeframe})",
+                name=f"누적 평단선 ({selected_timeframe})",
                 line=dict(color="#ff7f0e", width=2.5),
             )
         )
@@ -424,7 +419,7 @@ with main_tab1:
         )
 
         fig.update_layout(
-            title=f"{stock_name} ({code}) - {selected_timeframe} 세력평단 및 매매 가이드 라인",
+            title=f"{stock_name} ({code}) - {selected_timeframe} 평단선 및 매매 가이드 라인",
             margin=dict(l=20, r=20, t=35, b=20),
             hovermode="x unified",
             template="plotly_white",
@@ -438,9 +433,7 @@ with main_tab1:
 # ---------------------------------------------------------
 with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
-    st.caption(
-        "테마별 실시간 시세, 영업이익, 외인·기관 및 실시간 프로그램 수급 종합 분석"
-    )
+    st.caption("테마별 실시간 시세, 영업이익, 외인·기관 및 실시간 프로그램 수급 종합 분석")
 
     THEME_DATA = {
         "광케이블/광섬유": {
