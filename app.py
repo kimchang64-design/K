@@ -474,9 +474,14 @@ with main_tab1:
         credit_ratio = f_info["credit_ratio"]
         news_list = f_info.get("news", [])
 
+        # 목표가 단계별 설정: 1차(+5%), 2차(+10%), 3차(+15%)
         target_1st = int(last_vwap * 1.05)
-        buy_limit = int(last_vwap * 1.015)
-        absolute_stop_loss = int(last_vwap * 0.96)
+        target_2nd = int(last_vwap * 1.10)
+        target_3rd = int(last_vwap * 1.15)
+
+        # 손절가 단계별 설정: 1차(-2%), 2차(-4% 또는 절대사수)
+        stop_1st = int(last_vwap * 0.98)
+        absolute_stop_loss = int(last_vwap * 0.96) # 절대사수 손절가 (-4%)
 
         if 0 <= disparity <= 5.0:
             status_signal = "🔥 최적타점 (손절짧은매수타점)"
@@ -519,42 +524,54 @@ with main_tab1:
 
         metrics_click_copy_html = f"""
         <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 5px;">
-            <div onclick="navigator.clipboard.writeText('{last_close}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#666; font-weight:bold;">현재가 (클릭 복사)</div>
-                <div style="font-size:15px; font-weight:bold; color:#111; margin-top:2px;">{last_close:,}원 <span style="font-size:11px; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.2f}%)</span></div>
+            <div onclick="navigator.clipboard.writeText('{last_close}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:130px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#666; font-weight:bold;">현재가</div>
+                <div style="font-size:14px; font-weight:bold; color:#111; margin-top:2px;">{last_close:,}원 <span style="font-size:10px; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.1f}%)</span></div>
             </div>
             
-            <div onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#1a73e8; font-weight:bold;">📌 {selected_timeframe} 평단가 (클릭 복사)</div>
-                <div style="font-size:15px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원 <span style="font-size:11px; font-weight:normal; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.1f}%)</span></div>
+            <div onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:130px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#1a73e8; font-weight:bold;">📌 {selected_timeframe} 평단가</div>
+                <div style="font-size:14px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원</div>
             </div>
 
-            <div onclick="navigator.clipboard.writeText('{vi_upper}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#d63384; font-weight:bold;">⚡ VI상한(+10%) (클릭 복사)</div>
-                <div style="font-size:15px; font-weight:bold; color:#d63384; margin-top:2px;">{vi_upper:,}원 <span style="font-size:11px;">(+10.0%)</span></div>
+            <div onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:130px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 1차목표(+5%)</div>
+                <div style="font-size:14px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_1st:,}원</div>
             </div>
 
-            <div onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 1차목표(+5%) (클릭 복사)</div>
-                <div style="font-size:15px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_1st:,}원 <span style="font-size:11px;">(+5.0%)</span></div>
+            <div onclick="navigator.clipboard.writeText('{target_2nd}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:130px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 2차목표(+10%)</div>
+                <div style="font-size:14px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_2nd:,}원</div>
             </div>
 
-            <div onclick="navigator.clipboard.writeText('{absolute_stop_loss}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#e03131; font-weight:bold;">🚨 절대손절(-4%) (클릭 복사)</div>
-                <div style="font-size:15px; font-weight:bold; color:#e03131; margin-top:2px;">{absolute_stop_loss:,}원 <span style="font-size:11px;">(-4.0%)</span></div>
+            <div onclick="navigator.clipboard.writeText('{target_3rd}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:130px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 3차목표(+15%)</div>
+                <div style="font-size:14px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_3rd:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{stop_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:130px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#f59f00; font-weight:bold;">🛑 1차 손절가(-2%)</div>
+                <div style="font-size:14px; font-weight:bold; color:#f59f00; margin-top:2px;">{stop_1st:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{absolute_stop_loss}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:130px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#e03131; font-weight:bold;">🚨 절대사수 손절가(-4%)</div>
+                <div style="font-size:14px; font-weight:bold; color:#e03131; margin-top:2px;">{absolute_stop_loss:,}원</div>
             </div>
         </div>
         """
-        components.html(metrics_click_copy_html, height=75)
+        components.html(metrics_click_copy_html, height=85)
 
         with st.expander("📝 텍스트 요약 및 전체 복사 기능"):
             copy_summary = (
                 f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
                 f"• 매매성향: {trade_type} | 괴리율: {disparity:+.2f}%\n"
-                f"• 현재가: {last_close:,}원 ({disparity:+.2f}%) | 평단가: {last_vwap:,}원\n"
-                f"• ⚡ VI 상한(+10%): {vi_upper:,}원\n"
-                f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
-                f"• 🚨 절대손절(-4%): {absolute_stop_loss:,}원"
+                f"• 현재가: {last_close:,}원 | 평단가: {last_vwap:,}원\n"
+                f"• 🎯 1차목표 (+5%): {target_1st:,}원\n"
+                f"• 🎯 2차목표 (+10%): {target_2nd:,}원\n"
+                f"• 🎯 3차목표 (+15%): {target_3rd:,}원\n"
+                f"• 🛑 1차 손절가 (-2%): {stop_1st:,}원\n"
+                f"• 🚨 절대사수 손절가 (-4%): {absolute_stop_loss:,}원"
             )
             st.code(copy_summary, language="text")
 
@@ -604,30 +621,50 @@ with main_tab1:
             )
         )
 
-        # VI 상한선 추가 (% 및 가격 표시)
+        # 차트 내 목표가 및 손절가 가이드 라인 추가
         fig.add_hline(
-            y=vi_upper,
-            line_dash="dash",
-            line_color="#d63384",
-            annotation_text=f"⚡ VI 상한 (+10.0%): {vi_upper:,}원",
-            annotation_position="top right",
+            y=target_3rd,
+            line_dash="dot",
+            line_color="#2b8a3e",
+            annotation_text=f"🎯 3차 목표가 (+15%): {target_3rd:,}원",
+            annotation_position="top left",
         )
-
+        fig.add_hline(
+            y=target_2nd,
+            line_dash="dot",
+            line_color="#2b8a3e",
+            annotation_text=f"🎯 2차 목표가 (+10%): {target_2nd:,}원",
+            annotation_position="top left",
+        )
         fig.add_hline(
             y=target_1st,
             line_dash="dot",
             line_color="#2b8a3e",
-            annotation_text=f"🎯 1차 목표가 (+5.0%): {target_1st:,}원",
+            annotation_text=f"🎯 1차 목표가 (+5%): {target_1st:,}원",
             annotation_position="top left",
+        )
+        fig.add_hline(
+            y=stop_1st,
+            line_dash="dash",
+            line_color="#f59f00",
+            annotation_text=f"🛑 1차 손절가 (-2%): {stop_1st:,}원",
+            annotation_position="bottom left",
+        )
+        fig.add_hline(
+            y=absolute_stop_loss,
+            line_dash="dash",
+            line_color="#e03131",
+            annotation_text=f"🚨 절대사수 손절가 (-4%): {absolute_stop_loss:,}원",
+            annotation_position="bottom left",
         )
 
         fig.update_layout(
-            title=f"{stock_name} ({code}) - 평단선, VI 상한선 및 순매수 증감 추세 차트",
+            title=f"{stock_name} ({code}) - 다단계 목표가 및 절대사수 손절선 차트",
             margin=dict(l=20, r=20, t=35, b=20),
             hovermode="x unified",
             template="plotly_white",
-            height=380,
-            yaxis=dict(title="가격 (원) / %"),
+            height=400,
+            yaxis=dict(title="가격 (원)"),
             yaxis2=dict(title="누적 순매수 증감 (주)", overlaying="y", side="right", showgrid=False)
         )
 
@@ -649,15 +686,22 @@ with main_tab1:
             c_val = int(row["종가"])
             v_val = int(row["평단가"]) if pd.notna(row["평단가"]) else 0
             n_val = int(row["순매수증감"])
-            t1_val = int(v_val * 1.05) if v_val > 0 else 0
+            t1 = int(v_val * 1.05) if v_val > 0 else 0
+            t2 = int(v_val * 1.10) if v_val > 0 else 0
+            t3 = int(v_val * 1.15) if v_val > 0 else 0
+            s1 = int(v_val * 0.98) if v_val > 0 else 0
+            s_abs = int(v_val * 0.96) if v_val > 0 else 0
             
             card_rows_html += f"""
-            <tr style="border-bottom: 1px solid #f0f0f0; height: 40px; font-size: 12px;">
+            <tr style="border-bottom: 1px solid #f0f0f0; height: 40px; font-size: 11px;">
                 <td style="text-align: center; font-weight: bold; color: #333;">{d_str}</td>
-                <td onclick="navigator.clipboard.writeText('{c_val}');" style="text-align: right; font-weight: bold; color: #1f77b4; cursor: pointer;" title="클릭 시 즉시 복사">{c_val:,}원 <span style="font-size:10px; color:#2b8a3e;">({disparity:+.1f}%)</span></td>
+                <td onclick="navigator.clipboard.writeText('{c_val}');" style="text-align: right; font-weight: bold; color: #1f77b4; cursor: pointer;" title="클릭 시 즉시 복사">{c_val:,}원</td>
                 <td onclick="navigator.clipboard.writeText('{v_val}');" style="text-align: right; font-weight: bold; color: #ff7f0e; cursor: pointer; background: #fff9db;" title="클릭 시 즉시 복사">{v_val:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{n_val}');" style="text-align: right; font-weight: bold; color: {'#d32f2f' if n_val>=0 else '#7048e8'}; cursor: pointer;" title="클릭 시 즉시 복사">{n_val:,}주</td>
-                <td onclick="navigator.clipboard.writeText('{t1_val}');" style="text-align: right; font-weight: bold; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t1_val:,}원 <span style="font-size:10px;">(+5.0%)</span></td>
+                <td onclick="navigator.clipboard.writeText('{t1}');" style="text-align: right; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t1:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{t2}');" style="text-align: right; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t2:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{t3}');" style="text-align: right; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t3:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{s1}');" style="text-align: right; color: #f59f00; cursor: pointer;" title="클릭 시 즉시 복사">{s1:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{s_abs}');" style="text-align: right; font-weight: bold; color: #e03131; cursor: pointer;" title="클릭 시 즉시 복사">{s_abs:,}원</td>
             </tr>
             """
             
@@ -667,10 +711,13 @@ with main_tab1:
                 <thead>
                     <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 32px;">
                         <th style="text-align: center;">날짜</th>
-                        <th style="text-align: right; color: #1f77b4;">종가 (클릭 복사)</th>
-                        <th style="text-align: right; color: #ff7f0e; background: #fff9db;">누적 평단가 (클릭 복사)</th>
-                        <th style="text-align: right; color: #2b8a3e;">순매수 증감 (클릭 복사)</th>
-                        <th style="text-align: right; color: #2b8a3e;">1차목표 +5% (클릭 복사)</th>
+                        <th style="text-align: right; color: #1f77b4;">종가 (복사)</th>
+                        <th style="text-align: right; color: #ff7f0e; background: #fff9db;">평단가 (복사)</th>
+                        <th style="text-align: right; color: #2b8a3e;">1차목표(+5%)</th>
+                        <th style="text-align: right; color: #2b8a3e;">2차목표(+10%)</th>
+                        <th style="text-align: right; color: #2b8a3e;">3차목표(+15%)</th>
+                        <th style="text-align: right; color: #f59f00;">1차손절(-2%)</th>
+                        <th style="text-align: right; color: #e03131;">절대사수(-4%)</th>
                     </tr>
                 </thead>
                 <tbody>{card_rows_html}</tbody>
@@ -685,9 +732,7 @@ with main_tab1:
 # ---------------------------------------------------------
 with main_tab2:
     st.markdown("### ⭐ 업종·테마 분석 대시보드")
-    st.caption(
-        "실적(흑자/적자), 매매유형, 다중 주기 평단가 및 목표가 분석"
-    )
+    st.caption("다단계 목표가 및 절대사수 손절선 포함 분석")
 
     THEME_DATA = {
         "광케이블/광섬유": {
@@ -706,7 +751,11 @@ with main_tab2:
                     "w_vwap": 1580,
                     "m_vwap": 1450,
                     "m3_vwap": 1790,
-                    "target": 1900,
+                    "target1": 1900,
+                    "target2": 1990,
+                    "target3": 2080,
+                    "stop1": 1770,
+                    "stop_abs": 1735,
                 }
             ],
         },
@@ -726,7 +775,11 @@ with main_tab2:
                     "w_vwap": 12100,
                     "m_vwap": 11500,
                     "m3_vwap": 14100,
-                    "target": 14600,
+                    "target1": 14600,
+                    "target2": 15340,
+                    "target3": 16040,
+                    "stop1": 13650,
+                    "stop_abs": 13390,
                 }
             ],
         },
@@ -797,18 +850,19 @@ with main_tab2:
                 table_rows_html = ""
                 for idx, item in enumerate(matched_stocks, start=1):
                     table_rows_html += f"""
-                    <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
+                    <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 11px;">
                         <td style="text-align: center; font-weight: bold;">{idx}</td>
                         <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['trade_type']} ({item['theme']})</span></td>
                         <td style="text-align: center; font-weight: bold; color: #1a73e8;">{item['code']}</td>
                         <td style="text-align: center; font-weight: bold;">{item['op_status']}</td>
                         <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
                         <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{item['change']:.2f}%</td>
-                        <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원 ({item['d_disp']})</td>
-                        <td style="text-align: center; background-color: #f3f0ff; font-weight: bold;">{item['w_vwap']:,}원</td>
-                        <td style="text-align: center; background-color: #e6fcf5; font-weight: bold;">{item['m_vwap']:,}원</td>
-                        <td style="text-align: center; background-color: #fff0f6; font-weight: bold;">{item['m3_vwap']:,}원</td>
-                        <td style="text-align: right; color: #2b8a3e; font-weight: bold;">{item['target']:,}원</td>
+                        <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원</td>
+                        <td style="text-align: right; color: #2b8a3e;">{item['target1']:,}원</td>
+                        <td style="text-align: right; color: #2b8a3e;">{item['target2']:,}원</td>
+                        <td style="text-align: right; color: #2b8a3e;">{item['target3']:,}원</td>
+                        <td style="text-align: right; color: #f59f00;">{item['stop1']:,}원</td>
+                        <td style="text-align: right; font-weight: bold; color: #e03131;">{item['stop_abs']:,}원</td>
                     </tr>
                     """
                 search_table_html = f"""
@@ -818,15 +872,16 @@ with main_tab2:
                             <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 38px;">
                                 <th style="text-align: center;">순위</th>
                                 <th style="text-align: left;">종목명</th>
-                                <th style="text-align: center;">종목코드</th>
+                                <th style="text-align: center;">코드</th>
                                 <th style="text-align: center;">실적</th>
                                 <th style="text-align: right;">현재가</th>
                                 <th style="text-align: right;">전일대비</th>
-                                <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리)</th>
-                                <th style="text-align: center; background-color: #f3f0ff;">주봉 평단</th>
-                                <th style="text-align: center; background-color: #e6fcf5;">월봉 평단</th>
-                                <th style="text-align: center; background-color: #fff0f6;">3분봉 평단</th>
-                                <th style="text-align: right; color: #2b8a3e;">🎯 목표가(+5%)</th>
+                                <th style="text-align: center; background-color: #fff9db;">일봉 평단</th>
+                                <th style="text-align: right; color: #2b8a3e;">1차목표</th>
+                                <th style="text-align: right; color: #2b8a3e;">2차목표</th>
+                                <th style="text-align: right; color: #2b8a3e;">3차목표</th>
+                                <th style="text-align: right; color: #f59f00;">1차손절</th>
+                                <th style="text-align: right; color: #e03131;">절대사수</th>
                             </tr>
                         </thead>
                         <tbody>{table_rows_html}</tbody>
@@ -847,18 +902,19 @@ with main_tab2:
                 table_rows_html = ""
                 for idx, item in enumerate(stocks_list, start=1):
                     table_rows_html += f"""
-                    <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
+                    <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 11px;">
                         <td style="text-align: center; font-weight: bold;">{idx}</td>
                         <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['trade_type']}</span></td>
                         <td style="text-align: center; font-weight: bold; color: #1a73e8;">{item['code']}</td>
                         <td style="text-align: center; font-weight: bold;">{item['op_status']}</td>
                         <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
                         <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{item['change']:.2f}%</td>
-                        <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원 ({item['d_disp']})</td>
-                        <td style="text-align: center; background-color: #f3f0ff; font-weight: bold;">{item['w_vwap']:,}원</td>
-                        <td style="text-align: center; background-color: #e6fcf5; font-weight: bold;">{item['m_vwap']:,}원</td>
-                        <td style="text-align: center; background-color: #fff0f6; font-weight: bold;">{item['m3_vwap']:,}원</td>
-                        <td style="text-align: right; color: #2b8a3e; font-weight: bold;">{item['target']:,}원</td>
+                        <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원</td>
+                        <td style="text-align: right; color: #2b8a3e;">{item['target1']:,}원</td>
+                        <td style="text-align: right; color: #2b8a3e;">{item['target2']:,}원</td>
+                        <td style="text-align: right; color: #2b8a3e;">{item['target3']:,}원</td>
+                        <td style="text-align: right; color: #f59f00;">{item['stop1']:,}원</td>
+                        <td style="text-align: right; font-weight: bold; color: #e03131;">{item['stop_abs']:,}원</td>
                     </tr>
                     """
                 full_table_html = f"""
@@ -868,15 +924,16 @@ with main_tab2:
                             <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 38px;">
                                 <th style="text-align: center;">순위</th>
                                 <th style="text-align: left;">종목명</th>
-                                <th style="text-align: center;">종목코드</th>
+                                <th style="text-align: center;">코드</th>
                                 <th style="text-align: center;">실적</th>
                                 <th style="text-align: right;">현재가</th>
                                 <th style="text-align: right;">전일대비</th>
-                                <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리)</th>
-                                <th style="text-align: center; background-color: #f3f0ff;">주봉 평단</th>
-                                <th style="text-align: center; background-color: #e6fcf5;">월봉 평단</th>
-                                <th style="text-align: center; background-color: #fff0f6;">3분봉 평단</th>
-                                <th style="text-align: right; color: #2b8a3e;">🎯 목표가(+5%)</th>
+                                <th style="text-align: center; background-color: #fff9db;">일봉 평단</th>
+                                <th style="text-align: right; color: #2b8a3e;">1차목표</th>
+                                <th style="text-align: right; color: #2b8a3e;">2차목표</th>
+                                <th style="text-align: right; color: #2b8a3e;">3차목표</th>
+                                <th style="text-align: right; color: #f59f00;">1차손절</th>
+                                <th style="text-align: right; color: #e03131;">절대사수</th>
                             </tr>
                         </thead>
                         <tbody>{table_rows_html}</tbody>
@@ -891,9 +948,7 @@ with main_tab2:
 # ---------------------------------------------------------
 with main_tab3:
     st.title("🔥 전체 거래대금 TOP 30 대시보드")
-    st.caption(
-        "시장 주도 상위 종목 실적, 다중 주기 평단가 및 목표가 분석"
-    )
+    st.caption("다단계 목표가 및 절대사수 손절선 포함 분석")
 
     t30_sort_mode = st.radio(
         "정렬 기준 선택",
@@ -911,11 +966,11 @@ with main_tab3:
             "amt": 20600,
             "op_status": "🟢 흑자",
             "d_vwap": 71000,
-            "d_disp": "+2.1%",
-            "w_vwap": 68500,
-            "m_vwap": 65000,
-            "m3_vwap": 72100,
-            "target": 74550,
+            "target1": 74550,
+            "target2": 78100,
+            "target3": 81650,
+            "stop1": 69580,
+            "stop_abs": 68160,
             "type": "🏆 중장기",
         },
         {
@@ -926,11 +981,11 @@ with main_tab3:
             "amt": 16700,
             "op_status": "🟢 흑자",
             "d_vwap": 165000,
-            "d_disp": "+14.2%",
-            "w_vwap": 155000,
-            "m_vwap": 140000,
-            "m3_vwap": 187000,
-            "target": 173250,
+            "target1": 173250,
+            "target2": 181500,
+            "target3": 189750,
+            "stop1": 161700,
+            "stop_abs": 158400,
             "type": "🏆 중장기",
         },
     ]
@@ -938,7 +993,7 @@ with main_tab3:
     t30_rows = ""
     for idx, item in enumerate(top30_sample, start=1):
         t30_rows += f"""
-        <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
+        <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 11px;">
             <td style="text-align: center; font-weight: bold;">{idx}</td>
             <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['type']}</span></td>
             <td style="text-align: center; font-weight: bold; color: #1a73e8;">{item['code']}</td>
@@ -946,11 +1001,12 @@ with main_tab3:
             <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
             <td style="text-align: right; color: #d32f2f;">+{item['change']:.2f}%</td>
             <td style="text-align: right;">{item['amt']:,} 백만</td>
-            <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원 ({item['d_disp']})</td>
-            <td style="text-align: center; background-color: #f3f0ff; font-weight: bold;">{item['w_vwap']:,}원</td>
-            <td style="text-align: center; background-color: #e6fcf5; font-weight: bold;">{item['m_vwap']:,}원</td>
-            <td style="text-align: center; background-color: #fff0f6; font-weight: bold;">{item['m3_vwap']:,}원</td>
-            <td style="text-align: right; color: #2b8a3e; font-weight: bold;">{item['target']:,}원</td>
+            <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원</td>
+            <td style="text-align: right; color: #2b8a3e;">{item['target1']:,}원</td>
+            <td style="text-align: right; color: #2b8a3e;">{item['target2']:,}원</td>
+            <td style="text-align: right; color: #2b8a3e;">{item['target3']:,}원</td>
+            <td style="text-align: right; color: #f59f00;">{item['stop1']:,}원</td>
+            <td style="text-align: right; font-weight: bold; color: #e03131;">{item['stop_abs']:,}원</td>
         </tr>
         """
 
@@ -966,11 +1022,12 @@ with main_tab3:
                     <th style="text-align: right;">현재가</th>
                     <th style="text-align: right;">등락률</th>
                     <th style="text-align: right;">거래대금</th>
-                    <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리)</th>
-                    <th style="text-align: center; background-color: #f3f0ff;">주봉 평단</th>
-                    <th style="text-align: center; background-color: #e6fcf5;">월봉 평단</th>
-                    <th style="text-align: center; background-color: #fff0f6;">3분봉 평단</th>
-                    <th style="text-align: right; color: #2b8a3e;">🎯 목표가(+5%)</th>
+                    <th style="text-align: center; background-color: #fff9db;">일봉 평단</th>
+                    <th style="text-align: right; color: #2b8a3e;">1차목표</th>
+                    <th style="text-align: right; color: #2b8a3e;">2차목표</th>
+                    <th style="text-align: right; color: #2b8a3e;">3차목표</th>
+                    <th style="text-align: right; color: #f59f00;">1차손절</th>
+                    <th style="text-align: right; color: #e03131;">절대사수</th>
                 </tr>
             </thead>
             <tbody>{t30_rows}</tbody>
@@ -985,7 +1042,7 @@ with main_tab3:
 # ---------------------------------------------------------
 with main_tab4:
     st.title("🌙 시간외 단일가 거래 TOP 30 대시보드")
-    st.caption("시간외 급등 종목 실적, 다중 주기 평단가 및 목표가 분석")
+    st.caption("다단계 목표가 및 절대사수 손절선 포함 분석")
 
     ah_sort_mode = st.radio(
         "정렬 기준 선택",
@@ -1003,11 +1060,11 @@ with main_tab4:
             "amt": 850,
             "op_status": "🟢 흑자",
             "d_vwap": 1810,
-            "d_disp": "+7.7%",
-            "w_vwap": 1580,
-            "m_vwap": 1450,
-            "m3_vwap": 1920,
-            "target": 1900,
+            "target1": 1900,
+            "target2": 1990,
+            "target3": 2080,
+            "stop1": 1770,
+            "stop_abs": 1735,
             "reason": "재료 호재 (단타/스윙)",
         },
         {
@@ -1018,11 +1075,11 @@ with main_tab4:
             "amt": 1200,
             "op_status": "🟢 흑자",
             "d_vwap": 13950,
-            "d_disp": "+6.1%",
-            "w_vwap": 12100,
-            "m_vwap": 11500,
-            "m3_vwap": 14600,
-            "target": 14647,
+            "target1": 14600,
+            "target2": 15340,
+            "target3": 16040,
+            "stop1": 13650,
+            "stop_abs": 13390,
             "reason": "대규모 수주 (스윙)",
         },
     ]
@@ -1030,7 +1087,7 @@ with main_tab4:
     ah_rows = ""
     for idx, item in enumerate(after_hours_data, start=1):
         ah_rows += f"""
-        <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
+        <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 11px;">
             <td style="text-align: center; font-weight: bold;">{idx}</td>
             <td style="font-weight: bold;">{item['name']}</td>
             <td style="text-align: center; font-weight: bold; color: #1a73e8;">{item['code']}</td>
@@ -1038,11 +1095,12 @@ with main_tab4:
             <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
             <td style="text-align: right; color: #d32f2f;">+{item['change']:.2f}%</td>
             <td style="text-align: right;">{item['amt']:,} 백만</td>
-            <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원 ({item['d_disp']})</td>
-            <td style="text-align: center; background-color: #f3f0ff; font-weight: bold;">{item['w_vwap']:,}원</td>
-            <td style="text-align: center; background-color: #e6fcf5; font-weight: bold;">{item['m_vwap']:,}원</td>
-            <td style="text-align: center; background-color: #fff0f6; font-weight: bold;">{item['m3_vwap']:,}원</td>
-            <td style="text-align: right; color: #2b8a3e; font-weight: bold;">{item['target']:,}원</td>
+            <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원</td>
+            <td style="text-align: right; color: #2b8a3e;">{item['target1']:,}원</td>
+            <td style="text-align: right; color: #2b8a3e;">{item['target2']:,}원</td>
+            <td style="text-align: right; color: #2b8a3e;">{item['target3']:,}원</td>
+            <td style="text-align: right; color: #f59f00;">{item['stop1']:,}원</td>
+            <td style="text-align: right; font-weight: bold; color: #e03131;">{item['stop_abs']:,}원</td>
             <td style="text-align: center; color: #2b8a3e;">{item['reason']}</td>
         </tr>
         """
@@ -1059,12 +1117,13 @@ with main_tab4:
                     <th style="text-align: right;">시간외 종가</th>
                     <th style="text-align: right;">시간외 등락률</th>
                     <th style="text-align: right;">시간외 거래대금</th>
-                    <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리)</th>
-                    <th style="text-align: center; background-color: #f3f0ff;">주봉 평단</th>
-                    <th style="text-align: center; background-color: #e6fcf5;">월봉 평단</th>
-                    <th style="text-align: center; background-color: #fff0f6;">3분봉 평단</th>
-                    <th style="text-align: right; color: #2b8a3e;">🎯 목표가(+5%)</th>
-                    <th style="text-align: center;">특이사항 / 성향</th>
+                    <th style="text-align: center; background-color: #fff9db;">일봉 평단</th>
+                    <th style="text-align: right; color: #2b8a3e;">1차목표</th>
+                    <th style="text-align: right; color: #2b8a3e;">2차목표</th>
+                    <th style="text-align: right; color: #2b8a3e;">3차목표</th>
+                    <th style="text-align: right; color: #f59f00;">1차손절</th>
+                    <th style="text-align: right; color: #e03131;">절대사수</th>
+                    <th style="text-align: center;">특이사항</th>
                 </tr>
             </thead>
             <tbody>{ah_rows}</tbody>
