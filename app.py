@@ -442,7 +442,6 @@ with main_tab1:
 
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
-        # 📌 수치 클릭 시 확인창 없이 즉시 복사 적용 HTML 컴포넌트 (alert 제거 완료)
         metrics_click_copy_html = f"""
         <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 5px;">
             <div onclick="navigator.clipboard.writeText('{last_close}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
@@ -492,9 +491,12 @@ with main_tab1:
             st.code(copy_summary, language="text")
 
         fig = go.Figure()
+        
+        hover_x = [d.strftime("%Y-%m-%d") for d in df.index]
+
         fig.add_trace(
             go.Scatter(
-                x=df.index,
+                x=hover_x,
                 y=df["종가"],
                 mode="lines",
                 name="종가",
@@ -503,7 +505,7 @@ with main_tab1:
         )
         fig.add_trace(
             go.Scatter(
-                x=df.index,
+                x=hover_x,
                 y=df["평단가"],
                 mode="lines",
                 name=f"누적 평단가 ({selected_timeframe})",
@@ -549,12 +551,52 @@ with main_tab1:
         )
 
         fig.update_xaxes(
-            tickformat="%Y-%m",
-            dtick="M1",
+            type="category",
             tickangle=0,
+            nticks=10,
         )
 
         st.plotly_chart(fig, use_container_width=True)
+
+        # 📌 툴팁 복사 대안: 최근 주요 일자별 상세 수치 카드 및 즉시 복사 테이블 영역
+        st.markdown("### 📋 최근 날짜별 상세 수치 복사 (클릭 시 즉시 복사)")
+        recent_df = df.tail(5).iloc[::-1] # 최근 5일 데이터 역순
+        
+        card_rows_html = ""
+        for dt_idx, row in recent_df.iterrows():
+            d_str = dt_idx.strftime("%Y-%m-%d") if hasattr(dt_idx, "strftime") else str(dt_idx)[:10]
+            c_val = int(row["종가"])
+            v_val = int(row["평단가"]) if pd.notna(row["평단가"]) else 0
+            t1_val = int(v_val * 1.05) if v_val > 0 else 0
+            s1_val = int(v_val * 0.98) if v_val > 0 else 0
+            
+            card_rows_html += f"""
+            <tr style="border-bottom: 1px solid #f0f0f0; height: 40px; font-size: 12px;">
+                <td style="text-align: center; font-weight: bold; color: #333;">{d_str}</td>
+                <td onclick="navigator.clipboard.writeText('{c_val}');" style="text-align: right; font-weight: bold; color: #1f77b4; cursor: pointer;" title="클릭 시 복사">{c_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{v_val}');" style="text-align: right; font-weight: bold; color: #ff7f0e; cursor: pointer; background: #fff9db;" title="클릭 시 복사">{v_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{t1_val}');" style="text-align: right; font-weight: bold; color: #2b8a3e; cursor: pointer;" title="클릭 시 복사">{t1_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{s1_val}');" style="text-align: right; font-weight: bold; color: #e03131; cursor: pointer;" title="클릭 시 복사">{s1_val:,}원</td>
+            </tr>
+            """
+            
+        recent_table_html = f"""
+        <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 15px;">
+            <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+                <thead>
+                    <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 32px;">
+                        <th style="text-align: center;">날짜</th>
+                        <th style="text-align: right; color: #1f77b4;">종가 (클릭 복사)</th>
+                        <th style="text-align: right; color: #ff7f0e; background: #fff9db;">평단가 (클릭 복사)</th>
+                        <th style="text-align: right; color: #2b8a3e;">1차목표 +5% (클릭 복사)</th>
+                        <th style="text-align: right; color: #e03131;">1차손절 -2% (클릭 복사)</th>
+                    </tr>
+                </thead>
+                <tbody>{card_rows_html}</tbody>
+            </table>
+        </div>
+        """
+        components.html(recent_table_html, height=210)
 
 
 # ---------------------------------------------------------
