@@ -65,7 +65,7 @@ main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs(
 
 
 # ---------------------------------------------------------
-# 공통 함수 (한글 종목명 검색 정확도 강화)
+# 공통 함수 (한글 종목명 및 코드 매핑 강화)
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_stock_ticker_map():
@@ -92,6 +92,7 @@ def get_stock_ticker_map():
         "RF머트리얼즈": "327260",
         "DB하이텍": "000990",
         "제주반도체": "080220",
+        "코스나인": "252670",
     }
     try:
         today_str = datetime.datetime.now().strftime("%Y%m%d")
@@ -107,7 +108,14 @@ def get_stock_ticker_map():
 
 def resolve_code_or_name(user_input):
     user_input = user_input.strip()
+    name_map = get_stock_ticker_map()
+
+    # 역방향 매핑 (코드로 입력했을 때 한글 종목명 찾기)
+    code_to_name = {v: k for k, v in name_map.items()}
+
     if user_input.isdigit() and len(user_input) == 6:
+        if user_input in code_to_name:
+            return user_input, code_to_name[user_input]
         try:
             name = stock.get_market_ticker_name(user_input)
             name_str = str(name).strip() if name else user_input
@@ -115,11 +123,10 @@ def resolve_code_or_name(user_input):
         except Exception:
             return user_input, user_input
 
-    name_map = get_stock_ticker_map()
     if user_input in name_map:
         return name_map[user_input], user_input
 
-    # 부분 일치 검색 지원 (예: 'SK하이닉스', '삼성' 등)
+    # 부분 일치 검색 지원
     for name, code in name_map.items():
         if user_input.lower() in name.lower():
             return code, name
@@ -212,7 +219,10 @@ with main_tab1:
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
-        # 텍스트 입력창 처리
+        # 최근 검색 버튼 클릭 시 작동할 콜백 함수
+        def set_search_query(val):
+            st.session_state.input_stock_val = val
+
         raw_input = st.text_input(
             "종목 입력",
             value=st.session_state.input_stock_val,
@@ -221,22 +231,21 @@ with main_tab1:
             placeholder="종목명 또는 코드 입력",
         )
 
-        # 사용자가 직접 입력한 값이 변경되었을 때 동기화
         if raw_input != st.session_state.input_stock_val:
             st.session_state.input_stock_val = raw_input
 
         code, stock_name = resolve_code_or_name(st.session_state.input_stock_val)
 
-        # 현재 검색된 종목이 유효하면 최근 검색 기록에 추가
+        # 최근 검색 기록에 추가
         if stock_name and stock_name not in st.session_state.search_history:
             st.session_state.search_history.insert(0, stock_name)
             if len(st.session_state.search_history) > 8:
                 st.session_state.search_history.pop()
 
-        # 📌 종목 코드명 옆에 한글 종목명 함께 표시
+        # 📌 종목 코드 및 한글명 함께 표시
         st.caption(f"📌 **종목:** {stock_name} ({code} - {stock_name})")
 
-        # 🕒 최근 검색 기록 버튼 영역
+        # 🕒 최근 검색 기록 버튼 영역 (on_click 콜백 적용으로 즉시 반영)
         if st.session_state.search_history:
             st.markdown(
                 "<span style='font-size:11px; color:#666;'>최근 검색 기록:</span>",
@@ -247,11 +256,13 @@ with main_tab1:
                 st.session_state.search_history[:4]
             ):
                 with history_cols[idx % len(history_cols)]:
-                    if st.button(
-                        hist_name, key=f"hist_{idx}", use_container_width=True
-                    ):
-                        st.session_state.input_stock_val = hist_name
-                        st.rerun()
+                    st.button(
+                        hist_name,
+                        key=f"hist_{idx}",
+                        on_click=set_search_query,
+                        args=(hist_name,),
+                        use_container_width=True,
+                    )
 
     with col2:
         timeframe_options = [
