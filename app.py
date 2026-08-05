@@ -58,7 +58,7 @@ ticker_bar_html = """
 """
 st.markdown(ticker_bar_html, unsafe_allow_html=True)
 
-# 4개의 상단 메인 탭 구성 (평단선 차트 명칭 복원)
+# 4개의 상단 메인 탭 구성
 main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs(
     ["📈 평단선 차트", "⭐ 업종·테마 분석", "🔥 거래대금 TOP 30", "🌙 시간외 톱 30"]
 )
@@ -140,51 +140,6 @@ def get_financial_info(code):
             "inst_net": "+1,200주",
             "prog_net": "+180억 (폭발적)",
             "credit_ratio": "3.85%",
-        },
-        "017900": {
-            "mcap": 1400,
-            "op_profit": 18,
-            "trade_type": "🌊 스윙",
-            "foreign_net": "-4,100주",
-            "inst_net": "+5,600주",
-            "prog_net": "+12억",
-            "credit_ratio": "1.10%",
-        },
-        "327260": {
-            "mcap": 3920,
-            "op_profit": 32,
-            "trade_type": "⚡ 단타",
-            "foreign_net": "+45,000주",
-            "inst_net": "+18,900주",
-            "prog_net": "+62억",
-            "credit_ratio": "2.15%",
-        },
-        "001440": {
-            "mcap": 18500,
-            "op_profit": 780,
-            "trade_type": "🌊 스윙",
-            "foreign_net": "+95,200주",
-            "inst_net": "+31,000주",
-            "prog_net": "+94억",
-            "credit_ratio": "1.05%",
-        },
-        "024840": {
-            "mcap": 850,
-            "op_profit": 12,
-            "trade_type": "⚡ 단타",
-            "foreign_net": "+18,000주",
-            "inst_net": "-800주",
-            "prog_net": "+8억",
-            "credit_ratio": "2.90%",
-        },
-        "028670": {
-            "mcap": 5100,
-            "op_profit": 130,
-            "trade_type": "🏆 중장기",
-            "foreign_net": "+22,100주",
-            "inst_net": "+14,500주",
-            "prog_net": "+25억",
-            "credit_ratio": "0.78%",
         },
     }
     return sample_financials.get(
@@ -434,11 +389,13 @@ with main_tab1:
 
 
 # ---------------------------------------------------------
-# TAB 2: 업종·테마 분석 대시보드 (두 번째 사진 스타일 복원)
+# TAB 2: 업종·테마 분석 대시보드 (세 번째 사진 스타일 완벽 복원)
 # ---------------------------------------------------------
 with main_tab2:
-    st.title("⭐ 업종·테마 분석 대시보드")
-    st.caption("주도 업종/테마 순위 및 테마별 세부 구성 종목의 시세를 분석합니다.")
+    st.markdown("### ⭐ 업종·테마 분석 대시보드")
+    st.caption(
+        "실적(흑자/적자), 매매유형(단타/스윙/중장기), 평단선 괴리율을 기반의 매수타점을 종합 분석합니다."
+    )
 
     THEME_DATA = {
         "광케이블/광섬유": {
@@ -449,34 +406,35 @@ with main_tab2:
                     "name": "대한광통신",
                     "code": "010170",
                     "price": 1850,
-                    "change": 14.50,
-                    "amt": 12500000,
-                    "vol": "12,500,000",
-                    "mcap": "2,100억",
-                    "d_vwap": 2100,
-                    "w_vwap": 1810,
+                    "change": 4.50,
+                    "amt": 12500,
+                    "op": 231,
+                    "trade_type": "⚡ 단타",
+                    "d_vwap": 1810,
+                    "d_disp": "+2.1%",
+                    "w_vwap": 1580,
+                    "w_disp": "+17.1%",
+                    "m_vwap": 1450,
+                    "m_disp": "+27.5%",
+                    "m3_vwap": 1780,
+                    "m3_disp": "+3.9%",
                 },
                 {
                     "name": "광전자",
                     "code": "017900",
                     "price": 2450,
                     "change": 9.80,
-                    "amt": 4200000,
-                    "vol": "4,200,000",
-                    "mcap": "1,400억",
-                    "d_vwap": 1400,
-                    "w_vwap": 2100,
-                },
-                {
-                    "name": "RF머트리얼즈",
-                    "code": "327260",
-                    "price": 33750,
-                    "change": 29.80,
-                    "amt": 3480000,
-                    "vol": "3,480,000",
-                    "mcap": "3,920억",
-                    "d_vwap": 3920,
-                    "w_vwap": 16572,
+                    "amt": 4200,
+                    "op": 18,
+                    "trade_type": "🌊 스윙",
+                    "d_vwap": 2100,
+                    "d_disp": "+16.6%",
+                    "w_vwap": 2050,
+                    "w_disp": "+19.5%",
+                    "m_vwap": 1950,
+                    "m_disp": "+25.6%",
+                    "m3_vwap": 2350,
+                    "m3_disp": "+4.2%",
                 },
             ],
         },
@@ -489,34 +447,18 @@ with main_tab2:
                     "code": "001440",
                     "price": 14200,
                     "change": 8.50,
-                    "amt": 18200000,
-                    "vol": "18,200,000",
-                    "mcap": "18,500억",
-                    "d_vwap": 18500,
-                    "w_vwap": 13950,
-                },
-                {
-                    "name": "KBI메탈",
-                    "code": "024840",
-                    "price": 2150,
-                    "change": 12.10,
-                    "amt": 8900000,
-                    "vol": "8,900,000",
-                    "mcap": "850억",
-                    "d_vwap": 850,
-                    "w_vwap": 1850,
-                },
-                {
-                    "name": "LS마린솔루션",
-                    "code": "028670",
-                    "price": 19800,
-                    "change": 6.20,
-                    "amt": 3100000,
-                    "vol": "3,100,000",
-                    "mcap": "5,100억",
-                    "d_vwap": 5100,
-                    "w_vwap": 17200,
-                },
+                    "amt": 18200,
+                    "op": 780,
+                    "trade_type": "🌊 스윙",
+                    "d_vwap": 13950,
+                    "d_disp": "+1.8%",
+                    "w_vwap": 12100,
+                    "w_disp": "+17.3%",
+                    "m_vwap": 11500,
+                    "m_disp": "+23.4%",
+                    "m3_vwap": 13900,
+                    "m3_disp": "+2.1%",
+                }
             ],
         },
         "통신장비": {
@@ -528,50 +470,74 @@ with main_tab2:
                     "code": "215790",
                     "price": 2150,
                     "change": 5.20,
-                    "amt": 5200000,
-                    "vol": "5,200,000",
-                    "mcap": "1,200억",
+                    "amt": 5200,
+                    "op": -45,
+                    "trade_type": "⚡ 단타",
                     "d_vwap": 2100,
+                    "d_disp": "+2.3%",
                     "w_vwap": 2050,
-                },
-                {
-                    "name": "CS",
-                    "code": "065770",
-                    "price": 3100,
-                    "change": 4.10,
-                    "amt": 2100000,
-                    "vol": "2,100,000",
-                    "mcap": "980억",
-                    "d_vwap": 3000,
-                    "w_vwap": 2900,
-                },
+                    "w_disp": "+4.8%",
+                    "m_vwap": 1950,
+                    "m_disp": "+10.2%",
+                    "m3_vwap": 2120,
+                    "m3_disp": "+1.4%",
+                }
             ],
         },
         "반도체 대표주(생산)": {
             "change": "+6.94%",
-            "leader": "삼성전자",
+            "leader": "삼성전자, SK하이닉스",
             "stocks": [
                 {
                     "name": "삼성전자",
                     "code": "005930",
                     "price": 72500,
                     "change": 4.50,
-                    "amt": 28500000,
-                    "vol": "28,500,000",
-                    "mcap": "432,000억",
+                    "amt": 20600,
+                    "op": 656700,
+                    "trade_type": "🏆 중장기",
                     "d_vwap": 71000,
+                    "d_disp": "+2.1%",
                     "w_vwap": 66200,
+                    "w_disp": "+9.5%",
+                    "m_vwap": 64000,
+                    "m_disp": "+13.3%",
+                    "m3_vwap": 71200,
+                    "m3_disp": "+1.8%",
                 },
                 {
                     "name": "SK하이닉스",
                     "code": "000660",
                     "price": 188500,
                     "change": 8.90,
-                    "amt": 8900000,
-                    "vol": "8,900,000",
-                    "mcap": "137,000억",
+                    "amt": 16700,
+                    "op": 120500,
+                    "trade_type": "🏆 중장기",
                     "d_vwap": 165000,
+                    "d_disp": "+14.2%",
                     "w_vwap": 158000,
+                    "w_disp": "+19.3%",
+                    "m_vwap": 149000,
+                    "m_disp": "+26.5%",
+                    "m3_vwap": 181000,
+                    "m3_disp": "+4.1%",
+                },
+                {
+                    "name": "DB하이텍",
+                    "code": "000990",
+                    "price": 48500,
+                    "change": 7.20,
+                    "amt": 606,
+                    "op": 2100,
+                    "trade_type": "🌊 스윙",
+                    "d_vwap": 47200,
+                    "d_disp": "+2.8%",
+                    "w_vwap": 41500,
+                    "w_disp": "+16.9%",
+                    "m_vwap": 39800,
+                    "m_disp": "+21.9%",
+                    "m3_vwap": 46800,
+                    "m3_disp": "+3.6%",
                 },
             ],
         },
@@ -584,17 +550,92 @@ with main_tab2:
                     "code": "218410",
                     "price": 21500,
                     "change": 3.10,
-                    "amt": 1500000,
-                    "vol": "1,500,000",
-                    "mcap": "3,100억",
+                    "amt": 1500,
+                    "op": 32,
+                    "trade_type": "⚡ 단타",
                     "d_vwap": 21000,
+                    "d_disp": "+2.3%",
                     "w_vwap": 20500,
+                    "w_disp": "+4.8%",
+                    "m_vwap": 19500,
+                    "m_disp": "+10.2%",
+                    "m3_vwap": 21200,
+                    "m3_disp": "+1.4%",
+                }
+            ],
+        },
+        "온디바이스 AI": {
+            "change": "+5.80%",
+            "leader": "제주반도체",
+            "stocks": [
+                {
+                    "name": "제주반도체",
+                    "code": "080220",
+                    "price": 25100,
+                    "change": 6.50,
+                    "amt": 1500,
+                    "op": 120,
+                    "trade_type": "⚡ 단타",
+                    "d_vwap": 24500,
+                    "d_disp": "+2.4%",
+                    "w_vwap": 23000,
+                    "w_disp": "+9.1%",
+                    "m_vwap": 21000,
+                    "m_disp": "+19.5%",
+                    "m3_vwap": 24800,
+                    "m3_disp": "+1.2%",
+                }
+            ],
+        },
+        "HBM(고대역폭메모리)": {
+            "change": "+5.40%",
+            "leader": "한미반도체",
+            "stocks": [
+                {
+                    "name": "한미반도체",
+                    "code": "042700",
+                    "price": 134000,
+                    "change": 5.40,
+                    "amt": 1450,
+                    "op": 780,
+                    "trade_type": "⚡ 단타",
+                    "d_vwap": 130000,
+                    "d_disp": "+3.1%",
+                    "w_vwap": 125000,
+                    "w_disp": "+7.2%",
+                    "m_vwap": 115000,
+                    "m_disp": "+16.5%",
+                    "m3_vwap": 132000,
+                    "m3_disp": "+1.5%",
+                }
+            ],
+        },
+        "분자진단/진단키트": {
+            "change": "+4.20%",
+            "leader": "셀트리온",
+            "stocks": [
+                {
+                    "name": "셀트리온",
+                    "code": "068270",
+                    "price": 182000,
+                    "change": 1.50,
+                    "amt": 980,
+                    "op": 2100,
+                    "trade_type": "🏆 중장기",
+                    "d_vwap": 180000,
+                    "d_disp": "+1.1%",
+                    "w_vwap": 175000,
+                    "w_disp": "+4.0%",
+                    "m_vwap": 165000,
+                    "m_disp": "+10.3%",
+                    "m3_vwap": 181000,
+                    "m3_disp": "+0.5%",
                 }
             ],
         },
     }
 
-    st.subheader("🔥 인기 업종·테마 Top (1위 ~ 5위)")
+    # 인기 테마 Top 카드 출력 (1위 ~ 5위)
     top_keys = list(THEME_DATA.keys())[:5]
     top_cols = st.columns(len(top_keys))
 
@@ -616,39 +657,51 @@ with main_tab2:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 좌우 분할 레이아웃 (왼쪽: 테마 목록 선택 / 오른쪽: 상세 테이블)
+    # 좌우 분할 레이아웃 (세 번째 사진 스타일 복원)
     col_left, col_right = st.columns([1, 3.2])
 
     with col_left:
-        st.markdown(
-            "### 📊 인기 테마 목록 (총 25개)",
-            unsafe_allow_html=True,
+        search_mode = st.radio(
+            "검색 모드", ["테마 검색", "종목 검색"], horizontal=True, key="search_mode_radio"
         )
-        search_theme = st.text_input(
-            "테마 검색...", "", label_visibility="collapsed", placeholder="테마 검색..."
+        search_input = st.text_input(
+            "검색어 입력...", "", key="theme_search_input", placeholder="검색어 입력..."
         )
 
         theme_list = list(THEME_DATA.keys())
-        if search_theme.strip():
-            theme_list = [
-                t for t in theme_list if search_theme.strip() in t
-            ]
+        if search_mode == "테마 검색" and search_input.strip():
+            theme_list = [t for t in theme_list if search_input.strip() in t]
+        elif search_mode == "종목 검색" and search_input.strip():
+            matched = []
+            for t_name, t_info in THEME_DATA.items():
+                for s in t_info["stocks"]:
+                    if (
+                        search_input.strip().lower() in s["name"].lower()
+                        or search_input.strip() in s["code"]
+                    ):
+                        matched.append(t_name)
+            theme_list = list(dict.fromkeys(matched)) if matched else theme_list
+
+        st.markdown(
+            f"### 📊 인기 테마 목록 ({len(theme_list)}개)",
+            unsafe_allow_html=True,
+        )
 
         selected_theme = st.radio(
-            "테마 선택",
+            "테마 선택 라디오",
             theme_list,
             index=0,
             label_visibility="collapsed",
-            key="theme_radio_list",
+            key="theme_radio_select",
         )
 
     with col_right:
-        if selected_theme:
+        if selected_theme and selected_theme in THEME_DATA:
             st.markdown(f"### 📌 {selected_theme}", unsafe_allow_html=True)
 
             theme_sort_mode = st.radio(
                 "정렬 필터",
-                ["전체", "거래대금 상위", "상승 TOP"],
+                ["전체", "거래대금 상위", "상승 TOP", "영업이익 높은순"],
                 horizontal=True,
                 key=f"sort_{selected_theme}",
             )
@@ -663,6 +716,10 @@ with main_tab2:
                 stocks_list = sorted(
                     stocks_list, key=lambda x: x["change"], reverse=True
                 )
+            elif theme_sort_mode == "영업이익 높은순":
+                stocks_list = sorted(
+                    stocks_list, key=lambda x: x["op"], reverse=True
+                )
 
             table_rows_html = ""
             for idx, item in enumerate(stocks_list, start=1):
@@ -670,36 +727,50 @@ with main_tab2:
                 s_code = item["code"]
                 curr_price = item["price"]
                 change_pct = item["change"]
-                vol = item["vol"]
-                trade_amt = item["amt"]
-                mcap = item["mcap"]
+                amt = item["amt"]
+                op = item["op"]
+                t_type = item["trade_type"]
+
+                d_vwap, d_disp = item["d_vwap"], item["d_disp"]
+                w_vwap, w_disp = item["w_vwap"], item["w_disp"]
+                m_vwap, m_disp = item["m_vwap"], item["m_disp"]
+                m3_vwap, m3_disp = item["m3_vwap"], item["m3_disp"]
+
+                profit_str = f"흑자 ({op:,}억)" if op > 0 else f"적자 ({op}억)"
+                profit_color = "#0ca678" if op > 0 else "#f03e3e"
 
                 table_rows_html += f"""
-                <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
-                    <td style="text-align: center;">{idx}</td>
-                    <td style="font-weight: bold;">{s_name}</td>
-                    <td style="text-align: center;">{s_code}</td>
+                <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
+                    <td style="text-align: center; font-weight: bold;">{idx}</td>
+                    <td style="font-weight: bold;">{s_name}<br><span style="color:#1c7ed6; font-size:10px;">{t_type}</span></td>
+                    <td style="text-align: center;"><span style="border:1px solid #ddd; padding:2px 6px; border-radius:4px; font-size:10px;">{s_code}</span></td>
+                    <td style="text-align: center; color:{profit_color}; font-weight:bold;">🟢 {profit_str}</td>
                     <td style="text-align: right; font-weight: bold;">{curr_price:,}원</td>
                     <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{change_pct:.2f}%</td>
-                    <td style="text-align: right;">{vol}</td>
-                    <td style="text-align: right;">{trade_amt:,}백만</td>
-                    <td style="text-align: right;">{mcap}</td>
+                    <td style="text-align: right;">{amt:,}백만</td>
+                    <td style="text-align: center; background-color: #fff9db;"><b>{d_vwap:,}원</b><br><span style="color:#d32f2f; font-size:11px;">({d_disp})</span></td>
+                    <td style="text-align: center; background-color: #fff3bf;"><b>{w_vwap:,}원</b><br><span style="color:#d32f2f; font-size:11px;">({w_disp})</span></td>
+                    <td style="text-align: center; background-color: #ffec99;"><b>{m_vwap:,}원</b><br><span style="color:#d32f2f; font-size:11px;">({m_disp})</span></td>
+                    <td style="text-align: center; background-color: #e7f5ff;"><b>{m3_vwap:,}원</b><br><span style="color:#d32f2f; font-size:11px;">({m3_disp})</span></td>
                 </tr>
                 """
 
             full_table_html = f"""
             <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
-                <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 800px;">
+                <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 1100px;">
                     <thead>
-                        <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 35px;">
+                        <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 38px;">
                             <th style="text-align: center;">순위</th>
-                            <th style="text-align: left;">종목명</th>
+                            <th style="text-align: left;">종목명 (매매유형)</th>
                             <th style="text-align: center;">종목코드</th>
+                            <th style="text-align: center;">실적 (영업이익)</th>
                             <th style="text-align: right;">현재가</th>
                             <th style="text-align: right;">전일대비</th>
-                            <th style="text-align: right;">거래량</th>
                             <th style="text-align: right;">거래대금</th>
-                            <th style="text-align: right;">시가총액</th>
+                            <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리율)</th>
+                            <th style="text-align: center; background-color: #fff3bf;">주봉 평단(괴리율)</th>
+                            <th style="text-align: center; background-color: #ffec99;">월봉 평단(괴리율)</th>
+                            <th style="text-align: center; background-color: #e7f5ff;">3분봉 평단(괴리율)</th>
                         </tr>
                     </thead>
                     <tbody>{table_rows_html}</tbody>
@@ -707,7 +778,7 @@ with main_tab2:
             </div>
             """
             components.html(
-                full_table_html, height=len(stocks_list) * 60 + 50, scrolling=True
+                full_table_html, height=len(stocks_list) * 70 + 60, scrolling=True
             )
 
 
@@ -781,64 +852,9 @@ with main_tab3:
             "type": "⚡ 단타",
             "prog": "+62억",
         },
-        {
-            "name": "에코프로비엠",
-            "code": "247540",
-            "price": 215000,
-            "change": 3.20,
-            "amt": 1840,
-            "vwap": 210000,
-            "w_vwap": 198000,
-            "type": "🌊 스윙",
-            "prog": "+40억",
-        },
-        {
-            "name": "에코프로",
-            "code": "086520",
-            "price": 98000,
-            "change": 2.10,
-            "amt": 1520,
-            "vwap": 96000,
-            "w_vwap": 92000,
-            "type": "🌊 스윙",
-            "prog": "+25억",
-        },
-        {
-            "name": "셀트리온",
-            "code": "068270",
-            "price": 182000,
-            "change": 1.50,
-            "amt": 980,
-            "vwap": 180000,
-            "w_vwap": 175000,
-            "type": "🏆 중장기",
-            "prog": "+15억",
-        },
-        {
-            "name": "한미반도체",
-            "code": "042700",
-            "price": 134000,
-            "change": 5.40,
-            "amt": 1450,
-            "vwap": 130000,
-            "w_vwap": 125000,
-            "type": "⚡ 단타",
-            "prog": "+85억",
-        },
-        {
-            "name": "LG에너지솔루션",
-            "code": "373220",
-            "price": 382000,
-            "change": -0.50,
-            "amt": 1120,
-            "vwap": 385000,
-            "w_vwap": 390000,
-            "type": "🏆 중장기",
-            "prog": "-30억",
-        },
     ]
 
-    full_top30 = (top30_sample * 3)[:30]
+    full_top30 = (top30_sample * 6)[:30]
 
     if t30_sort_mode == "거래대금 많은순":
         full_top30 = sorted(full_top30, key=lambda x: x["amt"], reverse=True)
@@ -962,27 +978,9 @@ with main_tab4:
             "type": "🏆 중장기",
             "reason": "실적 호조",
         },
-        {
-            "name": "제주반도체",
-            "code": "080220",
-            "price": 25100,
-            "change": 6.50,
-            "amt": 1500,
-            "type": "⚡ 단타",
-            "reason": "AI 반도체 부각",
-        },
-        {
-            "name": "두산로보틱스",
-            "code": "454910",
-            "price": 79500,
-            "change": 2.10,
-            "amt": 920,
-            "type": "⚡ 단타",
-            "reason": "로봇 수주",
-        },
     ]
 
-    full_after = (after_hours_data * 5)[:30]
+    full_after = (after_hours_data * 6)[:30]
 
     if ah_sort_mode == "시간외 거래대금 많은순":
         full_after = sorted(full_after, key=lambda x: x["amt"], reverse=True)
