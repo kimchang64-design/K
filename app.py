@@ -155,15 +155,15 @@ if st.button("차트 및 수치 분석 실행", type="primary"):
         mc2.metric("누적 세력평단", f"{last_vwap:,} 원")
         mc3.metric("괴리율", f"{disparity:+.2f} %")
 
-        # 원클릭 복사 버튼 및 수치 박스 (HTML/JS 기반)
+        # 팝업 알림 창 없는 즉시 복사 버튼 (HTML/JS)
         copy_html = f"""
         <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; font-family: sans-serif;">
             <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-                <button onclick="navigator.clipboard.writeText('{last_vwap}'); alert('세력평단 수치({last_vwap})가 복사되었습니다!');" 
+                <button onclick="navigator.clipboard.writeText('{last_vwap}');" 
                         style="padding: 8px 16px; background-color: #ff4b4b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
                     📋 세력평단 수치만 복사 ({last_vwap})
                 </button>
-                <button onclick="navigator.clipboard.writeText(document.getElementById('fullSummary').innerText); alert('전체 요약 결과가 복사되었습니다!');" 
+                <button onclick="navigator.clipboard.writeText(document.getElementById('fullSummary').innerText);" 
                         style="padding: 8px 16px; background-color: #4bac30; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
                     📝 전체 결과 요약 복사
                 </button>
