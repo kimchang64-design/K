@@ -335,7 +335,7 @@ with main_tab2:
         )
 
         selected_theme = None
-        searched_stocks_result = []
+        matched_themes_from_stock = []  # 종목 검색으로 발견된 테마 목록
 
         if search_mode == "테마 검색":
             st.subheader("📊 인기 테마 목록")
@@ -356,8 +356,8 @@ with main_tab2:
             else:
                 st.warning("검색된 테마가 없습니다.")
         else:
-            # 종목 검색 모드
-            st.subheader("🔎 검색된 종목 결과")
+            # 종목 검색 모드: 해당 종목이 속한 모든 테마 수집
+            st.subheader("🔎 검색된 종목 소속 테마")
             query = search_input.strip().lower()
             if query:
                 for theme_name, theme_info in THEME_DATA.items():
@@ -365,60 +365,38 @@ with main_tab2:
                         s_name = s[0]
                         s_code = str(s[1]).zfill(6)
                         if query in s_name.lower() or query in s_code:
-                            # (테마명, 종목 튜플) 저장
-                            searched_stocks_result.append((theme_name, s))
+                            matched_themes_from_stock.append((theme_name, s_name))
 
-                if searched_stocks_result:
-                    st.caption(
-                        f"총 **{len(searched_stocks_result)}**개 종목이 검색되었습니다."
+                if matched_themes_from_stock:
+                    st.success(
+                        f"총 **{len(matched_themes_from_stock)}개** 테마에 포함되어 있습니다."
                     )
+                    for t_name, matched_sname in matched_themes_from_stock:
+                        st.caption(f"• **{matched_sname}** ➔ [{t_name}]")
                 else:
-                    st.info("검색어와 일치하는 종목이 없습니다.")
+                    st.info("검색어와 일치하는 종목을 찾지 못했습니다.")
             else:
                 st.info("종목명 또는 종목코드를 입력하세요.")
 
     with col_right:
-        stocks_to_display = []
-        header_title = ""
-
         if search_mode == "테마 검색" and selected_theme:
-            header_title = f"📌 {selected_theme}"
-            stocks_to_display = THEME_DATA[selected_theme]["stocks"]
-        elif search_mode == "종목 검색":
-            header_title = (
-                f"🔎 '{search_input}' 종목 검색 결과"
-                if search_input
-                else "🔎 종목 검색"
+            themes_to_render = [selected_theme]
+        elif search_mode == "종목 검색" and matched_themes_from_stock:
+            # 종목이 속한 모든 테마들의 이름을 중복 없이 추출
+            themes_to_render = list(
+                dict.fromkeys([t[0] for t in matched_themes_from_stock])
             )
+        else:
+            themes_to_render = []
 
-        if header_title:
-            st.subheader(header_title)
+        if themes_to_render:
+            for render_theme in themes_to_render:
+                st.subheader(f"📌 {render_theme} (구성 종목 전체)")
+                stocks_list = THEME_DATA[render_theme]["stocks"]
 
-            # 종목 검색 모드일 때는 각 종목 튜플 앞에 테마 정보 포함
-            if search_mode == "테마 검색":
-                sort_option = st.radio(
-                    "정렬 필터",
-                    ["전체", "거래대금 상위", "상승 TOP"],
-                    horizontal=True,
-                    key="sort_filter_option",
-                )
-
-                if sort_option == "거래대금 상위":
-                    stocks_to_display = sorted(
-                        stocks_to_display, key=lambda x: x[5], reverse=True
-                    )
-                elif sort_option == "상승 TOP":
-                    stocks_to_display = sorted(
-                        stocks_to_display, key=lambda x: x[3], reverse=True
-                    )
-
-                display_list = [(selected_theme, item) for item in stocks_to_display]
-            else:
-                display_list = searched_stocks_result
-
-            if display_list:
+                # 테이블 HTML 생성
                 table_rows_html = ""
-                for idx, (t_belong, item) in enumerate(display_list, start=1):
+                for idx, item in enumerate(stocks_list, start=1):
                     s_name = item[0]
                     s_code = str(item[1]).zfill(6)
                     curr_price = item[2]
@@ -433,18 +411,22 @@ with main_tab2:
                     m_disp = ((curr_price - m_vwap) / m_vwap) * 100
                     m3_disp = ((curr_price - m3_vwap) / m3_vwap) * 100
 
-                    theme_tag = (
-                        f'<div style="font-size: 10px; color: #666; font-weight: normal;">[{t_belong}]</div>'
-                        if search_mode == "종목 검색"
-                        else ""
+                    # 검색된 특정 종목 강조 표시 (연한 분홍색 배경)
+                    query = search_input.strip().lower()
+                    is_searched_item = (
+                        search_mode == "종목 검색"
+                        and query
+                        and (query in s_name.lower() or query in s_code)
+                    )
+                    row_bg = (
+                        "background-color: #fff0f6;" if is_searched_item else ""
                     )
 
                     table_rows_html += f"""
-                    <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
+                    <tr style="border-bottom: 1px solid #f0f0f0; height: 48px; font-size: 12px; {row_bg}">
                         <td style="text-align: center; color: #666; width: 35px;">{idx}</td>
-                        <td style="font-weight: bold; color: #111; padding-left: 5px; width: 110px;">
-                            {s_name}
-                            {theme_tag}
+                        <td style="font-weight: bold; color: #111; padding-left: 5px; width: 100px;">
+                            {s_name} {'<span style="color:#d32f2f; font-size:10px;">(검색)</span>' if is_searched_item else ''}
                         </td>
                         <td style="text-align: center; width: 75px;">
                             <button onclick="navigator.clipboard.writeText('{s_code}');" 
@@ -493,12 +475,12 @@ with main_tab2:
                     """
 
                 full_table_html = f"""
-                <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin-bottom: 25px;">
                     <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
                         <thead>
                             <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; color: #555; font-size: 11px; height: 38px;">
                                 <th style="text-align: center; width: 35px;">순위</th>
-                                <th style="text-align: left; padding-left: 5px; width: 110px;">종목명 (소속테마)</th>
+                                <th style="text-align: left; padding-left: 5px; width: 100px;">종목명</th>
                                 <th style="text-align: center; width: 75px;">종목코드</th>
                                 <th style="text-align: right; padding-right: 5px; width: 75px;">현재가</th>
                                 <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 평단 (괴리율)</th>
@@ -514,7 +496,7 @@ with main_tab2:
                 </div>
                 """
 
-                calc_height = max(200, len(display_list) * 55 + 60)
+                calc_height = max(180, len(stocks_list) * 55 + 60)
                 components.html(
                     full_table_html, height=calc_height, scrolling=True
                 )
