@@ -65,7 +65,7 @@ main_tab1, main_tab2, main_tab3, main_tab4 = st.tabs(
 
 
 # ---------------------------------------------------------
-# 공통 함수 (한글 종목명 및 대원전선 등 매핑 강화)
+# 공통 함수 (한글 종목명 및 매핑 강화)
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_stock_ticker_map():
@@ -126,7 +126,6 @@ def resolve_code_or_name(user_input):
     if user_input in name_map:
         return name_map[user_input], user_input
 
-    # 부분 일치 검색
     for name, code in name_map.items():
         if user_input.lower() in name.lower():
             return code, name
@@ -218,19 +217,23 @@ with main_tab1:
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
-        # 검색 폼을 사용하여 엔터나 검색 버튼 입력 시에만 확실하게 반영되도록 분리
-        with st.form(key="search_form", clear_on_submit=False):
+        # 입력창과 [검색] 버튼을 가로로 배치 (비율 4:1)
+        sc1, sc2 = st.columns([4, 1])
+
+        with sc1:
             input_val = st.text_input(
                 "종목 입력",
                 value=st.session_state.target_stock,
-                placeholder="종목명 또는 코드 입력",
+                placeholder="종목명 또는 코드",
                 label_visibility="collapsed",
             )
-            submit_btn = st.form_submit_button(
-                "🔍 검색", use_container_width=True
+
+        with sc2:
+            search_clicked = st.button(
+                "검색", use_container_width=True, type="primary"
             )
 
-        if submit_btn and input_val:
+        if search_clicked and input_val:
             st.session_state.target_stock = input_val
 
         code, stock_name = resolve_code_or_name(
