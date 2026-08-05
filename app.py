@@ -383,7 +383,7 @@ with main_tab1:
         df["평단가"] = df["TPV"].cumsum() / cum_volume.replace(0, pd.NA)
         df["평단가"] = df["평단가"].ffill()
 
-        # 📌 HTS 분석 지표 계산 (안전하게 수정됨)
+        # 📌 HTS 분석 지표 계산
         df["가격변화"] = df["종가"].diff().fillna(0)
         df["매수거래량"] = df.apply(lambda r: r["거래량"] if r["가격변화"] >= 0 else r["거래량"] * 0.4, axis=1)
         df["매도거래량"] = df.apply(lambda r: r["거래량"] * 0.6 if r["가격변화"] < 0 else r["거래량"] * 0.2, axis=1)
@@ -391,7 +391,6 @@ with main_tab1:
         df["순매수증감"] = df["매수거래량"] - df["매도거래량"]
         df["누적순매수증감"] = df["순매수증감"].cumsum()
 
-        # 최근일 기준 지표 추출
         last_row = df.iloc[-1]
         total_vol = int(last_row["거래량"])
         cum_buy_inc = int(df["매수거래량"].sum())
@@ -461,44 +460,44 @@ with main_tab1:
 
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
-        # 📌 HTS 분석 지표 패널 구성
+        # 📌 HTS 분석 지표 패널 구성 (요청하신 8개 항목 모두 포함, 글자 클릭 즉시 복사 지원)
         hts_panel_html = f"""
         <div style="background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
             <div style="font-weight: bold; font-size: 13px; color: #333; margin-bottom: 10px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px;">
-                📊 HTS 기준 [{stock_name}] 수급 및 평단 분석 결과 <span style="font-size:11px; color:#666; font-weight:normal;">(클릭 시 즉시 복사)</span>
+                📊 HTS 기준 [{stock_name}] 수급 및 평단 분석 결과 <span style="font-size:11px; color:#666; font-weight:normal;">(글자 클릭 시 즉시 복사)</span>
             </div>
             <div style="display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 10px; font-size: 12px;">
                 <div style="display: flex; justify-content: space-between; padding: 6px; background: #f8f9fa; border-radius: 4px;">
                     <span style="color: #555; font-weight: bold;">당일 전체 거래량:</span>
-                    <span onclick="navigator.clipboard.writeText('{total_vol}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 복사">{total_vol:,} 주</span>
+                    <span onclick="navigator.clipboard.writeText('{total_vol}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{total_vol:,} 주</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 6px; background: #f8f9fa; border-radius: 4px;">
                     <span style="color: #555; font-weight: bold;">누적 매수 증가량:</span>
-                    <span onclick="navigator.clipboard.writeText('{cum_buy_inc}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 복사">{cum_buy_inc:,} 주</span>
+                    <span onclick="navigator.clipboard.writeText('{cum_buy_inc}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{cum_buy_inc:,} 주</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 6px; background: #f8f9fa; border-radius: 4px;">
                     <span style="color: #555; font-weight: bold;">순매수 수량(증감):</span>
-                    <span onclick="navigator.clipboard.writeText('{net_buy_qty}');" style="font-weight: bold; color: {'#d32f2f' if net_buy_qty>=0 else '#7048e8'}; cursor: pointer;" title="클릭 복사">{net_buy_qty:,} 주</span>
+                    <span onclick="navigator.clipboard.writeText('{net_buy_qty}');" style="font-weight: bold; color: {'#d32f2f' if net_buy_qty>=0 else '#7048e8'}; cursor: pointer;" title="클릭 시 즉시 복사">{net_buy_qty:,} 주</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 6px; background: #f8f9fa; border-radius: 4px;">
                     <span style="color: #555; font-weight: bold;">거래량 대비 매수 비율:</span>
-                    <span onclick="navigator.clipboard.writeText('{ratio_buy:.2f}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 복사">{ratio_buy:.2f} %</span>
+                    <span onclick="navigator.clipboard.writeText('{ratio_buy:.2f}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{ratio_buy:.2f} %</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 6px; background: #f8f9fa; border-radius: 4px;">
                     <span style="color: #555; font-weight: bold;">거래량 대비 순매수 비율:</span>
-                    <span onclick="navigator.clipboard.writeText('{ratio_net:.2f}');" style="font-weight: bold; color: {'#d32f2f' if ratio_net>=0 else '#e03131'}; cursor: pointer;" title="클릭 복사">{ratio_net:.2f} %</span>
+                    <span onclick="navigator.clipboard.writeText('{ratio_net:.2f}');" style="font-weight: bold; color: {'#d32f2f' if ratio_net>=0 else '#e03131'}; cursor: pointer;" title="클릭 시 즉시 복사">{ratio_net:.2f} %</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 6px; background: #f8f9fa; border-radius: 4px;">
                     <span style="color: #555; font-weight: bold;">전체 거래량 평단:</span>
-                    <span onclick="navigator.clipboard.writeText('{last_vwap}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 복사">{last_vwap:,} 원</span>
+                    <span onclick="navigator.clipboard.writeText('{last_vwap}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{last_vwap:,} 원</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 6px; background: #fff9db; border: 1px solid #ffe066; border-radius: 4px;">
                     <span style="color: #d9480f; font-weight: bold;">세력 매수 평단:</span>
-                    <span onclick="navigator.clipboard.writeText('{buy_vwap}');" style="font-weight: bold; color: #d32f2f; cursor: pointer;" title="클릭 복사">{buy_vwap:,} 원</span>
+                    <span onclick="navigator.clipboard.writeText('{buy_vwap}');" style="font-weight: bold; color: #d32f2f; cursor: pointer;" title="클릭 시 즉시 복사">{buy_vwap:,} 원</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 6px; background: #e7f5ff; border: 1px solid #74c0fc; border-radius: 4px;">
                     <span style="color: #1864ab; font-weight: bold;">세력 매도 평단:</span>
-                    <span onclick="navigator.clipboard.writeText('{sell_vwap}');" style="font-weight: bold; color: #1971c2; cursor: pointer;" title="클릭 복사">{sell_vwap:,} 원</span>
+                    <span onclick="navigator.clipboard.writeText('{sell_vwap}');" style="font-weight: bold; color: #1971c2; cursor: pointer;" title="클릭 시 즉시 복사">{sell_vwap:,} 원</span>
                 </div>
             </div>
         </div>
@@ -537,7 +536,7 @@ with main_tab1:
                 line=dict(color="#ff7f0e", width=2.5),
             )
         )
-        # 3. 순매수 증감 추세선
+        # 3. 순매수 증감 추세선 (보조 축 활용)
         fig.add_trace(
             go.Scatter(
                 x=hover_x,
