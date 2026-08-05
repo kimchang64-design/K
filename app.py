@@ -242,11 +242,14 @@ with main_tab1:
             if len(st.session_state.search_history) > 12:
                 st.session_state.search_history.pop()
 
-        # 📌 종목명·코드 및 즉시 복사 버튼 영역
+        # 📌 종목명·코드 및 코드 복사하기 버튼 영역
         st.markdown(
             f"""
             <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; padding: 6px 10px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
                 <span style="font-size: 13px; font-weight: bold;">📌 종목: {stock_name} ({code})</span>
+                <button onclick="navigator.clipboard.writeText('{code}');" style="background:#1a73e8; color:white; border:none; padding:3px 8px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
+                    📋 코드 복사 ({code})
+                </button>
             </div>
             """,
             unsafe_allow_html=True,
@@ -457,7 +460,7 @@ with main_tab1:
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
         m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
 
-        # 📋 확인창 없는 단가 복사 버튼 (코드명 옆 및 하단 제공)
+        # 📋 확인창 없는 단가 복사 버튼
         st.markdown(
             "### 📋 키움차트/주문창 단가 수치 복사하기 (클릭 시 확인창 없이 즉시 복사)"
         )
@@ -567,7 +570,7 @@ with main_tab1:
 with main_tab2:
     st.markdown("### ⭐ 업종·테마 분석 대시보드")
     st.caption(
-        "실적, 매매유형(단타/스윙/중장기), 평단가 및 괴리율 기반 매수타점 종합 분석"
+        "실적, 매매유형(단타/스윙/중장기), 다중 주기 평단가 및 괴리율 분석"
     )
 
     THEME_DATA = {
@@ -580,11 +583,15 @@ with main_tab2:
                     "code": "010170",
                     "price": 1850,
                     "change": 4.50,
-                    "amt": 12500,
-                    "op": 231,
                     "trade_type": "⚡ 단타",
                     "d_vwap": 1810,
                     "d_disp": "+2.1%",
+                    "w_vwap": 1580,
+                    "w_disp": "+17.1%",
+                    "m_vwap": 1450,
+                    "m_disp": "+27.5%",
+                    "m3_vwap": 1790,
+                    "m3_disp": "+3.3%",
                 }
             ],
         },
@@ -597,11 +604,15 @@ with main_tab2:
                     "code": "001440",
                     "price": 14200,
                     "change": 8.50,
-                    "amt": 18200,
-                    "op": 780,
                     "trade_type": "🌊 스윙",
                     "d_vwap": 13950,
                     "d_disp": "+1.8%",
+                    "w_vwap": 12100,
+                    "w_disp": "+17.3%",
+                    "m_vwap": 11500,
+                    "m_disp": "+23.4%",
+                    "m3_vwap": 14100,
+                    "m3_disp": "+0.7%",
                 }
             ],
         },
@@ -651,14 +662,33 @@ with main_tab2:
             stocks_list = THEME_DATA[selected_theme]["stocks"]
             table_rows_html = ""
             for idx, item in enumerate(stocks_list, start=1):
+                # 테이블 내 각 항목별 원클릭 복사 버튼 구성을 위한 HTML 렌더링
                 table_rows_html += f"""
                 <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
                     <td style="text-align: center; font-weight: bold;">{idx}</td>
                     <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['trade_type']}</span></td>
-                    <td style="text-align: center;">{item['code']}</td>
+                    <td style="text-align: center;">
+                        {item['code']} 
+                        <button onclick="navigator.clipboard.writeText('{item['code']}');" style="background:#1a73e8; color:white; border:none; padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px;">복사</button>
+                    </td>
                     <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
                     <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{item['change']:.2f}%</td>
-                    <td style="text-align: center; background-color: #fff9db;"><b>{item['d_vwap']:,}원</b> ({item['d_disp']})</td>
+                    <td style="text-align: center; background-color: #fff9db;">
+                        <b>{item['d_vwap']:,}원</b> ({item['d_disp']})
+                        <button onclick="navigator.clipboard.writeText('{item['d_vwap']}');" style="background:#e67700; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+                    </td>
+                    <td style="text-align: center; background-color: #f3f0ff;">
+                        <b>{item['w_vwap']:,}원</b> ({item['w_disp']})
+                        <button onclick="navigator.clipboard.writeText('{item['w_vwap']}');" style="background:#7950f2; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+                    </td>
+                    <td style="text-align: center; background-color: #e6fcf5;">
+                        <b>{item['m_vwap']:,}원</b> ({item['m_disp']})
+                        <button onclick="navigator.clipboard.writeText('{item['m_vwap']}');" style="background:#0ca678; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+                    </td>
+                    <td style="text-align: center; background-color: #fff0f6;">
+                        <b>{item['m3_vwap']:,}원</b> ({item['m3_disp']})
+                        <button onclick="navigator.clipboard.writeText('{item['m3_vwap']}');" style="background:#d63384; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+                    </td>
                 </tr>
                 """
             full_table_html = f"""
@@ -671,14 +701,17 @@ with main_tab2:
                             <th style="text-align: center;">종목코드</th>
                             <th style="text-align: right;">현재가</th>
                             <th style="text-align: right;">전일대비</th>
-                            <th style="text-align: center; background-color: #fff9db;">일봉 평단가 (괴리율)</th>
+                            <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리)</th>
+                            <th style="text-align: center; background-color: #f3f0ff;">주봉 평단(괴리)</th>
+                            <th style="text-align: center; background-color: #e6fcf5;">월봉 평단(괴리)</th>
+                            <th style="text-align: center; background-color: #fff0f6;">3분봉 평단(괴리)</th>
                         </tr>
                     </thead>
                     <tbody>{table_rows_html}</tbody>
                 </table>
             </div>
             """
-            components.html(full_table_html, height=200, scrolling=True)
+            components.html(full_table_html, height=220, scrolling=True)
 
 
 # ---------------------------------------------------------
@@ -686,9 +719,7 @@ with main_tab2:
 # ---------------------------------------------------------
 with main_tab3:
     st.title("🔥 전체 거래대금 TOP 30 대시보드")
-    st.caption(
-        "시장 주도 상위 종목 평단가, 괴리율 및 매매 성향(중장기/스윙) 분석"
-    )
+    st.caption("주도 상위 종목들의 다중 주기 평단가 및 코드 원클릭 복사 지원")
 
     t30_sort_mode = st.radio(
         "정렬 기준 선택",
@@ -704,8 +735,14 @@ with main_tab3:
             "price": 72500,
             "change": 4.50,
             "amt": 20600,
-            "vwap": 71000,
-            "disp": "+2.1%",
+            "d_vwap": 71000,
+            "d_disp": "+2.1%",
+            "w_vwap": 68500,
+            "w_disp": "+5.8%",
+            "m_vwap": 65000,
+            "m_disp": "+11.5%",
+            "m3_vwap": 72100,
+            "m3_disp": "+0.5%",
             "type": "🏆 중장기",
         },
         {
@@ -714,8 +751,14 @@ with main_tab3:
             "price": 188500,
             "change": 8.90,
             "amt": 16700,
-            "vwap": 165000,
-            "disp": "+14.2%",
+            "d_vwap": 165000,
+            "d_disp": "+14.2%",
+            "w_vwap": 155000,
+            "w_disp": "+21.6%",
+            "m_vwap": 140000,
+            "m_disp": "+34.6%",
+            "m3_vwap": 187000,
+            "m3_disp": "+0.8%",
             "type": "🏆 중장기",
         },
     ]
@@ -726,11 +769,29 @@ with main_tab3:
         <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
             <td style="text-align: center; font-weight: bold;">{idx}</td>
             <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['type']}</span></td>
-            <td style="text-align: center;">{item['code']}</td>
+            <td style="text-align: center;">
+                {item['code']} 
+                <button onclick="navigator.clipboard.writeText('{item['code']}');" style="background:#1a73e8; color:white; border:none; padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px;">복사</button>
+            </td>
             <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
             <td style="text-align: right; color: #d32f2f;">+{item['change']:.2f}%</td>
             <td style="text-align: right;">{item['amt']:,} 백만</td>
-            <td style="text-align: center; background-color: #fff9db;"><b>{item['vwap']:,}원</b> ({item['disp']})</td>
+            <td style="text-align: center; background-color: #fff9db;">
+                <b>{item['d_vwap']:,}원</b> ({item['d_disp']})
+                <button onclick="navigator.clipboard.writeText('{item['d_vwap']}');" style="background:#e67700; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+            </td>
+            <td style="text-align: center; background-color: #f3f0ff;">
+                <b>{item['w_vwap']:,}원</b> ({item['w_disp']})
+                <button onclick="navigator.clipboard.writeText('{item['w_vwap']}');" style="background:#7950f2; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+            </td>
+            <td style="text-align: center; background-color: #e6fcf5;">
+                <b>{item['m_vwap']:,}원</b> ({item['m_disp']})
+                <button onclick="navigator.clipboard.writeText('{item['m_vwap']}');" style="background:#0ca678; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+            </td>
+            <td style="text-align: center; background-color: #fff0f6;">
+                <b>{item['m3_vwap']:,}원</b> ({item['m3_disp']})
+                <button onclick="navigator.clipboard.writeText('{item['m3_vwap']}');" style="background:#d63384; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+            </td>
         </tr>
         """
 
@@ -745,7 +806,10 @@ with main_tab3:
                     <th style="text-align: right;">현재가</th>
                     <th style="text-align: right;">등락률</th>
                     <th style="text-align: right;">거래대금</th>
-                    <th style="text-align: center; background-color: #fff9db;">일봉 평단가 (괴리율)</th>
+                    <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리)</th>
+                    <th style="text-align: center; background-color: #f3f0ff;">주봉 평단(괴리)</th>
+                    <th style="text-align: center; background-color: #e6fcf5;">월봉 평단(괴리)</th>
+                    <th style="text-align: center; background-color: #fff0f6;">3분봉 평단(괴리)</th>
                 </tr>
             </thead>
             <tbody>{t30_rows}</tbody>
@@ -760,9 +824,7 @@ with main_tab3:
 # ---------------------------------------------------------
 with main_tab4:
     st.title("🌙 시간외 단일가 거래 TOP 30 대시보드")
-    st.caption(
-        "장 마감 후 시간외 단일가 급등 종목 시초가 공략 및 평단가 비교"
-    )
+    st.caption("시간외 급등 종목 시초가 공략 및 다중 주기 평단가 분석")
 
     ah_sort_mode = st.radio(
         "정렬 기준 선택",
@@ -778,8 +840,14 @@ with main_tab4:
             "price": 1950,
             "change": 9.80,
             "amt": 850,
-            "vwap": 1810,
-            "disp": "+7.7%",
+            "d_vwap": 1810,
+            "d_disp": "+7.7%",
+            "w_vwap": 1580,
+            "w_disp": "+23.4%",
+            "m_vwap": 1450,
+            "m_disp": "+34.4%",
+            "m3_vwap": 1920,
+            "m3_disp": "+1.5%",
             "reason": "재료 호재 (단타/스윙)",
         },
         {
@@ -788,8 +856,14 @@ with main_tab4:
             "price": 14800,
             "change": 4.20,
             "amt": 1200,
-            "vwap": 13950,
-            "disp": "+6.1%",
+            "d_vwap": 13950,
+            "d_disp": "+6.1%",
+            "w_vwap": 12100,
+            "w_disp": "+22.3%",
+            "m_vwap": 11500,
+            "m_disp": "+28.6%",
+            "m3_vwap": 14600,
+            "m3_disp": "+1.3%",
             "reason": "대규모 수주 (스윙)",
         },
     ]
@@ -800,11 +874,29 @@ with main_tab4:
         <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
             <td style="text-align: center; font-weight: bold;">{idx}</td>
             <td style="font-weight: bold;">{item['name']}</td>
-            <td style="text-align: center;">{item['code']}</td>
+            <td style="text-align: center;">
+                {item['code']} 
+                <button onclick="navigator.clipboard.writeText('{item['code']}');" style="background:#1a73e8; color:white; border:none; padding:2px 5px; border-radius:3px; cursor:pointer; font-size:10px;">복사</button>
+            </td>
             <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
             <td style="text-align: right; color: #d32f2f;">+{item['change']:.2f}%</td>
             <td style="text-align: right;">{item['amt']:,} 백만</td>
-            <td style="text-align: center; background-color: #fff9db;"><b>{item['vwap']:,}원</b> ({item['disp']})</td>
+            <td style="text-align: center; background-color: #fff9db;">
+                <b>{item['d_vwap']:,}원</b> ({item['d_disp']})
+                <button onclick="navigator.clipboard.writeText('{item['d_vwap']}');" style="background:#e67700; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+            </td>
+            <td style="text-align: center; background-color: #f3f0ff;">
+                <b>{item['w_vwap']:,}원</b> ({item['w_disp']})
+                <button onclick="navigator.clipboard.writeText('{item['w_vwap']}');" style="background:#7950f2; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+            </td>
+            <td style="text-align: center; background-color: #e6fcf5;">
+                <b>{item['m_vwap']:,}원</b> ({item['m_disp']})
+                <button onclick="navigator.clipboard.writeText('{item['m_vwap']}');" style="background:#0ca678; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+            </td>
+            <td style="text-align: center; background-color: #fff0f6;">
+                <b>{item['m3_vwap']:,}원</b> ({item['m3_disp']})
+                <button onclick="navigator.clipboard.writeText('{item['m3_vwap']}');" style="background:#d63384; color:white; border:none; padding:2px 4px; border-radius:3px; cursor:pointer; font-size:9px;">복사</button>
+            </td>
             <td style="text-align: center; color: #2b8a3e;">{item['reason']}</td>
         </tr>
         """
@@ -820,7 +912,10 @@ with main_tab4:
                     <th style="text-align: right;">시간외 종가</th>
                     <th style="text-align: right;">시간외 등락률</th>
                     <th style="text-align: right;">시간외 거래대금</th>
-                    <th style="text-align: center; background-color: #fff9db;">일봉 평단가 (괴리율)</th>
+                    <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리)</th>
+                    <th style="text-align: center; background-color: #f3f0ff;">주봉 평단(괴리)</th>
+                    <th style="text-align: center; background-color: #e6fcf5;">월봉 평단(괴리)</th>
+                    <th style="text-align: center; background-color: #fff0f6;">3분봉 평단(괴리)</th>
                     <th style="text-align: center;">특이사항 / 성향</th>
                 </tr>
             </thead>
