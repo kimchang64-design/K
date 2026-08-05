@@ -109,8 +109,6 @@ def get_stock_ticker_map():
 def resolve_code_or_name(user_input):
     user_input = user_input.strip()
     name_map = get_stock_ticker_map()
-
-    # 역방향 매핑 (코드로 입력했을 때 한글 종목명 찾기)
     code_to_name = {v: k for k, v in name_map.items()}
 
     if user_input.isdigit() and len(user_input) == 6:
@@ -126,7 +124,6 @@ def resolve_code_or_name(user_input):
     if user_input in name_map:
         return name_map[user_input], user_input
 
-    # 부분 일치 검색 지원
     for name, code in name_map.items():
         if user_input.lower() in name.lower():
             return code, name
@@ -188,6 +185,16 @@ def get_financial_info(code):
                 "광케이블 테마 순환매… 대한광통신 상한가 기대감",
             ],
         },
+        "252670": {
+            "mcap": 5000,
+            "op_profit": 120,
+            "trade_type": "🌊 스윙",
+            "foreign_net": "+5,000주",
+            "inst_net": "+1,200주",
+            "prog_net": "+5억",
+            "credit_ratio": "1.00%",
+            "news": ["코스나인 실시간 수급 유입 및 테마 상승세 지속"],
+        },
     }
     return sample_financials.get(
         code,
@@ -213,39 +220,38 @@ with main_tab1:
     # 세션 상태 초기화
     if "search_history" not in st.session_state:
         st.session_state.search_history = ["삼성전자", "SK하이닉스"]
-    if "input_stock_val" not in st.session_state:
-        st.session_state.input_stock_val = "삼성전자"
+    if "current_stock" not in st.session_state:
+        st.session_state.current_stock = "삼성전자"
 
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
-        # 최근 검색 버튼 클릭 시 작동할 콜백 함수
-        def set_search_query(val):
-            st.session_state.input_stock_val = val
+        # 입력창 값 변경 처리 함수
+        def on_search_change():
+            st.session_state.current_stock = st.session_state.vwap_code_input
 
         raw_input = st.text_input(
             "종목 입력",
-            value=st.session_state.input_stock_val,
+            value=st.session_state.current_stock,
             key="vwap_code_input",
+            on_change=on_search_change,
             label_visibility="collapsed",
             placeholder="종목명 또는 코드 입력",
         )
 
-        if raw_input != st.session_state.input_stock_val:
-            st.session_state.input_stock_val = raw_input
+        code, stock_name = resolve_code_or_name(
+            st.session_state.current_stock
+        )
 
-        code, stock_name = resolve_code_or_name(st.session_state.input_stock_val)
-
-        # 최근 검색 기록에 추가
+        # 최근 검색 기록 관리 (중복 제거 및 최신순 유지)
         if stock_name and stock_name not in st.session_state.search_history:
             st.session_state.search_history.insert(0, stock_name)
             if len(st.session_state.search_history) > 8:
                 st.session_state.search_history.pop()
 
-        # 📌 종목 코드 및 한글명 함께 표시
         st.caption(f"📌 **종목:** {stock_name} ({code} - {stock_name})")
 
-        # 🕒 최근 검색 기록 버튼 영역 (on_click 콜백 적용으로 즉시 반영)
+        # 🕒 최근 검색 기록 버튼 영역 (클릭 시 즉시 상태 반영 후 rerun)
         if st.session_state.search_history:
             st.markdown(
                 "<span style='font-size:11px; color:#666;'>최근 검색 기록:</span>",
@@ -256,13 +262,13 @@ with main_tab1:
                 st.session_state.search_history[:4]
             ):
                 with history_cols[idx % len(history_cols)]:
-                    st.button(
+                    if st.button(
                         hist_name,
-                        key=f"hist_{idx}",
-                        on_click=set_search_query,
-                        args=(hist_name,),
+                        key=f"hist_btn_{idx}",
                         use_container_width=True,
-                    )
+                    ):
+                        st.session_state.current_stock = hist_name
+                        st.rerun()
 
     with col2:
         timeframe_options = [
@@ -445,7 +451,7 @@ with main_tab1:
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
         m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
 
-        # 📋 확인창 없는 단가 복사 버튼
+        # 📋 확인창 없는 단가 복사 버튼 (안내 문구 삭제 완료)
         st.markdown(
             "### 📋 키움차트/주문창 단가 수치 복사하기 (클릭 시 확인창 없이 즉시 복사)"
         )
@@ -467,9 +473,8 @@ with main_tab1:
                 🚨 절대손절 ({absolute_stop_loss}) 복사
             </button>
         </div>
-        <p style="font-size: 11px; color: #666; margin-top: 5px;">💡 버튼을 클릭하면 확인창 없이 순수 숫자 단가가 클립보드에 곧바로 복사되어, 키움증권 HTS/MTS 주문창이나 차트 가격 입력란에 <code>Ctrl + V</code>로 바로 붙여넣으실 수 있습니다.</p>
         """
-        components.html(copy_html, height=85)
+        components.html(copy_html, height=55)
 
         with st.expander("📝 텍스트 요약 및 전체 복사 기능"):
             copy_summary = (
