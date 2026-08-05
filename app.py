@@ -25,7 +25,7 @@ main_tab1, main_tab2 = st.tabs(["📈 세력 평단가(VWAP) 차트", "⭐ 업�
 
 
 # ---------------------------------------------------------
-# 공통 함수 (안전한 한글 종목 매핑 지원)
+# 공통 함수 (한글 종목명 자동 변환 지원)
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def get_stock_ticker_map():
@@ -89,7 +89,7 @@ def get_financial_info(code):
 
 
 # ---------------------------------------------------------
-# TAB 1: 세력 평단가(VWAP) 차트
+# TAB 1: 세력 평단가(VWAP) 차트 (버튼 없는 실시간 자동 갱신)
 # ---------------------------------------------------------
 with main_tab1:
     col1, col2 = st.columns([1, 2.5])
@@ -134,7 +134,7 @@ with main_tab1:
         )
 
     if selected_timeframe in ["일봉", "주봉", "월봉"]:
-        d_col1, d_col2, d_col3 = st.columns([1, 1, 1])
+        d_col1, d_col2 = st.columns([1, 1])
         with d_col1:
             start_date = st.date_input(
                 "시작일", pd.to_datetime("2024-01-01"), key="vwap_start"
@@ -143,172 +143,161 @@ with main_tab1:
             end_date = st.date_input(
                 "종료일", pd.to_datetime("today"), key="vwap_end"
             )
-        with d_col3:
-            st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-            run_btn = st.button(
-                "📊 차트 분석 실행", type="primary", key="run_vwap", use_container_width=True
-            )
     else:
-        d_col1, d_col2 = st.columns([2, 1])
-        with d_col1:
-            today = datetime.datetime.now()
-            start_date = st.date_input("조회일 선택 (분봉)", today, key="vwap_min_date")
-            end_date = start_date
-        with d_col2:
-            st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-            run_btn = st.button(
-                "📊 차트 분석 실행", type="primary", key="run_vwap", use_container_width=True
+        today = datetime.datetime.now()
+        start_date = st.date_input("조회일 선택 (분봉)", today, key="vwap_min_date")
+        end_date = start_date
+
+    # 💡 버튼 없이 입력값 변경 즉시 자동 실행되는 데이터 로직
+    s_date = start_date.strftime("%Y%m%d")
+    e_date = end_date.strftime("%Y%m%d")
+
+    if selected_timeframe == "일봉":
+        df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "d")
+    elif selected_timeframe == "주봉":
+        df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "d")
+        if not df.empty:
+            df = df.resample("W-MON").agg(
+                {
+                    "시가": "first",
+                    "고가": "max",
+                    "저가": "min",
+                    "종가": "last",
+                    "거래량": "sum",
+                }
             )
+            df = df.dropna()
+    elif selected_timeframe == "월봉":
+        df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
+    else:
+        df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
+        if not df.empty:
+            minutes = selected_timeframe.replace("분봉", "") + "T"
+            if minutes != "1T":
+                df = df.resample(minutes).agg(
+                    {
+                        "시가": "first",
+                        "고가": "max",
+                        "저가": "min",
+                        "종가": "last",
+                        "거래량": "sum",
+                    }
+                )
+            df = df.dropna()
 
-    if run_btn:
-        s_date = start_date.strftime("%Y%m%d")
-        e_date = end_date.strftime("%Y%m%d")
+    if df is None or df.empty:
+        st.warning(
+            "선택한 조건에 해당하는 거래 데이터가 없습니다. 종목명이나 날짜를 확인해주세요."
+        )
+    else:
+        df["TPV"] = df["종가"] * df["거래량"]
+        cum_volume = df["거래량"].cumsum()
 
-        with st.spinner("데이터 계산 중..."):
-            if selected_timeframe == "일봉":
-                df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "d")
-            elif selected_timeframe == "주봉":
-                df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "d")
-                if not df.empty:
-                    df = df.resample("W-MON").agg(
-                        {
-                            "시가": "first",
-                            "고가": "max",
-                            "저가": "min",
-                            "종가": "last",
-                            "거래량": "sum",
-                        }
-                    )
-                    df = df.dropna()
-            elif selected_timeframe == "월봉":
-                df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
-            else:
-                df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
-                if not df.empty:
-                    minutes = selected_timeframe.replace("분봉", "") + "T"
-                    if minutes != "1T":
-                        df = df.resample(minutes).agg(
-                            {
-                                "시가": "first",
-                                "고가": "max",
-                                "저가": "min",
-                                "종가": "last",
-                                "거래량": "sum",
-                            }
-                        )
-                    df = df.dropna()
+        df["세력평단"] = df["TPV"].cumsum() / cum_volume.replace(0, pd.NA)
+        df["세력평단"] = df["세력평단"].ffill()
 
-        if df is None or df.empty:
-            st.error("거래 데이터가 없습니다. 종목명이나 날짜를 다시 확인해주세요.")
+        last_close = int(df["종가"].iloc[-1])
+        last_vwap = int(df["세력평단"].iloc[-1])
+        disparity = ((last_close - last_vwap) / last_vwap) * 100
+
+        f_info = get_financial_info(code)
+        mcap_val = f_info["mcap"]
+        op_profit = f_info["op_profit"]
+        trade_type = f_info["trade_type"]
+
+        target_1st = int(last_vwap * 1.05)
+        target_2nd = int(last_vwap * 1.10)
+        buy_limit = int(last_vwap * 1.015)
+        stop_loss = int(last_vwap * 0.98)
+        absolute_stop_loss = int(last_vwap * 0.96)
+
+        if 0 <= disparity <= 5.0:
+            status_signal = "🔥 최적타점"
+        elif disparity > 20.0:
+            status_signal = "⚠️ 진입주의"
+        elif last_close < absolute_stop_loss:
+            status_signal = "🚨 절대손절이탈"
         else:
-            df["TPV"] = df["종가"] * df["거래량"]
-            cum_volume = df["거래량"].cumsum()
+            status_signal = "📊 추세유지"
 
-            df["세력평단"] = df["TPV"].cumsum() / cum_volume.replace(0, pd.NA)
-            df["세력평단"] = df["세력평단"].ffill()
+        m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
+        m1.metric("현재가", f"{last_close:,}원")
+        m2.metric(f"{selected_timeframe} 세력평단", f"{last_vwap:,}원", f"{disparity:+.1f}%")
+        m3.metric("🎯1차목표(+5%)", f"{target_1st:,}원")
+        m4.metric("🚀2차목표(+10%)", f"{target_2nd:,}원")
+        m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
+        m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
+        m7.metric("진단/성향", f"{status_signal} | {trade_type}")
 
-            last_close = int(df["종가"].iloc[-1])
-            last_vwap = int(df["세력평단"].iloc[-1])
-            disparity = ((last_close - last_vwap) / last_vwap) * 100
-
-            f_info = get_financial_info(code)
-            mcap_val = f_info["mcap"]
-            op_profit = f_info["op_profit"]
-            trade_type = f_info["trade_type"]
-
-            target_1st = int(last_vwap * 1.05)
-            target_2nd = int(last_vwap * 1.10)
-            buy_limit = int(last_vwap * 1.015)
-            stop_loss = int(last_vwap * 0.98)
-            absolute_stop_loss = int(last_vwap * 0.96)
-
-            if 0 <= disparity <= 5.0:
-                status_signal = "🔥 최적타점"
-            elif disparity > 20.0:
-                status_signal = "⚠️ 진입주의"
-            elif last_close < absolute_stop_loss:
-                status_signal = "🚨 절대손절이탈"
-            else:
-                status_signal = "📊 추세유지"
-
-            m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
-            m1.metric("현재가", f"{last_close:,}원")
-            m2.metric(f"{selected_timeframe} 세력평단", f"{last_vwap:,}원", f"{disparity:+.1f}%")
-            m3.metric("🎯1차목표(+5%)", f"{target_1st:,}원")
-            m4.metric("🚀2차목표(+10%)", f"{target_2nd:,}원")
-            m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
-            m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
-            m7.metric("진단/성향", f"{status_signal} | {trade_type}")
-
-            with st.expander("📝 텍스트 요약 및 복사 기능 열기"):
-                copy_summary = (
-                    f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
-                    f"• 현재가: {last_close:,}원 | 세력평단: {last_vwap:,}원 ({disparity:+.2f}%)\n"
-                    f"• 매수범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
-                    f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
-                    f"• 🚀 2차목표(+10%): {target_2nd:,}원\n"
-                    f"• 🛑 1차손절(-2%): {stop_loss:,}원\n"
-                    f"• 🚨 절대사수손절(-4%): {absolute_stop_loss:,}원"
-                )
-                st.code(copy_summary, language="text")
-
-            fig = go.Figure()
-            fig.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=df["종가"],
-                    mode="lines",
-                    name="종가",
-                    line=dict(color="#1f77b4", width=1.5),
-                )
+        with st.expander("📝 텍스트 요약 및 복사 기능 열기"):
+            copy_summary = (
+                f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
+                f"• 현재가: {last_close:,}원 | 세력평단: {last_vwap:,}원 ({disparity:+.2f}%)\n"
+                f"• 매수범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
+                f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
+                f"• 🚀 2차목표(+10%): {target_2nd:,}원\n"
+                f"• 🛑 1차손절(-2%): {stop_loss:,}원\n"
+                f"• 🚨 절대사수손절(-4%): {absolute_stop_loss:,}원"
             )
-            fig.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=df["세력평단"],
-                    mode="lines",
-                    name=f"누적 세력평단 ({selected_timeframe})",
-                    line=dict(color="#ff7f0e", width=2.5),
-                )
-            )
+            st.code(copy_summary, language="text")
 
-            fig.add_hline(
-                y=target_1st,
-                line_dash="dot",
-                line_color="#1f77b4",
-                annotation_text=f"🎯 1차 목표가(+5%): {target_1st:,}원",
-                annotation_position="top right",
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["종가"],
+                mode="lines",
+                name="종가",
+                line=dict(color="#1f77b4", width=1.5),
             )
-            fig.add_hline(
-                y=target_2nd,
-                line_dash="dot",
-                line_color="#9467bd",
-                annotation_text=f"🚀 2차 목표가(+10%): {target_2nd:,}원",
-                annotation_position="top right",
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["세력평단"],
+                mode="lines",
+                name=f"누적 세력평단 ({selected_timeframe})",
+                line=dict(color="#ff7f0e", width=2.5),
             )
-            fig.add_hline(
-                y=stop_loss,
-                line_dash="dash",
-                line_color="#ff7f0e",
-                annotation_text=f"🛑 1차 손절가(-2%): {stop_loss:,}원",
-                annotation_position="bottom right",
-            )
-            fig.add_hline(
-                y=absolute_stop_loss,
-                line_dash="dash",
-                line_color="red",
-                annotation_text=f"🚨 절대사수 손절가(-4%): {absolute_stop_loss:,}원",
-                annotation_position="bottom right",
-            )
+        )
 
-            fig.update_layout(
-                title=f"{stock_name} ({code}) - {selected_timeframe} 세력평단 및 매매 가이드 라인",
-                margin=dict(l=20, r=20, t=35, b=20),
-                hovermode="x unified",
-                template="plotly_white",
-                height=400,
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        fig.add_hline(
+            y=target_1st,
+            line_dash="dot",
+            line_color="#1f77b4",
+            annotation_text=f"🎯 1차 목표가(+5%): {target_1st:,}원",
+            annotation_position="top right",
+        )
+        fig.add_hline(
+            y=target_2nd,
+            line_dash="dot",
+            line_color="#9467bd",
+            annotation_text=f"🚀 2차 목표가(+10%): {target_2nd:,}원",
+            annotation_position="top right",
+        )
+        fig.add_hline(
+            y=stop_loss,
+            line_dash="dash",
+            line_color="#ff7f0e",
+            annotation_text=f"🛑 1차 손절가(-2%): {stop_loss:,}원",
+            annotation_position="bottom right",
+        )
+        fig.add_hline(
+            y=absolute_stop_loss,
+            line_dash="dash",
+            line_color="red",
+            annotation_text=f"🚨 절대사수 손절가(-4%): {absolute_stop_loss:,}원",
+            annotation_position="bottom right",
+        )
+
+        fig.update_layout(
+            title=f"{stock_name} ({code}) - {selected_timeframe} 세력평단 및 매매 가이드 라인",
+            margin=dict(l=20, r=20, t=35, b=20),
+            hovermode="x unified",
+            template="plotly_white",
+            height=400,
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 
 # ---------------------------------------------------------
@@ -318,5 +307,5 @@ with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
     st.caption("인기 테마별 종목 전략 가이드")
     st.info(
-        "💡 상단 '📈 세력 평단가(VWAP) 차트' 탭에서 한글 종목명이나 코드를 입력해 확인하세요."
+        "💡 상단 '📈 세력 평단가(VWAP) 차트' 탭에서 종목명을 변경하면 즉시 실시간 반영됩니다."
     )
