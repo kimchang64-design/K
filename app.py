@@ -89,7 +89,7 @@ def get_financial_info(code):
 
 
 # ---------------------------------------------------------
-# TAB 1: 세력 평단가(VWAP) 차트 (실시간 자동 갱신 + 점선 가이드)
+# TAB 1: 세력 평단가(VWAP) 차트 (실시간 자동 갱신 + 재무/시총 정보 포함)
 # ---------------------------------------------------------
 with main_tab1:
     col1, col2 = st.columns([1, 2.5])
@@ -217,18 +217,32 @@ with main_tab1:
         else:
             status_signal = "📊 추세유지"
 
-        m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
+        # 💡 1단 카드: 시가총액, 영업이익 흑자/적자, 성향, 진단 상태 즉시 표시
+        f1, f2, f3, f4 = st.columns(4)
+        f1.metric("🏢 시가총액", f"{mcap_val:,} 억원")
+        f2.metric(
+            "💵 영업이익",
+            f"{op_profit:,} 억원",
+            "🟢 흑자" if op_profit > 0 else "🔴 적자",
+        )
+        f3.metric("🎯 AI 추천 성향", trade_type)
+        f4.metric("⚡ 진단 상태", status_signal)
+
+        st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+
+        # 💡 2단 카드: 현재가, 세력평단, 목표가, 손절가, 절대손절가
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
         m1.metric("현재가", f"{last_close:,}원")
         m2.metric(f"{selected_timeframe} 세력평단", f"{last_vwap:,}원", f"{disparity:+.1f}%")
         m3.metric("🎯1차목표(+5%)", f"{target_1st:,}원")
         m4.metric("🚀2차목표(+10%)", f"{target_2nd:,}원")
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
         m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
-        m7.metric("진단/성향", f"{status_signal} | {trade_type}")
 
         with st.expander("📝 텍스트 요약 및 복사 기능 열기"):
             copy_summary = (
                 f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
+                f"• 시가총액: {mcap_val:,}억원 | 영업이익: {op_profit:,}억원\n"
                 f"• 현재가: {last_close:,}원 | 세력평단: {last_vwap:,}원 ({disparity:+.2f}%)\n"
                 f"• 매수범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
                 f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
@@ -292,13 +306,13 @@ with main_tab1:
             margin=dict(l=20, r=20, t=35, b=20),
             hovermode="x unified",
             template="plotly_white",
-            height=400,
+            height=380,
         )
         st.plotly_chart(fig, use_container_width=True)
 
 
 # ---------------------------------------------------------
-# TAB 2: 업종·테마 분석 (2번 사진의 기능 완벽 복구)
+# TAB 2: 업종·테마 분석 대시보드
 # ---------------------------------------------------------
 with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
@@ -532,7 +546,6 @@ with main_tab2:
         },
     }
 
-    # Top 1~5 인기 테마 카드 표시
     st.subheader("🔥 인기 업종·테마 Top")
     top_keys = list(THEME_DATA.keys())[:5]
     top_cols = st.columns(len(top_keys))
