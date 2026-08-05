@@ -93,6 +93,7 @@ def get_stock_ticker_map():
         "DB하이텍": "000990",
         "제주반도체": "080220",
         "코스나인": "252670",
+        "씨젠": "096530",
     }
     try:
         today_str = datetime.datetime.now().strftime("%Y%m%d")
@@ -107,7 +108,7 @@ def get_stock_ticker_map():
 
 
 def resolve_code_or_name(user_input):
-    user_input = user_input.strip()
+    user_input = str(user_input).strip()
     name_map = get_stock_ticker_map()
     code_to_name = {v: k for k, v in name_map.items()}
 
@@ -160,40 +161,17 @@ def get_financial_info(code):
                 "SK하이닉스, 장중 신고가 경신… \"메모리 슈퍼사이클 진입\"",
             ],
         },
-        "000990": {
-            "mcap": 21500,
-            "op_profit": 2100,
+        "096530": {
+            "mcap": 15000,
+            "op_profit": 850,
             "trade_type": "🌊 스윙",
-            "foreign_net": "+12,500주",
-            "inst_net": "+3,200주",
-            "prog_net": "+45억",
-            "credit_ratio": "1.21%",
+            "foreign_net": "+15,000주",
+            "inst_net": "+4,200주",
+            "prog_net": "+25억",
+            "credit_ratio": "1.15%",
             "news": [
-                "DB하이텍, 파운드리 가동률 회복 및 실적 턴어라운드 부각",
+                "씨젠, 글로벌 진단키트 수요 변동에 따른 실적 반등 주목",
             ],
-        },
-        "010170": {
-            "mcap": 2100,
-            "op_profit": -45,
-            "trade_type": "⚡ 단타",
-            "foreign_net": "+340,000주",
-            "inst_net": "+1,200주",
-            "prog_net": "+180억 (폭발적)",
-            "credit_ratio": "3.85%",
-            "news": [
-                "[급등주] 대한광통신, 글로벌 통신망 투자 확대 소식에 매수세 집중",
-                "광케이블 테마 순환매… 대한광통신 상한가 기대감",
-            ],
-        },
-        "252670": {
-            "mcap": 5000,
-            "op_profit": 120,
-            "trade_type": "🌊 스윙",
-            "foreign_net": "+5,000주",
-            "inst_net": "+1,200주",
-            "prog_net": "+5억",
-            "credit_ratio": "1.00%",
-            "news": ["코스나인 실시간 수급 유입 및 테마 상승세 지속"],
         },
     }
     return sample_financials.get(
@@ -220,30 +198,35 @@ with main_tab1:
     # 세션 상태 초기화
     if "search_history" not in st.session_state:
         st.session_state.search_history = ["삼성전자", "SK하이닉스"]
-    if "current_stock" not in st.session_state:
-        st.session_state.current_stock = "삼성전자"
+    if "active_stock" not in st.session_state:
+        st.session_state.active_stock = "삼성전자"
 
     col1, col2 = st.columns([1, 2.5])
 
     with col1:
-        # 입력창 값 변경 처리 함수
-        def on_search_change():
-            st.session_state.current_stock = st.session_state.vwap_code_input
+        # 입력창 값 변경 콜백
+        def on_text_change():
+            st.session_state.active_stock = st.session_state.text_input_box
+
+        # 최근 검색 버튼 클릭 콜백
+        def set_active_stock(val):
+            st.session_state.active_stock = val
+            st.session_state.text_input_box = val
 
         raw_input = st.text_input(
             "종목 입력",
-            value=st.session_state.current_stock,
-            key="vwap_code_input",
-            on_change=on_search_change,
+            value=st.session_state.active_stock,
+            key="text_input_box",
+            on_change=on_text_change,
             label_visibility="collapsed",
             placeholder="종목명 또는 코드 입력",
         )
 
         code, stock_name = resolve_code_or_name(
-            st.session_state.current_stock
+            st.session_state.active_stock
         )
 
-        # 최근 검색 기록 관리 (중복 제거 및 최신순 유지)
+        # 최근 검색 기록에 추가 (중복 방지 및 최신순 유지)
         if stock_name and stock_name not in st.session_state.search_history:
             st.session_state.search_history.insert(0, stock_name)
             if len(st.session_state.search_history) > 8:
@@ -251,7 +234,7 @@ with main_tab1:
 
         st.caption(f"📌 **종목:** {stock_name} ({code} - {stock_name})")
 
-        # 🕒 최근 검색 기록 버튼 영역 (클릭 시 즉시 상태 반영 후 rerun)
+        # 🕒 최근 검색 기록 버튼 영역
         if st.session_state.search_history:
             st.markdown(
                 "<span style='font-size:11px; color:#666;'>최근 검색 기록:</span>",
@@ -262,13 +245,13 @@ with main_tab1:
                 st.session_state.search_history[:4]
             ):
                 with history_cols[idx % len(history_cols)]:
-                    if st.button(
+                    st.button(
                         hist_name,
                         key=f"hist_btn_{idx}",
+                        on_click=set_active_stock,
+                        args=(hist_name,),
                         use_container_width=True,
-                    ):
-                        st.session_state.current_stock = hist_name
-                        st.rerun()
+                    )
 
     with col2:
         timeframe_options = [
@@ -451,7 +434,7 @@ with main_tab1:
         m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
         m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
 
-        # 📋 확인창 없는 단가 복사 버튼 (안내 문구 삭제 완료)
+        # 📋 확인창 없는 단가 복사 버튼 (안내 문구 없음)
         st.markdown(
             "### 📋 키움차트/주문창 단가 수치 복사하기 (클릭 시 확인창 없이 즉시 복사)"
         )
