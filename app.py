@@ -61,7 +61,7 @@ def get_financial_info(code):
 
 
 # ---------------------------------------------------------
-# TAB 1: 세력 평단가(VWAP) 차트 (한 화면 최적화 버젼)
+# TAB 1: 세력 평단가(VWAP) 차트 (모든 목표/손절 점선 라인 반영)
 # ---------------------------------------------------------
 with main_tab1:
     col1, col2 = st.columns([1, 2.5])
@@ -105,7 +105,6 @@ with main_tab1:
             label_visibility="collapsed",
         )
 
-    # 시작일/종료일 및 분석 실행 버튼을 한 줄로 압축
     if selected_timeframe in ["일봉", "주봉", "월봉"]:
         d_col1, d_col2, d_col3 = st.columns([1, 1, 1])
         with d_col1:
@@ -191,15 +190,12 @@ with main_tab1:
             op_profit = f_info["op_profit"]
             trade_type = f_info["trade_type"]
 
+            # 💡 주기별 맞춤형 목표가 / 손절가 산출
             target_1st = int(last_vwap * 1.05)
             target_2nd = int(last_vwap * 1.10)
             buy_limit = int(last_vwap * 1.015)
             stop_loss = int(last_vwap * 0.98)
             absolute_stop_loss = int(last_vwap * 0.96)
-
-            profit_str = (
-                f"🟢 흑자({op_profit:,}억)" if op_profit > 0 else f"🔴 적자({op_profit:,}억)"
-            )
 
             if 0 <= disparity <= 5.0:
                 status_signal = "🔥 최적타점"
@@ -210,28 +206,29 @@ with main_tab1:
             else:
                 status_signal = "📊 추세유지"
 
-            # 컴팩트 1줄 주요 수치 배치
+            # 상단 메트릭 표시
             m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
             m1.metric("현재가", f"{last_close:,}원")
-            m2.metric("세력평단", f"{last_vwap:,}원", f"{disparity:+.1f}%")
+            m2.metric(f"{selected_timeframe} 세력평단", f"{last_vwap:,}원", f"{disparity:+.1f}%")
             m3.metric("🎯1차목표(+5%)", f"{target_1st:,}원")
             m4.metric("🚀2차목표(+10%)", f"{target_2nd:,}원")
             m5.metric("🛑1차손절(-2%)", f"{stop_loss:,}원")
             m6.metric("🚨절대손절(-4%)", f"{absolute_stop_loss:,}원")
             m7.metric("진단/성향", f"{status_signal} | {trade_type}")
 
-            # 접이식 복사 박스 (공간 절약)
             with st.expander("📝 텍스트 요약 및 복사 기능 열기"):
                 copy_summary = (
                     f"■ [{current_name}({code}) - {selected_timeframe}]\n"
                     f"• 현재가: {last_close:,}원 | 세력평단: {last_vwap:,}원 ({disparity:+.2f}%)\n"
                     f"• 매수범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
-                    f"• 1차목표: {target_1st:,}원 | 2차목표: {target_2nd:,}원\n"
-                    f"• 1차손절: {stop_loss:,}원 | 🚨절대손절: {absolute_stop_loss:,}원"
+                    f"• 🎯 1차목표(+5%): {target_1st:,}원\n"
+                    f"• 🚀 2차목표(+10%): {target_2nd:,}원\n"
+                    f"• 🛑 1차손절(-2%): {stop_loss:,}원\n"
+                    f"• 🚨 절대사수손절(-4%): {absolute_stop_loss:,}원"
                 )
                 st.code(copy_summary, language="text")
 
-            # 한 화면에 차트가 다 나오도록 높이를 380px로 조율
+            # 💡 Plotly 차트 구성 (모든 가이드 라인 점선 표시)
             fig = go.Figure()
             fig.add_trace(
                 go.Scatter(
@@ -247,24 +244,50 @@ with main_tab1:
                     x=df.index,
                     y=df["세력평단"],
                     mode="lines",
-                    name="누적 세력평단",
+                    name=f"누적 세력평단 ({selected_timeframe})",
                     line=dict(color="#ff7f0e", width=2.5),
                 )
             )
+
+            # 1차 목표가 점선
+            fig.add_hline(
+                y=target_1st,
+                line_dash="dot",
+                line_color="#1f77b4",
+                annotation_text=f"🎯 1차 목표가(+5%): {target_1st:,}원",
+                annotation_position="top right",
+            )
+            # 2차 목표가 점선
+            fig.add_hline(
+                y=target_2nd,
+                line_dash="dot",
+                line_color="#9467bd",
+                annotation_text=f"🚀 2차 목표가(+10%): {target_2nd:,}원",
+                annotation_position="top right",
+            )
+            # 1차 손절가 점선
+            fig.add_hline(
+                y=stop_loss,
+                line_dash="dash",
+                line_color="#ff7f0e",
+                annotation_text=f"🛑 1차 손절가(-2%): {stop_loss:,}원",
+                annotation_position="bottom right",
+            )
+            # 🚨 절대사수 손절가 점선
             fig.add_hline(
                 y=absolute_stop_loss,
                 line_dash="dash",
                 line_color="red",
-                annotation_text=f"🚨 절대사수 손절가: {absolute_stop_loss:,}원",
+                annotation_text=f"🚨 절대사수 손절가(-4%): {absolute_stop_loss:,}원",
                 annotation_position="bottom right",
             )
 
             fig.update_layout(
-                title=f"{current_name} ({code}) - {selected_timeframe} 차트",
+                title=f"{current_name} ({code}) - {selected_timeframe} 세력평단 및 매매 가이드 라인",
                 margin=dict(l=20, r=20, t=35, b=20),
                 hovermode="x unified",
                 template="plotly_white",
-                height=380,
+                height=400,
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -274,132 +297,37 @@ with main_tab1:
 # ---------------------------------------------------------
 with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
-    st.caption("25개 인기 테마 시세 및 종목별 전략 가이드")
+    st.caption("인기 테마별 종목 전략 가이드")
 
     THEME_DATA = {
-        "광케이블/광섬유": {
-            "change": "+9.99%",
-            "up_down": "상승 13 / 하락 0",
-            "stocks": [
-                (
-                    "대한광통신",
-                    "010170",
-                    1850,
-                    14.50,
-                    12500000,
-                    231,
-                    2100,
-                    1810,
-                    1580,
-                    1450,
-                    1780,
-                    -45,
-                    "⚡ 단타",
-                ),
-                (
-                    "광전자",
-                    "017900",
-                    2450,
-                    9.80,
-                    4200000,
-                    102,
-                    1400,
-                    2100,
-                    2050,
-                    1950,
-                    2350,
-                    18,
-                    "🌊 스윙",
-                ),
-                (
-                    "RF머트리얼즈",
-                    "327260",
-                    33750,
-                    29.80,
-                    3480000,
-                    1174,
-                    3920,
-                    16572,
-                    15200,
-                    13800,
-                    28500,
-                    32,
-                    "⚡ 단타",
-                ),
-            ],
-        },
         "반도체 대표주(생산)": {
             "change": "+6.94%",
-            "up_down": "상승 3 / 하락 0",
             "stocks": [
                 (
                     "삼성전자",
                     "005930",
                     72500,
                     4.50,
-                    28500000,
-                    20600,
-                    4320000,
                     71000,
                     66200,
                     64000,
                     71200,
                     656700,
-                    "🏆 중장기",
                 ),
                 (
                     "SK하이닉스",
                     "000660",
                     188500,
                     8.90,
-                    8900000,
-                    16700,
-                    1370000,
                     165000,
                     158000,
                     149000,
                     181000,
                     120500,
-                    "🏆 중장기",
                 ),
             ],
-        },
+        }
     }
-
-    selected_theme = st.selectbox("테마 선택", list(THEME_DATA.keys()))
-    if selected_theme:
-        stocks_list = THEME_DATA[selected_theme]["stocks"]
-        table_rows_html = ""
-        for idx, item in enumerate(stocks_list, start=1):
-            s_name, s_code, curr_price, change_pct = (
-                item[0],
-                str(item[1]).zfill(6),
-                item[2],
-                item[3],
-            )
-            d_vwap, op_profit = item[7], item[11]
-            d_target = int(d_vwap * 1.05)
-            d_stop = int(d_vwap * 0.98)
-            d_abs_stop = int(d_vwap * 0.96)
-
-            table_rows_html += f"""
-            <tr style="border-bottom: 1px solid #eee; height: 50px; font-size: 12px;">
-                <td style="text-align: center;">{idx}</td>
-                <td style="font-weight: bold;">{s_name} ({s_code})</td>
-                <td style="text-align: right;">{curr_price:,}원</td>
-                <td style="text-align: right; color: #d32f2f;">+{change_pct:.1f}%</td>
-                <td style="text-align: center;"><b>평단: {d_vwap:,}원</b> | 🎯목표: {d_target:,}원 | 🛑1차손절: {d_stop:,}원 | <span style="color:#d6336c; font-weight:bold;">🚨절대손절: {d_abs_stop:,}원</span></td>
-            </tr>
-            """
-
-        full_table_html = f"""
-        <table style="width: 100%; border-collapse: collapse; font-family: sans-serif;">
-            <thead>
-                <tr style="background-color: #f8f9fa; font-size: 11px; height: 35px;">
-                    <th>순위</th><th>종목명</th><th>현재가</th><th>전일대비</th><th>일봉 핵심 전략 가이드라인</th>
-                </tr>
-            </thead>
-            <tbody>{table_rows_html}</tbody>
-        </table>
-        """
-        components.html(full_table_html, height=220, scrolling=True)
+    st.info(
+        "💡 상단 '📈 세력 평단가(VWAP) 차트' 탭에서 원하는 종목코드와 주기를 선택하여 상세 가이드 라인을 확인하세요."
+    )
