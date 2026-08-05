@@ -319,136 +319,202 @@ with main_tab2:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. 테마 세부 종목 레이아웃
+    # 2. 검색 및 테마/종목 레이아웃
     col_left, col_right = st.columns([1, 3.2])
 
     with col_left:
-        st.subheader("📊 인기 테마 목록")
-        search_theme = st.text_input(
-            "🔍 테마 검색...", "", key="search_theme_input"
+        search_mode = st.radio(
+            "검색 모드",
+            ["테마 검색", "종목 검색"],
+            horizontal=True,
+            key="search_mode_select",
         )
 
-        filtered_themes = [
-            t for t in THEME_DATA.keys() if search_theme.lower() in t.lower()
-        ]
-
-        selected_theme = st.radio(
-            "테마 선택",
-            filtered_themes,
-            index=0 if filtered_themes else None,
-            label_visibility="collapsed",
-            key="theme_radio_select",
+        search_input = st.text_input(
+            "🔍 검색어 입력...", "", key="search_general_input"
         )
+
+        selected_theme = None
+        searched_stocks_result = []
+
+        if search_mode == "테마 검색":
+            st.subheader("📊 인기 테마 목록")
+            filtered_themes = [
+                t
+                for t in THEME_DATA.keys()
+                if search_input.strip().lower() in t.lower()
+            ]
+
+            if filtered_themes:
+                selected_theme = st.radio(
+                    "테마 선택",
+                    filtered_themes,
+                    index=0,
+                    label_visibility="collapsed",
+                    key="theme_radio_select",
+                )
+            else:
+                st.warning("검색된 테마가 없습니다.")
+        else:
+            # 종목 검색 모드
+            st.subheader("🔎 검색된 종목 결과")
+            query = search_input.strip().lower()
+            if query:
+                for theme_name, theme_info in THEME_DATA.items():
+                    for s in theme_info["stocks"]:
+                        s_name = s[0]
+                        s_code = str(s[1]).zfill(6)
+                        if query in s_name.lower() or query in s_code:
+                            # (테마명, 종목 튜플) 저장
+                            searched_stocks_result.append((theme_name, s))
+
+                if searched_stocks_result:
+                    st.caption(
+                        f"총 **{len(searched_stocks_result)}**개 종목이 검색되었습니다."
+                    )
+                else:
+                    st.info("검색어와 일치하는 종목이 없습니다.")
+            else:
+                st.info("종목명 또는 종목코드를 입력하세요.")
 
     with col_right:
-        if selected_theme:
-            t_data = THEME_DATA[selected_theme]
-            stocks_list = t_data["stocks"]
+        stocks_to_display = []
+        header_title = ""
 
-            st.subheader(f"📌 {selected_theme}")
-
-            # 정렬 필터
-            sort_option = st.radio(
-                "정렬 필터",
-                ["전체", "거래대금 상위", "상승 TOP"],
-                horizontal=True,
-                key="sort_filter_option",
+        if search_mode == "테마 검색" and selected_theme:
+            header_title = f"📌 {selected_theme}"
+            stocks_to_display = THEME_DATA[selected_theme]["stocks"]
+        elif search_mode == "종목 검색":
+            header_title = (
+                f"🔎 '{search_input}' 종목 검색 결과"
+                if search_input
+                else "🔎 종목 검색"
             )
 
-            if sort_option == "거래대금 상위":
-                stocks_list = sorted(stocks_list, key=lambda x: x[5], reverse=True)
-            elif sort_option == "상승 TOP":
-                stocks_list = sorted(stocks_list, key=lambda x: x[3], reverse=True)
+        if header_title:
+            st.subheader(header_title)
 
-            table_rows_html = ""
-            for idx, item in enumerate(stocks_list, start=1):
-                s_name = item[0]
-                s_code = str(item[1]).zfill(6)
-                curr_price = item[2]
-                
-                # 4대 주기 세력평단 수치
-                d_vwap = item[7]   # 일봉
-                w_vwap = item[8]   # 주봉
-                m_vwap = item[9]   # 월봉
-                m3_vwap = item[10] # 3분봉
+            # 종목 검색 모드일 때는 각 종목 튜플 앞에 테마 정보 포함
+            if search_mode == "테마 검색":
+                sort_option = st.radio(
+                    "정렬 필터",
+                    ["전체", "거래대금 상위", "상승 TOP"],
+                    horizontal=True,
+                    key="sort_filter_option",
+                )
 
-                # 괴리율 계산: ((현재가 - 세력평단) / 세력평단) * 100
-                d_disp = ((curr_price - d_vwap) / d_vwap) * 100
-                w_disp = ((curr_price - w_vwap) / w_vwap) * 100
-                m_disp = ((curr_price - m_vwap) / m_vwap) * 100
-                m3_disp = ((curr_price - m3_vwap) / m3_vwap) * 100
+                if sort_option == "거래대금 상위":
+                    stocks_to_display = sorted(
+                        stocks_to_display, key=lambda x: x[5], reverse=True
+                    )
+                elif sort_option == "상승 TOP":
+                    stocks_to_display = sorted(
+                        stocks_to_display, key=lambda x: x[3], reverse=True
+                    )
 
-                table_rows_html += f"""
-                <tr style="border-bottom: 1px solid #f0f0f0; height: 48px; font-size: 12px;">
-                    <td style="text-align: center; color: #666; width: 35px;">{idx}</td>
-                    <td style="font-weight: bold; color: #111; padding-left: 5px; width: 100px;">{s_name}</td>
-                    <td style="text-align: center; width: 75px;">
-                        <button onclick="navigator.clipboard.writeText('{s_code}');" 
-                                style="padding: 2px 4px; background-color: #f1f3f5; color: #333; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px;">
-                            📋 {s_code}
-                        </button>
-                    </td>
-                    <td style="text-align: right; padding-right: 5px; font-weight: bold; width: 75px;">{curr_price:,}원</td>
-                    
-                    <!-- 일봉 -->
-                    <td style="text-align: center; background-color: #fff9db;">
-                        <button onclick="navigator.clipboard.writeText('{d_vwap}');" 
-                                style="padding: 2px 4px; background-color: #ffe066; color: #000; border: 1px solid #fcc419; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
-                            📋 {d_vwap:,}
-                        </button>
-                        <div style="font-size: 10px; color: {'#d32f2f' if d_disp > 0 else '#1976d2'}; font-weight: bold;">{d_disp:+.1f}%</div>
-                    </td>
-                    
-                    <!-- 주봉 -->
-                    <td style="text-align: center; background-color: #fff3bf;">
-                        <button onclick="navigator.clipboard.writeText('{w_vwap}');" 
-                                style="padding: 2px 4px; background-color: #ffd43b; color: #000; border: 1px solid #fab005; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
-                            📋 {w_vwap:,}
-                        </button>
-                        <div style="font-size: 10px; color: {'#d32f2f' if w_disp > 0 else '#1976d2'}; font-weight: bold;">{w_disp:+.1f}%</div>
-                    </td>
+                display_list = [(selected_theme, item) for item in stocks_to_display]
+            else:
+                display_list = searched_stocks_result
 
-                    <!-- 월봉 -->
-                    <td style="text-align: center; background-color: #ffec99;">
-                        <button onclick="navigator.clipboard.writeText('{m_vwap}');" 
-                                style="padding: 2px 4px; background-color: #fcc419; color: #000; border: 1px solid #f59f00; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
-                            📋 {m_vwap:,}
-                        </button>
-                        <div style="font-size: 10px; color: {'#d32f2f' if m_disp > 0 else '#1976d2'}; font-weight: bold;">{m_disp:+.1f}%</div>
-                    </td>
+            if display_list:
+                table_rows_html = ""
+                for idx, (t_belong, item) in enumerate(display_list, start=1):
+                    s_name = item[0]
+                    s_code = str(item[1]).zfill(6)
+                    curr_price = item[2]
 
-                    <!-- 3분봉 -->
-                    <td style="text-align: center; background-color: #e7f5ff;">
-                        <button onclick="navigator.clipboard.writeText('{m3_vwap}');" 
-                                style="padding: 2px 4px; background-color: #a5d8ff; color: #000; border: 1px solid #74c0fc; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
-                            📋 {m3_vwap:,}
-                        </button>
-                        <div style="font-size: 10px; color: {'#d32f2f' if m3_disp > 0 else '#1976d2'}; font-weight: bold;">{m3_disp:+.1f}%</div>
-                    </td>
-                </tr>
+                    d_vwap = item[7]
+                    w_vwap = item[8]
+                    m_vwap = item[9]
+                    m3_vwap = item[10]
+
+                    d_disp = ((curr_price - d_vwap) / d_vwap) * 100
+                    w_disp = ((curr_price - w_vwap) / w_vwap) * 100
+                    m_disp = ((curr_price - m_vwap) / m_vwap) * 100
+                    m3_disp = ((curr_price - m3_vwap) / m3_vwap) * 100
+
+                    theme_tag = (
+                        f'<div style="font-size: 10px; color: #666; font-weight: normal;">[{t_belong}]</div>'
+                        if search_mode == "종목 검색"
+                        else ""
+                    )
+
+                    table_rows_html += f"""
+                    <tr style="border-bottom: 1px solid #f0f0f0; height: 50px; font-size: 12px;">
+                        <td style="text-align: center; color: #666; width: 35px;">{idx}</td>
+                        <td style="font-weight: bold; color: #111; padding-left: 5px; width: 110px;">
+                            {s_name}
+                            {theme_tag}
+                        </td>
+                        <td style="text-align: center; width: 75px;">
+                            <button onclick="navigator.clipboard.writeText('{s_code}');" 
+                                    style="padding: 2px 4px; background-color: #f1f3f5; color: #333; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px;">
+                                📋 {s_code}
+                            </button>
+                        </td>
+                        <td style="text-align: right; padding-right: 5px; font-weight: bold; width: 75px;">{curr_price:,}원</td>
+                        
+                        <!-- 일봉 -->
+                        <td style="text-align: center; background-color: #fff9db;">
+                            <button onclick="navigator.clipboard.writeText('{d_vwap}');" 
+                                    style="padding: 2px 4px; background-color: #ffe066; color: #000; border: 1px solid #fcc419; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
+                                📋 {d_vwap:,}
+                            </button>
+                            <div style="font-size: 10px; color: {'#d32f2f' if d_disp > 0 else '#1976d2'}; font-weight: bold;">{d_disp:+.1f}%</div>
+                        </td>
+                        
+                        <!-- 주봉 -->
+                        <td style="text-align: center; background-color: #fff3bf;">
+                            <button onclick="navigator.clipboard.writeText('{w_vwap}');" 
+                                    style="padding: 2px 4px; background-color: #ffd43b; color: #000; border: 1px solid #fab005; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
+                                📋 {w_vwap:,}
+                            </button>
+                            <div style="font-size: 10px; color: {'#d32f2f' if w_disp > 0 else '#1976d2'}; font-weight: bold;">{w_disp:+.1f}%</div>
+                        </td>
+
+                        <!-- 월봉 -->
+                        <td style="text-align: center; background-color: #ffec99;">
+                            <button onclick="navigator.clipboard.writeText('{m_vwap}');" 
+                                    style="padding: 2px 4px; background-color: #fcc419; color: #000; border: 1px solid #f59f00; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
+                                📋 {m_vwap:,}
+                            </button>
+                            <div style="font-size: 10px; color: {'#d32f2f' if m_disp > 0 else '#1976d2'}; font-weight: bold;">{m_disp:+.1f}%</div>
+                        </td>
+
+                        <!-- 3분봉 -->
+                        <td style="text-align: center; background-color: #e7f5ff;">
+                            <button onclick="navigator.clipboard.writeText('{m3_vwap}');" 
+                                    style="padding: 2px 4px; background-color: #a5d8ff; color: #000; border: 1px solid #74c0fc; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
+                                📋 {m3_vwap:,}
+                            </button>
+                            <div style="font-size: 10px; color: {'#d32f2f' if m3_disp > 0 else '#1976d2'}; font-weight: bold;">{m3_disp:+.1f}%</div>
+                        </td>
+                    </tr>
+                    """
+
+                full_table_html = f"""
+                <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+                        <thead>
+                            <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; color: #555; font-size: 11px; height: 38px;">
+                                <th style="text-align: center; width: 35px;">순위</th>
+                                <th style="text-align: left; padding-left: 5px; width: 110px;">종목명 (소속테마)</th>
+                                <th style="text-align: center; width: 75px;">종목코드</th>
+                                <th style="text-align: right; padding-right: 5px; width: 75px;">현재가</th>
+                                <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 평단 (괴리율)</th>
+                                <th style="text-align: center; background-color: #fff3bf; color: #d9480f;">주봉 평단 (괴리율)</th>
+                                <th style="text-align: center; background-color: #ffec99; color: #d9480f;">월봉 평단 (괴리율)</th>
+                                <th style="text-align: center; background-color: #e7f5ff; color: #1864ab;">3분봉 평단 (괴리율)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {table_rows_html}
+                        </tbody>
+                    </table>
+                </div>
                 """
 
-            full_table_html = f"""
-            <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-                    <thead>
-                        <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; color: #555; font-size: 11px; height: 38px;">
-                            <th style="text-align: center; width: 35px;">순위</th>
-                            <th style="text-align: left; padding-left: 5px; width: 100px;">종목명</th>
-                            <th style="text-align: center; width: 75px;">종목코드</th>
-                            <th style="text-align: right; padding-right: 5px; width: 75px;">현재가</th>
-                            <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 평단 (괴리율)</th>
-                            <th style="text-align: center; background-color: #fff3bf; color: #d9480f;">주봉 평단 (괴리율)</th>
-                            <th style="text-align: center; background-color: #ffec99; color: #d9480f;">월봉 평단 (괴리율)</th>
-                            <th style="text-align: center; background-color: #e7f5ff; color: #1864ab;">3분봉 평단 (괴리율)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {table_rows_html}
-                    </tbody>
-                </table>
-            </div>
-            """
-
-            calc_height = max(200, len(stocks_list) * 55 + 60)
-            components.html(full_table_html, height=calc_height, scrolling=True)
+                calc_height = max(200, len(display_list) * 55 + 60)
+                components.html(
+                    full_table_html, height=calc_height, scrolling=True
+                )
