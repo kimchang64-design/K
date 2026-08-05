@@ -224,7 +224,7 @@ with main_tab1:
 # ---------------------------------------------------------
 with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
-    st.caption("주도 업종/테마 순위 및 테마별 세부 구성 종목의 시세를 분석합니다.")
+    st.caption("주도 업종/테마 순위 및 테마별 세부 구성 종목의 상세 시세를 분석합니다.")
 
     # 각 종목 구조: (종목명, 코드, 현재가, 전일대비%, 거래량, 거래대금, 시총, 일봉평단, 주봉평단, 월봉평단, 3분봉평단)
     THEME_DATA = {
@@ -280,9 +280,161 @@ with main_tab2:
             "change": "+6.57%",
             "up_down": "상승 18 / 하락 1",
             "stocks": [
+                ("삼성전자", "005930", 72500, 4.50, 28500000, 20600, 4320000, 68500, 66200, 64000, 71200),
                 ("제주반도체", "080220", 24500, 18.20, 14500000, 3550, 8400, 19500, 18200, 16900, 22800),
                 ("리노공업", "058470", 210000, 5.40, 620000, 1302, 31900, 192000, 185000, 178000, 205000),
                 ("칩스앤미디어", "094360", 28900, 11.20, 2800000, 809, 5800, 24100, 23000, 21800, 27300),
+            ],
+        },
+        "CXL(컴퓨터 익스프레스 링크)": {
+            "change": "+6.22%",
+            "up_down": "상승 12 / 하락 0",
+            "stocks": [
+                ("네오셈", "253590", 14200, 22.40, 9800000, 1391, 6200, 11500, 10800, 9900, 13500),
+                ("엑시콘", "092870", 18500, 14.10, 4100000, 758, 3800, 15800, 14900, 13800, 17800),
+            ],
+        },
+        "HBM(고대역폭메모리)": {
+            "change": "+5.88%",
+            "up_down": "상승 22 / 하락 2",
+            "stocks": [
+                ("삼성전자", "005930", 72500, 4.50, 28500000, 20600, 4320000, 68500, 66200, 64000, 71200),
+                ("한미반도체", "042700", 145000, 11.50, 5200000, 7540, 141000, 128000, 121000, 115000, 139000),
+                ("피에스케이홀딩스", "031980", 52000, 8.40, 1800000, 936, 11000, 46500, 43800, 41000, 49800),
+            ],
+        },
+        "PCB(연성회로기판)": {
+            "change": "+5.40%",
+            "up_down": "상승 15 / 하락 3",
+            "stocks": [
+                ("대덕전자", "353200", 24100, 6.20, 1100000, 265, 12000, 22100, 21200, 20100, 23500),
+                ("심텍", "222800", 31200, 5.10, 950000, 296, 9900, 29100, 28000, 26800, 30500),
+            ],
+        },
+        "2차전지(장비)": {
+            "change": "+4.95%",
+            "up_down": "상승 28 / 하락 4",
+            "stocks": [
+                ("피엔티", "137400", 54000, 7.80, 1400000, 756, 12200, 49500, 47200, 45000, 52800),
+                ("하나기술", "299030", 48500, 4.30, 620000, 300, 4800, 45800, 44100, 42000, 47200),
+            ],
+        },
+        "로봇(산업용/협동)": {
+            "change": "+4.80%",
+            "up_down": "상승 31 / 하락 2",
+            "stocks": [
+                ("두산로보틱스", "454910", 78000, 9.20, 3200000, 2496, 50500, 71000, 68000, 64000, 76000),
+                ("레인보우로보틱스", "277810", 162000, 6.10, 1100000, 1782, 31100, 151000, 145000, 138000, 158000),
+            ],
+        },
+        "바이오시밀러": {
+            "change": "+4.12%",
+            "up_down": "상승 19 / 하락 5",
+            "stocks": [
+                ("셀트리온", "068270", 192000, 3.80, 1500000, 2880, 420000, 184000, 178000, 171000, 189000),
+                ("삼성바이오로직스", "207940", 810000, 2.50, 320000, 2592, 576000, 785000, 760000, 735000, 801000),
+            ],
+        },
+        "초전도체": {
+            "change": "+3.95%",
+            "up_down": "상승 9 / 하락 1",
+            "stocks": [
+                ("신성델타테크", "065350", 92000, 14.20, 6500000, 5980, 25200, 80100, 75000, 69000, 89500),
+                ("파워로직스", "047310", 81000, 11.00, 4100000, 3321, 14000, 72500, 68000, 63500, 78800),
+            ],
+        },
+        "원자력발전": {
+            "change": "+3.80%",
+            "up_down": "상승 25 / 하락 3",
+            "stocks": [
+                ("두산에너빌리티", "034020", 21500, 5.20, 11200000, 2408, 137000, 20200, 19500, 18800, 21100),
+                ("우진엔텍", "457550", 24800, 13.50, 5800000, 1438, 2300, 21800, 20500, 19200, 24100),
+            ],
+        },
+        "방위산업/전쟁": {
+            "change": "+3.65%",
+            "up_down": "상승 20 / 하락 2",
+            "stocks": [
+                ("한화에어로스페이스", "012450", 285000, 6.80, 1800000, 5130, 144000, 265000, 252000, 240000, 280000),
+                ("LIG넥스원", "079550", 210000, 4.50, 720000, 1512, 46200, 198000, 191000, 182000, 206000),
+            ],
+        },
+        "전력설비/변압기": {
+            "change": "+3.50%",
+            "up_down": "상승 16 / 하락 1",
+            "stocks": [
+                ("HD현대일렉트릭", "267260", 295000, 8.20, 1400000, 4130, 106000, 271000, 258000, 245000, 289000),
+                ("제룡전기", "033100", 68000, 10.50, 2100000, 1428, 10900, 61200, 58000, 54500, 66500),
+            ],
+        },
+        "우주항공산업": {
+            "change": "+3.20%",
+            "up_down": "상승 14 / 하락 2",
+            "stocks": [
+                ("컨코아에어로스페이스", "274500", 12500, 7.80, 1900000, 237, 1800, 11500, 10900, 10200, 12200),
+                ("AP위성", "211270", 16800, 5.40, 820000, 137, 2500, 15800, 15100, 14200, 16400),
+            ],
+        },
+        "자율주행": {
+            "change": "+3.10%",
+            "up_down": "상승 22 / 하락 4",
+            "stocks": [
+                ("모트렉스", "118990", 13200, 4.20, 1100000, 145, 3200, 12500, 12000, 11400, 12900),
+                ("현대오토에버", "307950", 154000, 3.80, 410000, 631, 42200, 148000, 142000, 135000, 151000),
+            ],
+        },
+        "의료AI": {
+            "change": "+2.95%",
+            "up_down": "상승 11 / 하락 2",
+            "stocks": [
+                ("루닛", "328130", 52000, 8.90, 2800000, 1456, 14900, 47500, 45000, 42000, 50800),
+                ("뷰노", "338220", 31500, 6.40, 1200000, 378, 4100, 29200, 28000, 26500, 30800),
+            ],
+        },
+        "폐배터리 재활용": {
+            "change": "+2.80%",
+            "up_down": "상승 10 / 하락 3",
+            "stocks": [
+                ("성일하이텍", "365340", 68500, 3.50, 450000, 308, 8200, 65800, 63500, 60000, 67200),
+                ("새빗켐", "107600", 42000, 4.10, 320000, 134, 2500, 40100, 38500, 36200, 41200),
+            ],
+        },
+        "정밀의료/유전자": {
+            "change": "+2.60%",
+            "up_down": "상승 13 / 하락 4",
+            "stocks": [
+                ("마크로젠", "038290", 22500, 5.10, 620000, 139, 2300, 21200, 20500, 19500, 22100),
+            ],
+        },
+        "스마트팩토리": {
+            "change": "+2.45%",
+            "up_down": "상승 17 / 하락 3",
+            "stocks": [
+                ("엠아이큐브솔루션", "373170", 15400, 6.20, 890000, 137, 1800, 14400, 13800, 13000, 15100),
+            ],
+        },
+        "화장품/K-뷰티": {
+            "change": "+2.30%",
+            "up_down": "상승 29 / 하락 6",
+            "stocks": [
+                ("실리콘투", "257720", 45000, 9.10, 5800000, 2610, 27100, 41000, 39000, 36500, 44200),
+                ("한국화장품제조", "003350", 62000, 12.40, 2100000, 1302, 2800, 54800, 52000, 48500, 60800),
+            ],
+        },
+        "엔터테인먼트/K-POP": {
+            "change": "+2.10%",
+            "up_down": "상승 12 / 하락 5",
+            "stocks": [
+                ("JYP Ent.", "035900", 58000, 2.80, 680000, 394, 20600, 56100, 54500, 52000, 57200),
+                ("하이브", "352820", 182000, 1.90, 420000, 764, 75800, 178000, 172000, 165000, 180500),
+            ],
+        },
+        "분자진단/진단키트": {
+            "change": "+1.95%",
+            "up_down": "상승 18 / 하락 8",
+            "stocks": [
+                ("씨젠", "096530", 22800, 3.50, 450000, 102, 11800, 21500, 20800, 19500, 22400),
+                ("SD바이오센서", "137310", 10200, 2.10, 320000, 32, 1480, 9800, 9500, 9100, 10100),
             ],
         },
     }
@@ -319,7 +471,7 @@ with main_tab2:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. 검색 및 테마/종목 레이아웃
+    # 2. 검색 및 인기 테마 25개 레이아웃
     col_left, col_right = st.columns([1, 3.2])
 
     with col_left:
@@ -335,10 +487,10 @@ with main_tab2:
         )
 
         selected_theme = None
-        matched_themes_from_stock = []  # 종목 검색으로 발견된 테마 목록
+        matched_themes_from_stock = []
 
         if search_mode == "테마 검색":
-            st.subheader("📊 인기 테마 목록")
+            st.subheader(f"📊 인기 테마 목록 ({len(THEME_DATA)}개)")
             filtered_themes = [
                 t
                 for t in THEME_DATA.keys()
@@ -356,7 +508,6 @@ with main_tab2:
             else:
                 st.warning("검색된 테마가 없습니다.")
         else:
-            # 종목 검색 모드: 해당 종목이 속한 모든 테마 수집
             st.subheader("🔎 검색된 종목 소속 테마")
             query = search_input.strip().lower()
             if query:
@@ -382,7 +533,6 @@ with main_tab2:
         if search_mode == "테마 검색" and selected_theme:
             themes_to_render = [selected_theme]
         elif search_mode == "종목 검색" and matched_themes_from_stock:
-            # 종목이 속한 모든 테마들의 이름을 중복 없이 추출
             themes_to_render = list(
                 dict.fromkeys([t[0] for t in matched_themes_from_stock])
             )
@@ -391,15 +541,31 @@ with main_tab2:
 
         if themes_to_render:
             for render_theme in themes_to_render:
-                st.subheader(f"📌 {render_theme} (구성 종목 전체)")
+                st.subheader(f"📌 {render_theme}")
                 stocks_list = THEME_DATA[render_theme]["stocks"]
 
-                # 테이블 HTML 생성
+                # 정렬 옵션 (전체/거래대금 상위/상승 TOP)
+                sort_option = st.radio(
+                    "정렬 필터",
+                    ["전체", "거래대금 상위", "상승 TOP"],
+                    horizontal=True,
+                    key=f"sort_filter_{render_theme}",
+                )
+
+                if sort_option == "거래대금 상위":
+                    stocks_list = sorted(stocks_list, key=lambda x: x[5], reverse=True)
+                elif sort_option == "상승 TOP":
+                    stocks_list = sorted(stocks_list, key=lambda x: x[3], reverse=True)
+
                 table_rows_html = ""
                 for idx, item in enumerate(stocks_list, start=1):
                     s_name = item[0]
                     s_code = str(item[1]).zfill(6)
                     curr_price = item[2]
+                    change_pct = item[3]
+                    vol_val = item[4]
+                    trade_amt = item[5]
+                    mcap_val = item[6]
 
                     d_vwap = item[7]
                     w_vwap = item[8]
@@ -411,16 +577,15 @@ with main_tab2:
                     m_disp = ((curr_price - m_vwap) / m_vwap) * 100
                     m3_disp = ((curr_price - m3_vwap) / m3_vwap) * 100
 
-                    # 검색된 특정 종목 강조 표시 (연한 분홍색 배경)
+                    change_str = f"+{change_pct:.2f}%" if change_pct > 0 else f"{change_pct:.2f}%"
+
                     query = search_input.strip().lower()
                     is_searched_item = (
                         search_mode == "종목 검색"
                         and query
                         and (query in s_name.lower() or query in s_code)
                     )
-                    row_bg = (
-                        "background-color: #fff0f6;" if is_searched_item else ""
-                    )
+                    row_bg = "background-color: #fff0f6;" if is_searched_item else ""
 
                     table_rows_html += f"""
                     <tr style="border-bottom: 1px solid #f0f0f0; height: 48px; font-size: 12px; {row_bg}">
@@ -434,9 +599,13 @@ with main_tab2:
                                 📋 {s_code}
                             </button>
                         </td>
-                        <td style="text-align: right; padding-right: 5px; font-weight: bold; width: 75px;">{curr_price:,}원</td>
+                        <td style="text-align: right; padding-right: 5px; font-weight: bold; width: 70px;">{curr_price:,}원</td>
+                        <td style="text-align: right; padding-right: 5px; color: #d32f2f; font-weight: bold; width: 65px;">{change_str}</td>
+                        <td style="text-align: right; padding-right: 5px; color: #555; width: 75px;">{vol_val:,}</td>
+                        <td style="text-align: right; padding-right: 5px; color: #2b6cb0; font-weight: bold; width: 70px;">{trade_amt:,}백만</td>
+                        <td style="text-align: right; padding-right: 5px; color: #555; width: 75px;">{mcap_val:,}억</td>
                         
-                        <!-- 일봉 -->
+                        <!-- 일봉 평단 -->
                         <td style="text-align: center; background-color: #fff9db;">
                             <button onclick="navigator.clipboard.writeText('{d_vwap}');" 
                                     style="padding: 2px 4px; background-color: #ffe066; color: #000; border: 1px solid #fcc419; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
@@ -445,7 +614,7 @@ with main_tab2:
                             <div style="font-size: 10px; color: {'#d32f2f' if d_disp > 0 else '#1976d2'}; font-weight: bold;">{d_disp:+.1f}%</div>
                         </td>
                         
-                        <!-- 주봉 -->
+                        <!-- 주봉 평단 -->
                         <td style="text-align: center; background-color: #fff3bf;">
                             <button onclick="navigator.clipboard.writeText('{w_vwap}');" 
                                     style="padding: 2px 4px; background-color: #ffd43b; color: #000; border: 1px solid #fab005; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
@@ -454,7 +623,7 @@ with main_tab2:
                             <div style="font-size: 10px; color: {'#d32f2f' if w_disp > 0 else '#1976d2'}; font-weight: bold;">{w_disp:+.1f}%</div>
                         </td>
 
-                        <!-- 월봉 -->
+                        <!-- 월봉 평단 -->
                         <td style="text-align: center; background-color: #ffec99;">
                             <button onclick="navigator.clipboard.writeText('{m_vwap}');" 
                                     style="padding: 2px 4px; background-color: #fcc419; color: #000; border: 1px solid #f59f00; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
@@ -463,7 +632,7 @@ with main_tab2:
                             <div style="font-size: 10px; color: {'#d32f2f' if m_disp > 0 else '#1976d2'}; font-weight: bold;">{m_disp:+.1f}%</div>
                         </td>
 
-                        <!-- 3분봉 -->
+                        <!-- 3분봉 평단 -->
                         <td style="text-align: center; background-color: #e7f5ff;">
                             <button onclick="navigator.clipboard.writeText('{m3_vwap}');" 
                                     style="padding: 2px 4px; background-color: #a5d8ff; color: #000; border: 1px solid #74c0fc; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
@@ -476,17 +645,21 @@ with main_tab2:
 
                 full_table_html = f"""
                 <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin-bottom: 25px;">
-                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 950px;">
                         <thead>
                             <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; color: #555; font-size: 11px; height: 38px;">
                                 <th style="text-align: center; width: 35px;">순위</th>
                                 <th style="text-align: left; padding-left: 5px; width: 100px;">종목명</th>
                                 <th style="text-align: center; width: 75px;">종목코드</th>
-                                <th style="text-align: right; padding-right: 5px; width: 75px;">현재가</th>
-                                <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 평단 (괴리율)</th>
-                                <th style="text-align: center; background-color: #fff3bf; color: #d9480f;">주봉 평단 (괴리율)</th>
-                                <th style="text-align: center; background-color: #ffec99; color: #d9480f;">월봉 평단 (괴리율)</th>
-                                <th style="text-align: center; background-color: #e7f5ff; color: #1864ab;">3분봉 평단 (괴리율)</th>
+                                <th style="text-align: right; padding-right: 5px; width: 70px;">현재가</th>
+                                <th style="text-align: right; padding-right: 5px; width: 65px;">전일대비</th>
+                                <th style="text-align: right; padding-right: 5px; width: 75px;">거래량</th>
+                                <th style="text-align: right; padding-right: 5px; width: 70px;">거래대금</th>
+                                <th style="text-align: right; padding-right: 5px; width: 75px;">시가총액</th>
+                                <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 평단(괴리율)</th>
+                                <th style="text-align: center; background-color: #fff3bf; color: #d9480f;">주봉 평단(괴리율)</th>
+                                <th style="text-align: center; background-color: #ffec99; color: #d9480f;">월봉 평단(괴리율)</th>
+                                <th style="text-align: center; background-color: #e7f5ff; color: #1864ab;">3분봉 평단(괴리율)</th>
                             </tr>
                         </thead>
                         <tbody>
