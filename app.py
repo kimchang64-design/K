@@ -242,18 +242,18 @@ with main_tab1:
             if len(st.session_state.search_history) > 12:
                 st.session_state.search_history.pop()
 
-        # 📌 종목명·코드 바로 오른쪽에 복사 버튼 배치
-        code_copy_html = f"""
-        <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; padding: 6px 10px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
-            <span style="font-size: 13px; font-weight: bold;">📌 종목: {stock_name} ({code})</span>
-            <button onclick="navigator.clipboard.writeText('{code}');" style="background:#1a73e8; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
-                📋 코드 복사 ({code})
-            </button>
-        </div>
-        """
-        components.html(code_copy_html, height=42)
+        st.markdown(
+            f"""
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; padding: 6px 10px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
+                <span style="font-size: 13px; font-weight: bold;">📌 종목: {stock_name} ({code})</span>
+                <button onclick="navigator.clipboard.writeText('{code}');" style="background:#1a73e8; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
+                    📋 코드 복사 ({code})
+                </button>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-        # 🕒 최근 검색 기록 가로 배치 영역
         if st.session_state.search_history:
             st.markdown(
                 "<span style='font-size:11px; color:#666;'>최근 검색 기록 (최대 12개):</span>",
@@ -634,67 +634,140 @@ with main_tab2:
     col_left, col_right = st.columns([1, 3.2])
 
     with col_left:
+        # 🔄 검색 모드 및 검색 입력 영역을 상단으로 올리고 순서 교체 (종목 검색 <-> 테마 검색)
         search_mode = st.radio(
-            "검색 모드", ["테마 검색", "종목 검색"], horizontal=True, key="s_mode"
+            "검색 모드", ["종목 검색", "테마 검색"], horizontal=True, key="s_mode"
         )
         search_input = st.text_input(
-            "검색어 입력...", "", key="t_search", placeholder="검색어 입력..."
-        )
-        theme_list = list(THEME_DATA.keys())
-        selected_theme = st.radio(
-            "테마 선택 라디오",
-            theme_list,
-            index=0,
-            label_visibility="collapsed",
-            key="t_radio",
+            "검색어 입력...", "", key="t_search", placeholder="종목명 또는 테마명 입력..."
         )
 
+        theme_list = list(THEME_DATA.keys())
+
+        if search_mode == "종목 검색":
+            matched_stocks = []
+            for t_name, t_info in THEME_DATA.items():
+                for s_item in t_info["stocks"]:
+                    if not search_input or (
+                        search_input.lower() in s_item["name"].lower()
+                        or search_input in s_item["code"]
+                    ):
+                        matched_stocks.append({**s_item, "theme": t_name})
+
+            st.markdown(
+                f"<span style='font-size:12px; color:#555;'>검색 결과: <b>{len(matched_stocks)}개</b> 종목</span>",
+                unsafe_allow_html=True,
+            )
+        else:
+            filtered_themes = [
+                t for t in theme_list if not search_input or search_input in t
+            ]
+            selected_theme = st.radio(
+                "테마 선택 라디오",
+                filtered_themes if filtered_themes else ["검색 결과 없음"],
+                index=0,
+                label_visibility="collapsed",
+                key="t_radio",
+            )
+
     with col_right:
-        if selected_theme and selected_theme in THEME_DATA:
-            st.markdown(f"### 📌 {selected_theme}", unsafe_allow_html=True)
-            stocks_list = THEME_DATA[selected_theme]["stocks"]
-            table_rows_html = ""
-            for idx, item in enumerate(stocks_list, start=1):
-                table_rows_html += f"""
-                <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
-                    <td style="text-align: center; font-weight: bold;">{idx}</td>
-                    <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['trade_type']}</span></td>
-                    <td style="text-align: center; font-weight: bold; color: #1a73e8;">{item['code']}</td>
-                    <td style="text-align: center; font-weight: bold;">{item['op_status']}</td>
-                    <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
-                    <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{item['change']:.2f}%</td>
-                    <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원 ({item['d_disp']})</td>
-                    <td style="text-align: center; background-color: #f3f0ff; font-weight: bold;">{item['w_vwap']:,}원</td>
-                    <td style="text-align: center; background-color: #e6fcf5; font-weight: bold;">{item['m_vwap']:,}원</td>
-                    <td style="text-align: center; background-color: #fff0f6; font-weight: bold;">{item['m3_vwap']:,}원</td>
-                    <td style="text-align: right; color: #2b8a3e; font-weight: bold;">{item['target']:,}원</td>
-                    <td style="text-align: right; color: #e03131; font-weight: bold;">{item['stop']:,}원</td>
-                </tr>
+        if search_mode == "종목 검색":
+            st.markdown("### 📌 종목 검색 결과 분석", unsafe_allow_html=True)
+            if "matched_stocks" in locals() and matched_stocks:
+                table_rows_html = ""
+                for idx, item in enumerate(matched_stocks, start=1):
+                    table_rows_html += f"""
+                    <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
+                        <td style="text-align: center; font-weight: bold;">{idx}</td>
+                        <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['trade_type']} ({item['theme']})</span></td>
+                        <td style="text-align: center; font-weight: bold; color: #1a73e8;">{item['code']}</td>
+                        <td style="text-align: center; font-weight: bold;">{item['op_status']}</td>
+                        <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
+                        <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{item['change']:.2f}%</td>
+                        <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원 ({item['d_disp']})</td>
+                        <td style="text-align: center; background-color: #f3f0ff; font-weight: bold;">{item['w_vwap']:,}원</td>
+                        <td style="text-align: center; background-color: #e6fcf5; font-weight: bold;">{item['m_vwap']:,}원</td>
+                        <td style="text-align: center; background-color: #fff0f6; font-weight: bold;">{item['m3_vwap']:,}원</td>
+                        <td style="text-align: right; color: #2b8a3e; font-weight: bold;">{item['target']:,}원</td>
+                        <td style="text-align: right; color: #e03131; font-weight: bold;">{item['stop']:,}원</td>
+                    </tr>
+                    """
+                search_table_html = f"""
+                <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+                        <thead>
+                            <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 38px;">
+                                <th style="text-align: center;">순위</th>
+                                <th style="text-align: left;">종목명</th>
+                                <th style="text-align: center;">종목코드</th>
+                                <th style="text-align: center;">실적</th>
+                                <th style="text-align: right;">현재가</th>
+                                <th style="text-align: right;">전일대비</th>
+                                <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리)</th>
+                                <th style="text-align: center; background-color: #f3f0ff;">주봉 평단</th>
+                                <th style="text-align: center; background-color: #e6fcf5;">월봉 평단</th>
+                                <th style="text-align: center; background-color: #fff0f6;">3분봉 평단</th>
+                                <th style="text-align: right; color: #2b8a3e;">🎯 목표가(+5%)</th>
+                                <th style="text-align: right; color: #e03131;">🛑 손절가(-2%)</th>
+                            </tr>
+                        </thead>
+                        <tbody>{table_rows_html}</tbody>
+                    </table>
+                </div>
                 """
-            full_table_html = f"""
-            <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
-                <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-                    <thead>
-                        <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 38px;">
-                            <th style="text-align: center;">순위</th>
-                            <th style="text-align: left;">종목명</th>
-                            <th style="text-align: center;">종목코드</th>
-                            <th style="text-align: center;">실적</th>
-                            <th style="text-align: right;">현재가</th>
-                            <th style="text-align: right;">전일대비</th>
-                            <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리)</th>
-                            <th style="text-align: center; background-color: #f3f0ff;">주봉 평단</th>
-                            <th style="text-align: center; background-color: #e6fcf5;">월봉 평단</th>
-                            <th style="text-align: center; background-color: #fff0f6;">3분봉 평단</th>
-                            <th style="text-align: right; color: #2b8a3e;">🎯 목표가(+5%)</th>
-                            <th style="text-align: right; color: #e03131;">🛑 손절가(-2%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>{table_rows_html}</tbody>
-                </table>
-            </div>
-            """
-            components.html(full_table_html, height=220, scrolling=True)
+                components.html(search_table_html, height=220, scrolling=True)
+            else:
+                st.info("검색된 종목이 없습니다.")
+        else:
+            if (
+                "selected_theme" in locals()
+                and selected_theme
+                and selected_theme in THEME_DATA
+            ):
+                st.markdown(f"### 📌 {selected_theme}", unsafe_allow_html=True)
+                stocks_list = THEME_DATA[selected_theme]["stocks"]
+                table_rows_html = ""
+                for idx, item in enumerate(stocks_list, start=1):
+                    table_rows_html += f"""
+                    <tr style="border-bottom: 1px solid #f0f0f0; height: 65px; font-size: 12px;">
+                        <td style="text-align: center; font-weight: bold;">{idx}</td>
+                        <td style="font-weight: bold;">{item['name']}<br><span style="color:#1c7ed6; font-size:10px;">{item['trade_type']}</span></td>
+                        <td style="text-align: center; font-weight: bold; color: #1a73e8;">{item['code']}</td>
+                        <td style="text-align: center; font-weight: bold;">{item['op_status']}</td>
+                        <td style="text-align: right; font-weight: bold;">{item['price']:,}원</td>
+                        <td style="text-align: right; color: #d32f2f; font-weight: bold;">+{item['change']:.2f}%</td>
+                        <td style="text-align: center; background-color: #fff9db; font-weight: bold;">{item['d_vwap']:,}원 ({item['d_disp']})</td>
+                        <td style="text-align: center; background-color: #f3f0ff; font-weight: bold;">{item['w_vwap']:,}원</td>
+                        <td style="text-align: center; background-color: #e6fcf5; font-weight: bold;">{item['m_vwap']:,}원</td>
+                        <td style="text-align: center; background-color: #fff0f6; font-weight: bold;">{item['m3_vwap']:,}원</td>
+                        <td style="text-align: right; color: #2b8a3e; font-weight: bold;">{item['target']:,}원</td>
+                        <td style="text-align: right; color: #e03131; font-weight: bold;">{item['stop']:,}원</td>
+                    </tr>
+                    """
+                full_table_html = f"""
+                <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+                        <thead>
+                            <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 38px;">
+                                <th style="text-align: center;">순위</th>
+                                <th style="text-align: left;">종목명</th>
+                                <th style="text-align: center;">종목코드</th>
+                                <th style="text-align: center;">실적</th>
+                                <th style="text-align: right;">현재가</th>
+                                <th style="text-align: right;">전일대비</th>
+                                <th style="text-align: center; background-color: #fff9db;">일봉 평단(괴리)</th>
+                                <th style="text-align: center; background-color: #f3f0ff;">주봉 평단</th>
+                                <th style="text-align: center; background-color: #e6fcf5;">월봉 평단</th>
+                                <th style="text-align: center; background-color: #fff0f6;">3분봉 평단</th>
+                                <th style="text-align: right; color: #2b8a3e;">🎯 목표가(+5%)</th>
+                                <th style="text-align: right; color: #e03131;">🛑 손절가(-2%)</th>
+                            </tr>
+                        </thead>
+                        <tbody>{table_rows_html}</tbody>
+                    </table>
+                </div>
+                """
+                components.html(full_table_html, height=220, scrolling=True)
 
 
 # ---------------------------------------------------------
