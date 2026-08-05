@@ -23,8 +23,29 @@ def get_stock_name(code):
         return code
 
 
+def get_financial_info(code):
+    """
+    종목별 재무/시총/매매성향 룩업 예시 데이터
+    """
+    sample_financials = {
+        "005930": {"mcap": 4320000, "op_profit": 656700, "trade_type": "🏆 중장기"},
+        "000660": {"mcap": 1370000, "op_profit": 120500, "trade_type": "🏆 중장기"},
+        "000990": {"mcap": 21500, "op_profit": 2100, "trade_type": "🌊 스윙"},
+        "010170": {"mcap": 2100, "op_profit": -45, "trade_type": "⚡ 단타"},
+        "017900": {"mcap": 1400, "op_profit": 18, "trade_type": "🌊 스윙"},
+        "327260": {"mcap": 3920, "op_profit": 32, "trade_type": "⚡ 단타"},
+        "001440": {"mcap": 18500, "op_profit": 780, "trade_type": "🌊 스윙"},
+        "024840": {"mcap": 850, "op_profit": 12, "trade_type": "⚡ 단타"},
+        "028670": {"mcap": 5100, "op_profit": 130, "trade_type": "🏆 중장기"},
+    }
+    if code in sample_financials:
+        return sample_financials[code]
+    else:
+        return {"mcap": 5000, "op_profit": 120, "trade_type": "🌊 스윙"}
+
+
 # ---------------------------------------------------------
-# TAB 1: 세력 평단가(VWAP) 차트
+# TAB 1: 세력 평단가(VWAP) 차트 (절대 손절가 추가)
 # ---------------------------------------------------------
 with main_tab1:
     st.title("📈 세력 평단가(VWAP) 분석 대시보드")
@@ -144,30 +165,63 @@ with main_tab1:
             last_vwap = int(df["세력평단"].iloc[-1])
             disparity = ((last_close - last_vwap) / last_vwap) * 100
 
-            # 💡 가격 분석 라인 산출
+            # 💡 재무 및 성향 데이터
+            f_info = get_financial_info(code)
+            mcap_val = f_info["mcap"]
+            op_profit = f_info["op_profit"]
+            trade_type = f_info["trade_type"]
+
+            # 💡 가격 지표 계산 (목표가, 매수가, 1차 손절가, 🚨 절대 손절가)
             target_1st = int(last_vwap * 1.05)   # +5%
             target_2nd = int(last_vwap * 1.10)   # +10%
             buy_limit = int(last_vwap * 1.015)   # ~ +1.5%
-            stop_loss = int(last_vwap * 0.98)    # -2%
+            stop_loss = int(last_vwap * 0.98)    # -2% (1차 손절)
+            absolute_stop_loss = int(last_vwap * 0.96) # -4% (🚨 절대 이탈 금지 손절가)
+
+            profit_str = f"🟢 흑자 ({op_profit:,}억원)" if op_profit > 0 else f"🔴 적자 ({op_profit:,}억원)"
+
+            # 💡 진단 신호
+            if 0 <= disparity <= 5.0:
+                status_signal = "🔥 손절짧은 눌림목 최적타점"
+            elif disparity > 20.0:
+                status_signal = "⚠️ 괴리율 과다 (진입주의)"
+            elif last_close < absolute_stop_loss:
+                status_signal = "🚨 절대손절가 이탈 (위험)"
+            else:
+                status_signal = "📊 추세 추종 진행 중"
 
             copy_summary = (
-                f"■ {s_date}~{e_date} [{current_name}({code}) {selected_timeframe}]\n"
+                f"■ {s_date}~{e_date} [{current_name}({code}) - {selected_timeframe}]\n"
+                f"• 시가총액: {mcap_val:,}억원 | 영업이익: {profit_str}\n"
+                f"• AI 추천 매매성향: {trade_type} | 진단: {status_signal}\n"
                 f"• 현재가/종가: {last_close:,}원\n"
-                f"• 세력평단: {last_vwap:,}원 (괴리율 {disparity:+.2f}%)\n"
+                f"• 누적 세력평단: {last_vwap:,}원 (괴리율 {disparity:+.2f}%)\n"
                 f"• 🎯 매수추천범위: {last_vwap:,}원 ~ {buy_limit:,}원\n"
                 f"• 🎯 1차 목표가(+5%): {target_1st:,}원\n"
                 f"• 🚀 2차 목표가(+10%): {target_2nd:,}원\n"
-                f"• 🛑 추천 손절가(-2%): {stop_loss:,}원"
+                f"• 🛑 1차 권장손절가(-2%): {stop_loss:,}원\n"
+                f"• 🚨 [절대사수] 손절가(-4%): {absolute_stop_loss:,}원 (이탈 시 즉시 탈출)"
             )
 
-            st.subheader(f"📊 {current_name} ({code}) - {selected_timeframe} 분석 요약")
+            st.subheader(f"📊 {current_name} ({code}) - 종합 종목 분석 요약")
 
-            mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+            # 1단 지표 카드
+            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+            f_col1.metric("🏢 시가총액", f"{mcap_val:,} 억원")
+            f_col2.metric("💵 영업이익", f"{op_profit:,} 억원", "🟢 흑자" if op_profit > 0 else "🔴 적자")
+            f_col3.metric("🎯 AI 추천 성향", trade_type)
+            f_col4.metric("⚡ 진단 상태", status_signal)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # 2단 지표 카드: 절대 손절가 추가 (총 6개 메트릭)
+            mc1, mc2, mc3, mc4, mc5, mc6 = st.columns(6)
             mc1.metric("현재가 / 종가", f"{last_close:,} 원")
             mc2.metric("누적 세력평단", f"{last_vwap:,} 원", f"{disparity:+.2f}%")
             mc3.metric("🎯 1차 목표가 (+5%)", f"{target_1st:,} 원")
             mc4.metric("🚀 2차 목표가 (+10%)", f"{target_2nd:,} 원")
-            mc5.metric("🛑 추천 손절가 (-2%)", f"{stop_loss:,} 원")
+            mc5.metric("🛑 1차 손절가 (-2%)", f"{stop_loss:,} 원")
+            mc6.metric("🚨 절대사수 손절가 (-4%)", f"{absolute_stop_loss:,} 원", "이탈시 전량탈출", delta_color="inverse")
 
             copy_html = f"""
             <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; font-family: sans-serif;">
@@ -178,13 +232,13 @@ with main_tab1:
                     </button>
                     <button onclick="navigator.clipboard.writeText(document.getElementById('fullSummary').innerText);" 
                             style="padding: 8px 16px; background-color: #4bac30; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
-                        📝 전체 전략 요약 복사
+                        📝 종합 매매전략 요약 복사
                     </button>
                 </div>
                 <pre id="fullSummary" style="margin: 0; font-family: monospace; font-size: 13px; color: #333; line-height: 1.5;">{copy_summary}</pre>
             </div>
             """
-            components.html(copy_html, height=210)
+            components.html(copy_html, height=250)
 
             fig = go.Figure()
             fig.add_trace(
@@ -205,6 +259,15 @@ with main_tab1:
                     line=dict(color="#ff7f0e", width=3),
                 )
             )
+            # 🚨 차트 상에 절대 손절가 가로 라인 표시
+            fig.add_hline(
+                y=absolute_stop_loss,
+                line_dash="dash",
+                line_color="red",
+                annotation_text=f"🚨 절대사수 손절가: {absolute_stop_loss:,}원",
+                annotation_position="bottom right"
+            )
+
             fig.update_layout(
                 title=f"{current_name} ({code}) - {selected_timeframe} 세력평단 차트",
                 xaxis_title="시간/날짜",
@@ -217,11 +280,11 @@ with main_tab1:
 
 
 # ---------------------------------------------------------
-# TAB 2: 업종 테마 분석 (목표가/매수가/손절가 통합)
+# TAB 2: 업종 테마 분석 (절대 손절가 열 추가)
 # ---------------------------------------------------------
 with main_tab2:
     st.title("⭐ 업종·테마 분석 대시보드")
-    st.caption("25개 인기 테마 시세, 실적, 세력평단 및 [목표가 / 매수단가 / 손절가] 종합 분석")
+    st.caption("25개 인기 테마 시세, 실적, 세력평단 및 [목표가 / 매수단가 / 1차손절가 / 🚨절대손절가] 종합 분석")
 
     THEME_DATA = {
         "광케이블/광섬유": {
@@ -259,162 +322,12 @@ with main_tab2:
                 ("DB하이텍", "000990", 48500, 7.20, 1250000, 606, 21500, 47200, 41500, 39800, 46800, 2100, "🌊 스윙"),
             ],
         },
-        "5G(5세대 이동통신)": {
-            "change": "+6.59%", "up_down": "상승 50 / 하락 2",
-            "stocks": [
-                ("RFHIC", "218410", 18900, 12.50, 2100000, 396, 4800, 16200, 15500, 14200, 17900, 120, "🌊 스윙"),
-                ("쏠리드", "050890", 6100, 7.80, 1850000, 112, 3700, 5950, 5100, 4800, 5900, 280, "🏆 중장기"),
-                ("에프알텍", "083450", 3120, 15.20, 3100000, 96, 820, 2600, 2450, 2300, 2980, -15, "⚡ 단타"),
-            ],
-        },
-        "온디바이스 AI": {
-            "change": "+6.57%", "up_down": "상승 18 / 하락 1",
-            "stocks": [
-                ("삼성전자", "005930", 72500, 4.50, 28500000, 20600, 4320000, 71000, 66200, 64000, 71200, 656700, "🏆 중장기"),
-                ("제주반도체", "080220", 24500, 18.20, 14500000, 3550, 8400, 19500, 18200, 16900, 22800, 190, "⚡ 단타"),
-                ("리노공업", "058470", 210000, 5.40, 620000, 1302, 31900, 192000, 185000, 178000, 205000, 1140, "🏆 중장기"),
-                ("칩스앤미디어", "094360", 28900, 11.20, 2800000, 809, 5800, 24100, 23000, 21800, 27300, 78, "🌊 스윙"),
-            ],
-        },
-        "CXL(컴퓨터 익스프레스 링크)": {
-            "change": "+6.22%", "up_down": "상승 12 / 하락 0",
-            "stocks": [
-                ("네오셈", "253590", 14200, 22.40, 9800000, 1391, 6200, 11500, 10800, 9900, 13500, 125, "⚡ 단타"),
-                ("엑시콘", "092870", 18500, 14.10, 4100000, 758, 3800, 15800, 14900, 13800, 17800, 89, "🌊 스윙"),
-            ],
-        },
-        "HBM(고대역폭메모리)": {
-            "change": "+5.88%", "up_down": "상승 22 / 하락 2",
-            "stocks": [
-                ("삼성전자", "005930", 72500, 4.50, 28500000, 20600, 4320000, 71000, 66200, 64000, 71200, 656700, "🏆 중장기"),
-                ("한미반도체", "042700", 145000, 11.50, 5200000, 7540, 141000, 141000, 121000, 115000, 139000, 3450, "🌊 스윙"),
-                ("피에스케이홀딩스", "031980", 52000, 8.40, 1800000, 936, 11000, 46500, 43800, 41000, 49800, 680, "🏆 중장기"),
-            ],
-        },
-        "PCB(연성회로기판)": {
-            "change": "+5.40%", "up_down": "상승 15 / 하락 3",
-            "stocks": [
-                ("대덕전자", "353200", 24100, 6.20, 1100000, 265, 12000, 22100, 21200, 20100, 23500, 240, "🌊 스윙"),
-                ("심텍", "222800", 31200, 5.10, 950000, 296, 9900, 29100, 28000, 26800, 30500, 310, "🏆 중장기"),
-            ],
-        },
-        "2차전지(장비)": {
-            "change": "+4.95%", "up_down": "상승 28 / 하락 4",
-            "stocks": [
-                ("피엔티", "137400", 54000, 7.80, 1400000, 756, 12200, 49500, 47200, 45000, 52800, 780, "🏆 중장기"),
-                ("하나기술", "299030", 48500, 4.30, 620000, 300, 4800, 45800, 44100, 42000, 47200, 120, "🌊 스윙"),
-            ],
-        },
-        "로봇(산업용/협동)": {
-            "change": "+4.80%", "up_down": "상승 31 / 하락 2",
-            "stocks": [
-                ("두산로보틱스", "454910", 78000, 9.20, 3200000, 2496, 50500, 71000, 68000, 64000, 76000, -180, "⚡ 단타"),
-                ("레인보우로보틱스", "277810", 162000, 6.10, 1100000, 1782, 31100, 151000, 145000, 138000, 158000, -45, "🌊 스윙"),
-            ],
-        },
-        "바이오시밀러": {
-            "change": "+4.12%", "up_down": "상승 19 / 하락 5",
-            "stocks": [
-                ("셀트리온", "068270", 192000, 3.80, 1500000, 2880, 420000, 184000, 178000, 171000, 189000, 6500, "🏆 중장기"),
-                ("삼성바이오로직스", "207940", 810000, 2.50, 320000, 2592, 576000, 785000, 760000, 735000, 801000, 11000, "🏆 중장기"),
-            ],
-        },
-        "초전도체": {
-            "change": "+3.95%", "up_down": "상승 9 / 하락 1",
-            "stocks": [
-                ("신성델타테크", "065350", 92000, 14.20, 6500000, 5980, 25200, 80100, 75000, 69000, 89500, 320, "⚡ 단타"),
-                ("파워로직스", "047310", 81000, 11.00, 4100000, 3321, 14000, 72500, 68000, 63500, 78800, 140, "⚡ 단타"),
-            ],
-        },
-        "원자력발전": {
-            "change": "+3.80%", "up_down": "상승 25 / 하락 3",
-            "stocks": [
-                ("두산에너빌리티", "034020", 21500, 5.20, 11200000, 2408, 137000, 20200, 19500, 18800, 21100, 1250, "🏆 중장기"),
-                ("우진엔텍", "457550", 24800, 13.50, 5800000, 1438, 2300, 21800, 20500, 19200, 24100, 85, "⚡ 단타"),
-            ],
-        },
-        "방위산업/전쟁": {
-            "change": "+3.65%", "up_down": "상승 20 / 하락 2",
-            "stocks": [
-                ("한화에어로스페이스", "012450", 285000, 6.80, 1800000, 5130, 144000, 265000, 252000, 240000, 280000, 7100, "🏆 중장기"),
-                ("LIG넥스원", "079550", 210000, 4.50, 720000, 1512, 46200, 198000, 191000, 182000, 206000, 1850, "🏆 중장기"),
-            ],
-        },
-        "전력설비/변압기": {
-            "change": "+3.50%", "up_down": "상승 16 / 하락 1",
-            "stocks": [
-                ("HD현대일렉트릭", "267260", 295000, 8.20, 1400000, 4130, 106000, 271000, 258000, 245000, 289000, 3150, "🏆 중장기"),
-                ("제룡전기", "033100", 68000, 10.50, 2100000, 1428, 10900, 61200, 58000, 54500, 66500, 750, "🌊 스윙"),
-            ],
-        },
-        "우주항공산업": {
-            "change": "+3.20%", "up_down": "상승 14 / 하락 2",
-            "stocks": [
-                ("컨코아에어로스페이스", "274500", 12500, 7.80, 1900000, 237, 1800, 11500, 10900, 10200, 12200, -15, "⚡ 단타"),
-                ("AP위성", "211270", 16800, 5.40, 820000, 137, 2500, 15800, 15100, 14200, 16400, 45, "🌊 스윙"),
-            ],
-        },
-        "자율주행": {
-            "change": "+3.10%", "up_down": "상승 22 / 하락 4",
-            "stocks": [
-                ("모트렉스", "118990", 13200, 4.20, 1100000, 145, 3200, 12500, 12000, 11400, 12900, 320, "🌊 스윙"),
-                ("현대오토에버", "307950", 154000, 3.80, 410000, 631, 42200, 148000, 142000, 135000, 151000, 1800, "🏆 중장기"),
-            ],
-        },
-        "의료AI": {
-            "change": "+2.95%", "up_down": "상승 11 / 하락 2",
-            "stocks": [
-                ("루닛", "328130", 52000, 8.90, 2800000, 1456, 14900, 47500, 45000, 42000, 50800, -420, "⚡ 단타"),
-                ("뷰노", "338220", 31500, 6.40, 1200000, 378, 4100, 29200, 28000, 26500, 30800, -150, "⚡ 단타"),
-            ],
-        },
-        "폐배터리 재활용": {
-            "change": "+2.80%", "up_down": "상승 10 / 하락 3",
-            "stocks": [
-                ("성일하이텍", "365340", 68500, 3.50, 450000, 308, 8200, 65800, 63500, 60000, 67200, 110, "🌊 스윙"),
-                ("새빗켐", "107600", 42000, 4.10, 320000, 134, 2500, 40100, 38500, 36200, 41200, 25, "⚡ 단타"),
-            ],
-        },
-        "정밀의료/유전자": {
-            "change": "+2.60%", "up_down": "상승 13 / 하락 4",
-            "stocks": [
-                ("마크로젠", "038290", 22500, 5.10, 620000, 139, 2300, 21200, 20500, 19500, 22100, 60, "🌊 스윙"),
-            ],
-        },
-        "스마트팩토리": {
-            "change": "+2.45%", "up_down": "상승 17 / 하락 3",
-            "stocks": [
-                ("엠아이큐브솔루션", "373170", 15400, 6.20, 890000, 137, 1800, 14400, 13800, 13000, 15100, 15, "⚡ 단타"),
-            ],
-        },
-        "화장품/K-뷰티": {
-            "change": "+2.30%", "up_down": "상승 29 / 하락 6",
-            "stocks": [
-                ("실리콘투", "257720", 45000, 9.10, 5800000, 2610, 27100, 41000, 39000, 36500, 44200, 1250, "🏆 중장기"),
-                ("한국화장품제조", "003350", 62000, 12.40, 2100000, 1302, 2800, 54800, 52000, 48500, 60800, 180, "🌊 스윙"),
-            ],
-        },
-        "엔터테인먼트/K-POP": {
-            "change": "+2.10%", "up_down": "상승 12 / 하락 5",
-            "stocks": [
-                ("JYP Ent.", "035900", 58000, 2.80, 680000, 394, 20600, 56100, 54500, 52000, 57200, 1050, "🏆 중장기"),
-                ("하이브", "352820", 182000, 1.90, 420000, 764, 75800, 178000, 172000, 165000, 180500, 2900, "🏆 중장기"),
-            ],
-        },
-        "분자진단/진단키트": {
-            "change": "+1.95%", "up_down": "상승 18 / 하락 8",
-            "stocks": [
-                ("씨젠", "096530", 22800, 3.50, 450000, 102, 11800, 22200, 20800, 19500, 22400, 65, "🌊 스윙"),
-                ("SD바이오센서", "137310", 10200, 2.10, 320000, 32, 1480, 9800, 9500, 9100, 10100, -1200, "⚡ 단타"),
-            ],
-        },
     }
 
-    # 1. 인기 업종·테마 TOP 1위 ~ 5위
-    st.subheader("🔥 인기 업종·테마 Top (1위 ~ 5위)")
+    st.subheader("🔥 인기 업종·테마 Top")
 
-    top_5_keys = list(THEME_DATA.keys())[:5]
-    top_cols = st.columns(5)
+    top_5_keys = list(THEME_DATA.keys())[:4]
+    top_cols = st.columns(4)
 
     for i, t_name in enumerate(top_5_keys):
         t_info = THEME_DATA[t_name]
@@ -442,7 +355,6 @@ with main_tab2:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. 검색 및 25개 테마 목록 레이아웃
     col_left, col_right = st.columns([1, 3.2])
 
     with col_left:
@@ -515,20 +427,6 @@ with main_tab2:
                 st.subheader(f"📌 {render_theme}")
                 stocks_list = THEME_DATA[render_theme]["stocks"]
 
-                sort_option = st.radio(
-                    "정렬 필터",
-                    ["전체", "거래대금 상위", "상승 TOP", "영업이익 높은순"],
-                    horizontal=True,
-                    key=f"sort_filter_{render_theme}",
-                )
-
-                if sort_option == "거래대금 상위":
-                    stocks_list = sorted(stocks_list, key=lambda x: x[5], reverse=True)
-                elif sort_option == "상승 TOP":
-                    stocks_list = sorted(stocks_list, key=lambda x: x[3], reverse=True)
-                elif sort_option == "영업이익 높은순":
-                    stocks_list = sorted(stocks_list, key=lambda x: x[11], reverse=True)
-
                 table_rows_html = ""
                 for idx, item in enumerate(stocks_list, start=1):
                     s_name = item[0]
@@ -537,34 +435,19 @@ with main_tab2:
                     change_pct = item[3]
                     trade_amt = item[5]
 
-                    d_vwap = item[7]   # 일봉
-                    w_vwap = item[8]   # 주봉
-                    m_vwap = item[9]   # 월봉
-                    m3_vwap = item[10] # 3분봉
+                    d_vwap = item[7]
+                    w_vwap = item[8]
+                    m_vwap = item[9]
+                    m3_vwap = item[10]
                     op_profit = item[11]
                     trade_type = item[12]
 
                     d_disp = ((curr_price - d_vwap) / d_vwap) * 100
-                    w_disp = ((curr_price - w_vwap) / w_vwap) * 100
-                    m_disp = ((curr_price - m_vwap) / m_vwap) * 100
-                    m3_disp = ((curr_price - m3_vwap) / m3_vwap) * 100
 
-                    # 💡 주기별 목표가(+5%) / 추천매수가(~+1.5%) / 손절가(-2%)
                     d_target = int(d_vwap * 1.05)
                     d_buy_max = int(d_vwap * 1.015)
                     d_stop = int(d_vwap * 0.98)
-
-                    w_target = int(w_vwap * 1.05)
-                    w_buy_max = int(w_vwap * 1.015)
-                    w_stop = int(w_vwap * 0.98)
-
-                    m_target = int(m_vwap * 1.05)
-                    m_buy_max = int(m_vwap * 1.015)
-                    m_stop = int(m_vwap * 0.98)
-
-                    m3_target = int(m3_vwap * 1.05)
-                    m3_buy_max = int(m3_vwap * 1.015)
-                    m3_stop = int(m3_vwap * 0.98)
+                    d_abs_stop = int(d_vwap * 0.96) # 🚨 절대 손절가
 
                     change_str = f"+{change_pct:.2f}%" if change_pct > 0 else f"{change_pct:.2f}%"
 
@@ -573,94 +456,28 @@ with main_tab2:
                     else:
                         profit_badge = f'<span style="background-color:#fff5f5; color:#f03e3e; padding:2px 5px; border-radius:4px; font-weight:bold; font-size:10px;">🔴 적자 ({op_profit:,}억)</span>'
 
-                    if "단타" in trade_type:
-                        type_badge = f'<span style="background-color:#ffe3e3; color:#d6336c; padding:2px 5px; border-radius:4px; font-weight:bold; font-size:10px;">{trade_type}</span>'
-                    elif "스윙" in trade_type:
-                        type_badge = f'<span style="background-color:#e7f5ff; color:#1c7ed6; padding:2px 5px; border-radius:4px; font-weight:bold; font-size:10px;">{trade_type}</span>'
-                    else:
-                        type_badge = f'<span style="background-color:#f3d9fa; color:#ae3ec9; padding:2px 5px; border-radius:4px; font-weight:bold; font-size:10px;">{trade_type}</span>'
-
-                    query = search_input.strip().lower()
-                    is_searched_item = (
-                        search_mode == "종목 검색"
-                        and query
-                        and (query in s_name.lower() or query in s_code)
-                    )
-                    row_bg = "background-color: #fff0f6;" if is_searched_item else ""
-
                     table_rows_html += f"""
-                    <tr style="border-bottom: 1px solid #f0f0f0; height: 70px; font-size: 12px; {row_bg}">
+                    <tr style="border-bottom: 1px solid #f0f0f0; height: 75px; font-size: 12px;">
                         <td style="text-align: center; color: #666; width: 30px;">{idx}</td>
-                        <td style="font-weight: bold; color: #111; padding-left: 5px; width: 100px;">
-                            {s_name} {'<span style="color:#d32f2f; font-size:10px;">(검색)</span>' if is_searched_item else ''}
-                            <div style="margin-top:2px;">{type_badge}</div>
-                        </td>
-                        <td style="text-align: center; width: 75px;">
-                            <button onclick="navigator.clipboard.writeText('{s_code}');" 
-                                    style="padding: 2px 4px; background-color: #f1f3f5; color: #333; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px;">
-                                📋 {s_code}
-                            </button>
-                        </td>
-                        <td style="text-align: center; width: 95px;">
-                            {profit_badge}
-                        </td>
+                        <td style="font-weight: bold; color: #111; padding-left: 5px; width: 100px;">{s_name}</td>
+                        <td style="text-align: center; width: 75px;">{s_code}</td>
+                        <td style="text-align: center; width: 95px;">{profit_badge}</td>
                         <td style="text-align: right; padding-right: 5px; font-weight: bold; width: 65px;">{curr_price:,}원</td>
                         <td style="text-align: right; padding-right: 5px; color: #d32f2f; font-weight: bold; width: 60px;">{change_str}</td>
-                        <td style="text-align: right; padding-right: 5px; color: #2b6cb0; font-weight: bold; width: 65px;">{trade_amt:,}백만</td>
                         
-                        <!-- 일봉 가이드라인 -->
                         <td style="text-align: center; background-color: #fff9db;">
-                            <button onclick="navigator.clipboard.writeText('{d_vwap}');" 
-                                    style="padding: 2px 4px; background-color: #ffe066; color: #000; border: 1px solid #fcc419; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
-                                📋 {d_vwap:,}
-                            </button>
-                            <div style="font-size: 10px; color: {'#d32f2f' if d_disp > 0 else '#1976d2'}; font-weight: bold;">({d_disp:+.1f}%)</div>
-                            <div style="font-size: 9px; color: #1c7ed6; margin-top:2px;">🎯목표: {d_target:,}</div>
-                            <div style="font-size: 9px; color: #2b8a3e;">🛒매수: ~{d_buy_max:,}</div>
-                            <div style="font-size: 9px; color: #c92a2a;">🛑손절: {d_stop:,}</div>
-                        </td>
-                        
-                        <!-- 주봉 가이드라인 -->
-                        <td style="text-align: center; background-color: #fff3bf;">
-                            <button onclick="navigator.clipboard.writeText('{w_vwap}');" 
-                                    style="padding: 2px 4px; background-color: #ffd43b; color: #000; border: 1px solid #fab005; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
-                                📋 {w_vwap:,}
-                            </button>
-                            <div style="font-size: 10px; color: {'#d32f2f' if w_disp > 0 else '#1976d2'}; font-weight: bold;">({w_disp:+.1f}%)</div>
-                            <div style="font-size: 9px; color: #1c7ed6; margin-top:2px;">🎯목표: {w_target:,}</div>
-                            <div style="font-size: 9px; color: #2b8a3e;">🛒매수: ~{w_buy_max:,}</div>
-                            <div style="font-size: 9px; color: #c92a2a;">🛑손절: {w_stop:,}</div>
-                        </td>
-
-                        <!-- 월봉 가이드라인 -->
-                        <td style="text-align: center; background-color: #ffec99;">
-                            <button onclick="navigator.clipboard.writeText('{m_vwap}');" 
-                                    style="padding: 2px 4px; background-color: #fcc419; color: #000; border: 1px solid #f59f00; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
-                                📋 {m_vwap:,}
-                            </button>
-                            <div style="font-size: 10px; color: {'#d32f2f' if m_disp > 0 else '#1976d2'}; font-weight: bold;">({m_disp:+.1f}%)</div>
-                            <div style="font-size: 9px; color: #1c7ed6; margin-top:2px;">🎯목표: {m_target:,}</div>
-                            <div style="font-size: 9px; color: #2b8a3e;">🛒매수: ~{m_buy_max:,}</div>
-                            <div style="font-size: 9px; color: #c92a2a;">🛑손절: {m_stop:,}</div>
-                        </td>
-
-                        <!-- 3분봉 가이드라인 -->
-                        <td style="text-align: center; background-color: #e7f5ff;">
-                            <button onclick="navigator.clipboard.writeText('{m3_vwap}');" 
-                                    style="padding: 2px 4px; background-color: #a5d8ff; color: #000; border: 1px solid #74c0fc; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 11px; font-weight: bold;">
-                                📋 {m3_vwap:,}
-                            </button>
-                            <div style="font-size: 10px; color: {'#d32f2f' if m3_disp > 0 else '#1976d2'}; font-weight: bold;">({m3_disp:+.1f}%)</div>
-                            <div style="font-size: 9px; color: #1c7ed6; margin-top:2px;">🎯목표: {m3_target:,}</div>
-                            <div style="font-size: 9px; color: #2b8a3e;">🛒매수: ~{m3_buy_max:,}</div>
-                            <div style="font-size: 9px; color: #c92a2a;">🛑손절: {m3_stop:,}</div>
+                            <div style="font-size: 11px; font-weight: bold; color: #111;">📋 평단: {d_vwap:,}원 ({d_disp:+.1f}%)</div>
+                            <div style="font-size: 9px; color: #1c7ed6; margin-top:2px;">🎯 목표: {d_target:,}원</div>
+                            <div style="font-size: 9px; color: #2b8a3e;">🛒 매수: ~{d_buy_max:,}원</div>
+                            <div style="font-size: 9px; color: #c92a2a;">🛑 1차 손절: {d_stop:,}원</div>
+                            <div style="font-size: 9px; color: #d6336c; font-weight: bold; background-color: #ffe3e3; border-radius: 3px; margin-top:2px; padding: 1px;">🚨 절대사수 손절: {d_abs_stop:,}원</div>
                         </td>
                     </tr>
                     """
 
                 full_table_html = f"""
-                <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin-bottom: 25px;">
-                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; min-width: 1050px;">
+                <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; font-family: sans-serif; margin-bottom: 25px;">
+                    <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
                         <thead>
                             <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; color: #555; font-size: 11px; height: 38px;">
                                 <th style="text-align: center; width: 30px;">순위</th>
@@ -669,11 +486,7 @@ with main_tab2:
                                 <th style="text-align: center; width: 95px;">실적(영업이익)</th>
                                 <th style="text-align: right; padding-right: 5px; width: 65px;">현재가</th>
                                 <th style="text-align: right; padding-right: 5px; width: 60px;">전일대비</th>
-                                <th style="text-align: right; padding-right: 5px; width: 65px;">거래대금</th>
-                                <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 전략 가이드</th>
-                                <th style="text-align: center; background-color: #fff3bf; color: #d9480f;">주봉 전략 가이드</th>
-                                <th style="text-align: center; background-color: #ffec99; color: #d9480f;">월봉 전략 가이드</th>
-                                <th style="text-align: center; background-color: #e7f5ff; color: #1864ab;">3분봉 전략 가이드</th>
+                                <th style="text-align: center; background-color: #fff9db; color: #d9480f;">일봉 상세 전략 및 🚨 절대사수 손절가</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -683,7 +496,7 @@ with main_tab2:
                 </div>
                 """
 
-                calc_height = max(180, len(stocks_list) * 78 + 60)
+                calc_height = max(180, len(stocks_list) * 85 + 60)
                 components.html(
                     full_table_html, height=calc_height, scrolling=True
                 )
