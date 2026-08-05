@@ -11,7 +11,6 @@ col1, col2 = st.columns(2)
 with col1:
     code = st.text_input("종목코드 (6자리)", "005930")
 with col2:
-    # requested 주기 전체 옵션 (0분봉은 최소 단위인 1분봉으로 대체 적용)
     timeframe = st.selectbox(
         "차트 주기 선택",
         [
@@ -50,21 +49,28 @@ if st.button("차트 그리기"):
         if timeframe == "일봉":
             df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "d")
         elif timeframe == "주봉":
-            df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "w")
+            # 일봉 데이터를 받아와 주 단위(W-MON)로 직접 안전하게 리샘플링
+            df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "d")
+            if not df.empty:
+                df = df.resample("W-MON").agg(
+                    {
+                        "시가": "first",
+                        "고가": "max",
+                        "저가": "min",
+                        "종가": "last",
+                        "거래량": "sum",
+                    }
+                )
+                df = df.dropna()
         elif timeframe == "월봉":
             df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
         else:
-            # 1분봉 데이터 수집
+            # 분봉 처리
             df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
 
             if not df.empty:
-                # 선택한 주기 분 단위 파싱 (예: "90분봉" -> "90T")
                 minutes = timeframe.replace("분봉", "") + "T"
-
-                if minutes == "1T":
-                    # 1분봉은 리샘플링 없이 그대로 활용
-                    pass
-                else:
+                if minutes != "1T":
                     df = df.resample(minutes).agg(
                         {
                             "시가": "first",
@@ -81,11 +87,10 @@ if st.button("차트 그리기"):
             "선택한 날짜에 거래 데이터가 없습니다. 주말/휴일이거나 장 개장 전인지 확인해주세요."
         )
     else:
-        # 세력 평단(VWAP) 계산: 누적(종가 * 거래량) / 누적 거래량
+        # 세력 평단(VWAP) 계산
         df["TPV"] = df["종가"] * df["거래량"]
         cum_volume = df["거래량"].cumsum()
 
-        # 거래량이 0인 구간 예외 처리
         df["세력평단"] = df["TPV"].cumsum() / cum_volume.replace(0, pd.NA)
         df["세력평단"] = df["세력평단"].ffill()
 
