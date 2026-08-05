@@ -23,17 +23,6 @@ def get_stock_name(code):
         return code
 
 
-# 세력평단(VWAP) 계산 함수
-def calc_vwap(df):
-    if df is None or df.empty:
-        return 0
-    df["TPV"] = df["종가"] * df["거래량"]
-    cum_vol = df["거래량"].cumsum()
-    vwap_series = df["TPV"].cumsum() / cum_vol.replace(0, pd.NA)
-    vwap_series = vwap_series.ffill()
-    return int(vwap_series.iloc[-1]) if not vwap_series.empty else 0
-
-
 # ---------------------------------------------------------
 # TAB 1: 세력 평단가(VWAP) 차트
 # ---------------------------------------------------------
@@ -365,44 +354,21 @@ with main_tab2:
                 key="sort_filter_option",
             )
 
-            # DataFrame 데이터 가공
-            df_theme = pd.DataFrame(
-                stocks_list,
-                columns=[
-                    "종목명",
-                    "종목코드",
-                    "현재가",
-                    "전일대비(%)",
-                    "거래량",
-                    "거래대금(백만)",
-                    "시가총액(억)",
-                    "일봉세력평단",
-                    "3분봉세력평단",
-                ],
-            )
-
+            # 리스트 직접 루프 처리 (에러 원인 정밀 해결)
             if sort_option == "거래대금 상위":
-                df_theme = df_theme.sort_values(
-                    by="거래대금(백만)", ascending=False
-                )
+                stocks_list = sorted(stocks_list, key=lambda x: x[5], reverse=True)
             elif sort_option == "상승 TOP":
-                df_theme = df_theme.sort_values(
-                    by="전일대비(%)", ascending=False
-                )
+                stocks_list = sorted(stocks_list, key=lambda x: x[3], reverse=True)
 
-            # 커스텀 HTML 기반 종목 리스트 테이블 출력 (일봉 / 3분봉 세력평단 수치 및 개별 복사 버튼 포함)
             table_rows_html = ""
-            for idx, row in enumerate(df_theme.itertuples(), start=1):
-                stock_name_val = row.종목명
-                stock_code_val = str(row.종목코드).zfill(6)
-                price_val = f"{row.현재가:,}원"
-                change_val = (
-                    f"+{row.전일대비:.2f}%"
-                    if row._4 > 0
-                    else f"{row.전일대비:.2f}%"
-                )
-                day_vwap_val = row.일봉세력평단
-                min3_vwap_val = row._9
+            for idx, item in enumerate(stocks_list, start=1):
+                stock_name_val = item[0]
+                stock_code_val = str(item[1]).zfill(6)
+                price_val = f"{item[2]:,}원"
+                change_pct = item[3]
+                change_val = f"+{change_pct:.2f}%" if change_pct > 0 else f"{change_pct:.2f}%"
+                day_vwap_val = item[7]
+                min3_vwap_val = item[8]
 
                 table_rows_html += f"""
                 <tr style="border-bottom: 1px solid #f0f0f0; height: 45px; font-size: 13px;">
@@ -452,5 +418,5 @@ with main_tab2:
             </div>
             """
 
-            calc_height = max(180, len(df_theme) * 50 + 60)
+            calc_height = max(180, len(stocks_list) * 50 + 60)
             components.html(full_table_html, height=calc_height, scrolling=True)
