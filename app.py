@@ -300,7 +300,7 @@ with main_tab1:
         )
 
     # ---------------------------------------------------------
-    # 📌 요청하신 하늘색 박스 위치(조회 기간 설정 바로 위)에 배치된 HTS 수급 분석 패널
+    # 📌 항목과 수치를 가깝게 밀착시킨 HTS 수급 분석 패널
     # ---------------------------------------------------------
     s_date_dummy = "20240101"
     e_date_dummy = datetime.datetime.now().strftime("%Y%m%d")
@@ -331,37 +331,37 @@ with main_tab1:
         <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 8px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px;">
             📊 HTS 기준 [{stock_name}] 수급 및 평단 분석 결과 <span style="font-size:11px; color:#666; font-weight:normal;">(글자 클릭 시 확인창 없이 즉시 복사)</span>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 10px; font-size: 12px;">
-            <div style="display: flex; justify-content: space-between; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold;">당일 전체 거래량:</span>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 8px; font-size: 12px;">
+            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                <span style="color: #555; font-weight: bold; white-space: nowrap;">당일 전체 거래량:</span>
                 <span onclick="navigator.clipboard.writeText('{t_vol}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{t_vol:,} 주</span>
             </div>
-            <div style="display: flex; justify-content: space-between; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold;">누적 매수 증가량:</span>
+            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                <span style="color: #555; font-weight: bold; white-space: nowrap;">누적 매수 증가량:</span>
                 <span onclick="navigator.clipboard.writeText('{c_buy}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{c_buy:,} 주</span>
             </div>
-            <div style="display: flex; justify-content: space-between; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold;">순매수 수량(증감):</span>
+            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                <span style="color: #555; font-weight: bold; white-space: nowrap;">순매수 수량(증감):</span>
                 <span onclick="navigator.clipboard.writeText('{n_qty}');" style="font-weight: bold; color: {'#d32f2f' if n_qty>=0 else '#7048e8'}; cursor: pointer;" title="클릭 시 즉시 복사">{n_qty:,} 주</span>
             </div>
-            <div style="display: flex; justify-content: space-between; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold;">거래량 대비 매수 비율:</span>
+            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                <span style="color: #555; font-weight: bold; white-space: nowrap;">거래량 대비 매수 비율:</span>
                 <span onclick="navigator.clipboard.writeText('{r_buy:.2f}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{r_buy:.2f} %</span>
             </div>
-            <div style="display: flex; justify-content: space-between; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold;">거래량 대비 순매수 비율:</span>
+            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                <span style="color: #555; font-weight: bold; white-space: nowrap;">거래량 대비 순매수 비율:</span>
                 <span onclick="navigator.clipboard.writeText('{r_net:.2f}');" style="font-weight: bold; color: {'#d32f2f' if r_net>=0 else '#e03131'}; cursor: pointer;" title="클릭 시 즉시 복사">{r_net:.2f} %</span>
             </div>
-            <div style="display: flex; justify-content: space-between; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold;">전체 거래량 평단:</span>
+            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                <span style="color: #555; font-weight: bold; white-space: nowrap;">전체 거래량 평단:</span>
                 <span onclick="navigator.clipboard.writeText('{v_val}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{v_val:,} 원</span>
             </div>
-            <div style="display: flex; justify-content: space-between; padding: 5px 8px; background: #fff9db; border: 1px solid #ffe066; border-radius: 4px;">
-                <span style="color: #d9480f; font-weight: bold;">세력 매수 평단:</span>
+            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 5px 8px; background: #fff9db; border: 1px solid #ffe066; border-radius: 4px;">
+                <span style="color: #d9480f; font-weight: bold; white-space: nowrap;">세력 매수 평단:</span>
                 <span onclick="navigator.clipboard.writeText('{b_vwap}');" style="font-weight: bold; color: #d32f2f; cursor: pointer;" title="클릭 시 즉시 복사">{b_vwap:,} 원</span>
             </div>
-            <div style="display: flex; justify-content: space-between; padding: 5px 8px; background: #e7f5ff; border: 1px solid #74c0fc; border-radius: 4px;">
-                <span style="color: #1864ab; font-weight: bold;">세력 매도 평단:</span>
+            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 8px; padding: 5px 8px; background: #e7f5ff; border: 1px solid #74c0fc; border-radius: 4px;">
+                <span style="color: #1864ab; font-weight: bold; white-space: nowrap;">세력 매도 평단:</span>
                 <span onclick="navigator.clipboard.writeText('{s_vwap}');" style="font-weight: bold; color: #1971c2; cursor: pointer;" title="클릭 시 즉시 복사">{s_vwap:,} 원</span>
             </div>
         </div>
