@@ -442,35 +442,35 @@ with main_tab1:
 
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
-        # 📌 수치 클릭 시 클립보드 즉시 복사 적용 HTML 컴포넌트
+        # 📌 수치 클릭 시 확인창 없이 즉시 복사 적용 HTML 컴포넌트 (alert 제거 완료)
         metrics_click_copy_html = f"""
         <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 5px;">
-            <div onclick="navigator.clipboard.writeText('{last_close}'); alert('현재가 ({last_close:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+            <div onclick="navigator.clipboard.writeText('{last_close}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#666; font-weight:bold;">현재가 (클릭 복사)</div>
                 <div style="font-size:15px; font-weight:bold; color:#111; margin-top:2px;">{last_close:,}원</div>
             </div>
             
-            <div onclick="navigator.clipboard.writeText('{last_vwap}'); alert('평단가 ({last_vwap:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+            <div onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#1a73e8; font-weight:bold;">📌 {selected_timeframe} 평단가 (클릭 복사)</div>
                 <div style="font-size:15px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원 <span style="font-size:11px; font-weight:normal; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.1f}%)</span></div>
             </div>
 
-            <div onclick="navigator.clipboard.writeText('{target_1st}'); alert('1차목표가 ({target_1st:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+            <div onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 1차목표(+5%) (클릭 복사)</div>
                 <div style="font-size:15px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_1st:,}원</div>
             </div>
 
-            <div onclick="navigator.clipboard.writeText('{target_2nd}'); alert('2차목표가 ({target_2nd:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+            <div onclick="navigator.clipboard.writeText('{target_2nd}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#7048e8; font-weight:bold;">🚀 2차목표(+10%) (클릭 복사)</div>
                 <div style="font-size:15px; font-weight:bold; color:#7048e8; margin-top:2px;">{target_2nd:,}원</div>
             </div>
 
-            <div onclick="navigator.clipboard.writeText('{stop_loss}'); alert('1차손절가 ({stop_loss:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+            <div onclick="navigator.clipboard.writeText('{stop_loss}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#f59f00; font-weight:bold;">🛑 1차손절(-2%) (클릭 복사)</div>
                 <div style="font-size:15px; font-weight:bold; color:#f59f00; margin-top:2px;">{stop_loss:,}원</div>
             </div>
 
-            <div onclick="navigator.clipboard.writeText('{absolute_stop_loss}'); alert('절대손절가 ({absolute_stop_loss:,}원) 복사 완료!');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 즉시 복사">
+            <div onclick="navigator.clipboard.writeText('{absolute_stop_loss}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 14px; min-width:140px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#e03131; font-weight:bold;">🚨 절대손절(-4%) (클릭 복사)</div>
                 <div style="font-size:15px; font-weight:bold; color:#e03131; margin-top:2px;">{absolute_stop_loss:,}원</div>
             </div>
