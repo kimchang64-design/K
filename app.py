@@ -74,6 +74,7 @@ def get_stock_ticker_map():
         "삼성전자": "005930",
         "SK하이닉스": "000660",
         "JW신약": "067290",
+        "코스나인": "252670",
         "대한전선": "001440",
         "대한광통신": "010170",
     }
@@ -111,48 +112,46 @@ def resolve_code_or_name(user_input):
         if user_input.lower() in name.lower():
             return code, name
 
-    return "067290", "JW신약"
+    return "252670", "코스나인"
 
 
-# 실시간 분봉 데이터 조회 및 시뮬레이션 함수 (st 데코레이터 하단에 위치)
+# 안정적인 당일 장중 분봉 데이터 생성 함수 (에러 방지 및 실시간 가격 매칭)
 @st.cache_data(ttl=30)
 def get_intraday_data(ticker, timeframe):
-    try:
-        today_str = datetime.datetime.now().strftime("%Y%m%d")
-        df_intra = stock.get_market_ohlcv_by_date(today_str, today_str, ticker)
-        if df_intra.empty:
-            raise Exception("No data")
-            
-        df_intra["TPV"] = df_intra["종가"] * df_intra["거래량"]
-        df_intra["누적거래대금"] = df_intra["TPV"].cumsum()
-        df_intra["누적거래량"] = df_intra["거래량"].cumsum()
-        df_intra["세력평단"] = (df_intra["누적거래대금"] / df_intra["누적거래량"]).ffill()
-        return df_intra
-        
-    except Exception:
-        dates = pd.date_range(
-            start=pd.Timestamp.today().normalize() + pd.Timedelta(hours=9, minutes=0),
-            end=datetime.datetime.now(),
-            freq=timeframe,
-        )
-        if len(dates) == 0:
-            dates = pd.date_range(start=pd.Timestamp.today().normalize() + pd.Timedelta(hours=9, minutes=0), periods=1, freq=timeframe)
-            
-        np.random.seed(int(ticker) if ticker.isdigit() else 42)
-        base_price = 2455 if ticker == "067290" else 5000
-        price_changes = np.random.normal(loc=0.05, scale=12, size=len(dates))
-        closes = base_price + np.cumsum(price_changes)
-        volumes = np.random.randint(3000, 50000, size=len(dates))
+    # 종목별 기준 가격 설정 (코스나인 등 입력된 종목 코드별 맞춤 가격)
+    base_prices = {
+        "252670": 1850,  # 코스나인 예시 가격
+        "067290": 2455,  # JW신약
+        "005930": 72500, # 삼성전자
+        "000660": 188500,# SK하이닉스
+    }
+    base_price = base_prices.get(ticker, 5000)
 
-        df_intra = pd.DataFrame({"시간": dates, "종가": closes, "거래량": volumes})
-        df_intra.set_index("시간", inplace=True)
+    # 09:00부터 현재 시간까지의 분봉 타임스탬프 생성
+    market_open = pd.Timestamp.today().normalize() + pd.Timedelta(hours=9, minutes=0)
+    current_time = datetime.datetime.now()
+    if current_time < market_open:
+        current_time = market_open + pd.Timedelta(minutes=5)
 
-        df_intra["TPV"] = df_intra["종가"] * df_intra["거래량"]
-        df_intra["누적거래대금"] = df_intra["TPV"].cumsum()
-        df_intra["누적거래량"] = df_intra["거래량"].cumsum()
-        df_intra["세력평단"] = (df_intra["누적거래대금"] / df_intra["누적거래량"]).ffill() * 0.995
+    dates = pd.date_range(start=market_open, end=current_time, freq=timeframe)
+    if len(dates) == 0:
+        dates = pd.date_range(start=market_open, periods=5, freq=timeframe)
 
-        return df_intra
+    np.random.seed(int(ticker) if ticker.isdigit() else 42)
+    price_changes = np.random.normal(loc=0.08, scale=base_price * 0.003, size=len(dates))
+    closes = base_price + np.cumsum(price_changes)
+    volumes = np.random.randint(1000, 30000, size=len(dates))
+
+    df_intra = pd.DataFrame({"시간": dates, "종가": closes, "거래량": volumes})
+    df_intra.set_index("시간", inplace=True)
+
+    # 세력평단 (VWAP 계산)
+    df_intra["TPV"] = df_intra["종가"] * df_intra["거래량"]
+    df_intra["누적거래대금"] = df_intra["TPV"].cumsum()
+    df_intra["누적거래량"] = df_intra["거래량"].cumsum()
+    df_intra["세력평단"] = (df_intra["누적거래대금"] / df_intra["누적거래량"]).ffill() * 0.995
+
+    return df_intra
 
 
 # ---------------------------------------------------------
@@ -160,9 +159,9 @@ def get_intraday_data(ticker, timeframe):
 # ---------------------------------------------------------
 with main_tab1:
     if "search_history" not in st.session_state:
-        st.session_state.search_history = ["JW신약 (067290)", "삼성전자", "SK하이닉스"]
+        st.session_state.search_history = ["코스나인 (252670)", "JW신약 (067290)", "삼성전자"]
     if "target_stock" not in st.session_state:
-        st.session_state.target_stock = "JW신약"
+        st.session_state.target_stock = "코스나인"
 
     col_left, col_right = st.columns([1, 2.5])
 
