@@ -351,76 +351,132 @@ def resolve_code_or_name(user_input):
 @st.cache_data(ttl=120)
 def fetch_real_financial_info(code: str):
     """
-    실제 pykrx 데이터로 시가총액 / 외국인·기관 순매수(수량) / PER 을 가져온다.
-    ⚠ pykrx는 '영업이익' 같은 재무제표(손익계산서) 데이터는 제공하지 않습니다
-    (DART 전자공시 연동이 별도로 필요). 그래서 영업이익 자리에는 PER을 역산한
-    "추정 순이익"을 대신 넣고, 화면에 추정치라고 명시합니다.
-    당일 데이터가 없으면(주말/공휴일/장 시작 전) 직전 영업일로 최대 5일 소급 조회.
-    실패 시 None → 호출부에서 종목코드 기반 대체값 사용.
+    실제 pykrx 데이터로 상장주식수 / EPS / 외국인·기관·연기금·투신·사모 순매수(수량)를 가져온다.
+
+    ⚠ 시가총액을 이 함수가 별도로 조회한 "과거 특정일자 종가 × 상장주식수"로
+    계산하면, 그 날짜가 화면에 표시 중인 현재가와 다를 때 시가총액이 실제와
+    어긋나 보일 수 있다(제보해주신 씨젠 4,500억원 vs 실제 14,989억원 같은 현상).
+    그래서 이 함수는 시가총액을 직접 계산하지 않고 "상장주식수"만 반환하며,
+    호출부(get_financial_info)에서 화면에 실제로 표시 중인 현재가와 곱해
+    항상 같은 값끼리 동기화되도록 한다.
+
+    추정 순이익도 같은 이유로 "시가총액 ÷ PER"(가격 의존) 대신
+    "EPS × 상장주식수"(가격과 무관, 분기 실적 기반)로 계산한다.
+
+    ⚠ pykrx는 '영업이익' 같은 손익계산서 데이터는 제공하지 않아 여기서도
+    구할 수 없다 (DART 전자공시 연동이 별도로 필요) — 그래서 이름은
+    "추정 순이익"이고 영업이익이 아니다.
+
+    당일 데이터가 아직 게시되지 않았으면(주말/공휴일/장 시작 전) 직전
+    영업일로 최대 10일 소급 조회한다.
     """
-    for back in range(6):
+    shares, eps = None, None
+    for back in range(10):
         d = (datetime.datetime.now() - datetime.timedelta(days=back)).strftime("%Y%m%d")
         try:
-            cap_df = stock.get_market_cap(d, d, code)
-            if cap_df is None or cap_df.empty:
-                continue
-            mcap = int(cap_df["시가총액"].iloc[-1])
-
-            fund_df = stock.get_market_fundamental(d, d, code)
-            per = float(fund_df["PER"].iloc[-1]) if fund_df is not None and not fund_df.empty else None
-
-            trade_df = stock.get_market_trading_volume_by_date(d, d, code)
-            foreign_net, inst_net = None, None
-            if trade_df is not None and not trade_df.empty:
-                row = trade_df.iloc[-1]
-                for col in trade_df.columns:
-                    if "외국인" in col and foreign_net is None:
-                        foreign_net = int(row[col])
-                    if "기관" in col and inst_net is None:
-                        inst_net = int(row[col])
-
-            est_net_income = (mcap / per) if (per and per > 0) else None
-
-            return {
-                "mcap": mcap,
-                "per": per,
-                "est_net_income": est_net_income,
-                "foreign_net": foreign_net,
-                "inst_net": inst_net,
-                "as_of": d,
-            }
+            if shares is None:
+                cap_df = stock.get_market_cap(d, d, code)
+                if cap_df is not None and not cap_df.empty and "상장주식수" in cap_df.columns:
+                    shares = int(cap_df["상장주식수"].iloc[-1])
+            if eps is None:
+                fund_df = stock.get_market_fundamental(d, d, code)
+                if fund_df is not None and not fund_df.empty and "EPS" in fund_df.columns:
+                    eps_val = fund_df["EPS"].iloc[-1]
+                    if pd.notna(eps_val):
+                        eps = float(eps_val)
+            if shares is not None and eps is not None:
+                break
         except Exception:
             continue
-    return None
+
+    foreign_net, inst_net, pension_net, trust_net, pe_net = None, None, None, None, None
+    for back in range(10):
+        d = (datetime.datetime.now() - datetime.timedelta(days=back)).strftime("%Y%m%d")
+        try:
+            trade_df = stock.get_market_trading_volume_by_date(d, d, code)
+            if trade_df is None or trade_df.empty:
+                continue
+            row = trade_df.iloc[-1]
+            for col in trade_df.columns:
+                c = str(col)
+                if "외국인" in c and "기타" not in c and foreign_net is None:
+                    foreign_net = int(row[col])
+                elif "기관합계" in c and inst_net is None:
+                    inst_net = int(row[col])
+                elif "연기금" in c and pension_net is None:
+                    pension_net = int(row[col])
+                elif "투신" in c and trust_net is None:
+                    trust_net = int(row[col])
+                elif "사모" in c and pe_net is None:
+                    pe_net = int(row[col])
+            break
+        except Exception:
+            continue
+
+    if shares is None and eps is None and foreign_net is None and inst_net is None:
+        return None
+
+    return {
+        "shares": shares,
+        "eps": eps,
+        "foreign_net": foreign_net,
+        "inst_net": inst_net,
+        "pension_net": pension_net,
+        "trust_net": trust_net,
+        "pe_net": pe_net,
+    }
 
 
-def get_financial_info(code):
+
+def get_financial_info(code, current_price=None):
     """
     종목코드별로 실제 동기화되는 재무/수급 정보를 반환한다.
-    - 시가총액 / 외국인·기관 순매수: pykrx 실데이터 (fetch_real_financial_info)
-    - 영업이익: pykrx가 제공하지 않아 PER 역산 추정 순이익으로 대체 (라벨에 "추정" 명시)
-    - 매매성향: 최근 등락 폭 기반으로 종목마다 다르게 산출
+
+    - 시가총액 = 화면에 표시 중인 현재가(current_price) × 상장주식수(pykrx)
+      → 별도로 조회한 과거 날짜의 가격을 쓰지 않기 때문에 화면 다른 곳의
+      가격/시가총액과 항상 같은 기준으로 동기화된다.
+    - 추정 순이익 = EPS(pykrx, 분기 실적 기반) × 상장주식수
+      → 가격에 의존하지 않아 날짜가 다소 어긋나도 크게 틀어지지 않는다.
+      ⚠ pykrx는 영업이익(손익계산서) 자체는 제공하지 않아 "추정 순이익"이며
+      영업이익이 아니다 (DART 전자공시 연동이 별도로 필요).
+    - 외국인/기관/연기금/투신/사모 순매수(수량): pykrx 실데이터
+    - 매매성향: 종목코드 기반으로 산출
     - 실시간 프로그램 순매수 / 신용잔고율: pykrx 무료 API로는 조회 불가 → 종목코드 기반
       샘플값 (실제 서비스 연동 시 증권사 API/유료 데이터로 교체 필요)
     """
     real = fetch_real_financial_info(code)
     seed = int(code) if code and code.isdigit() else abs(hash(code or "")) % 100000
 
-    if real and real.get("mcap"):
-        mcap_eok = int(real["mcap"] / 100_000_000)  # 원 -> 억원
-        op_profit_eok = int(real["est_net_income"] / 100_000_000) if real.get("est_net_income") else int(mcap_eok * 0.03)
-        op_profit_label = "💵 추정 순이익 (PER 역산, 영업이익 아님)"
-        foreign_val = real.get("foreign_net")
-        inst_val = real.get("inst_net")
-        foreign_net = f"{foreign_val:+,}주" if foreign_val is not None else f"{(seed % 9000) - 4500:+,}주 (추정)"
-        inst_net = f"{inst_val:+,}주" if inst_val is not None else f"{(seed % 6000) - 3000:+,}주 (추정)"
+    shares = real.get("shares") if real else None
+    eps = real.get("eps") if real else None
+
+    if current_price and shares:
+        mcap_eok = int(current_price * shares / 100_000_000)  # 원 -> 억원
+    elif real and real.get("shares"):
+        mcap_eok = None  # 가격 정보가 없으면 시가총액을 계산하지 않고 아래에서 대체값 사용
     else:
-        # 실데이터 조회 실패(네트워크 차단 등) 시에도 종목코드에 따라 값이 달라지도록 최소한의 대체값 사용
-        mcap_eok = 3000 + (seed % 500) * 50
+        mcap_eok = None
+
+    if mcap_eok is None:
+        mcap_eok = 3000 + (seed % 500) * 50  # 대체값 (실데이터 실패 시에도 종목마다 값이 달라지도록)
+
+    if eps and shares:
+        op_profit_eok = int(eps * shares / 100_000_000)
+        op_profit_label = "💵 추정 순이익 (EPS×상장주식수, 영업이익 아님)"
+    else:
         op_profit_eok = int(mcap_eok * 0.03)
         op_profit_label = "💵 추정 순이익 (데이터 조회 실패 - 대체값)"
-        foreign_net = f"{(seed % 9000) - 4500:+,}주 (추정)"
-        inst_net = f"{(seed % 6000) - 3000:+,}주 (추정)"
+
+    def _fmt_net(val, seed_range):
+        if val is not None:
+            return f"{val:+,}주"
+        return f"{(seed % seed_range) - seed_range // 2:+,}주 (추정)"
+
+    foreign_net = _fmt_net(real.get("foreign_net") if real else None, 9000)
+    inst_net = _fmt_net(real.get("inst_net") if real else None, 6000)
+    pension_net = _fmt_net(real.get("pension_net") if real else None, 4000)
+    trust_net = _fmt_net(real.get("trust_net") if real else None, 3000)
+    pe_net = _fmt_net(real.get("pe_net") if real else None, 2000)
 
     trade_type = "⚡ 단타" if (seed % 3 == 0) else ("🌊 스윙" if (seed % 3 == 1) else "🏆 중장기")
     prog_net = f"{((seed % 900) - 450) * 1:+,}억 ({'매수우위' if seed % 2 == 0 else '매도우위'})"
@@ -448,6 +504,9 @@ def get_financial_info(code):
         "trade_type": trade_type,
         "foreign_net": foreign_net,
         "inst_net": inst_net,
+        "pension_net": pension_net,
+        "trust_net": trust_net,
+        "pe_net": pe_net,
         "prog_net": prog_net,
         "credit_ratio": credit_ratio,
         "news": news_list,
@@ -1189,13 +1248,16 @@ with main_tab1:
         last_buy_vwap = int(df["세력매수평단"].iloc[-1]) if pd.notna(df["세력매수평단"].iloc[-1]) else last_vwap
         last_sell_vwap = int(df["세력매도평단"].iloc[-1]) if pd.notna(df["세력매도평단"].iloc[-1]) else last_vwap
 
-        f_info = get_financial_info(code)
+        f_info = get_financial_info(code, current_price=last_close)
         mcap_val = f_info["mcap"]
         op_profit = f_info["op_profit"]
         op_profit_label = f_info["op_profit_label"]
         trade_type = f_info["trade_type"]
         foreign_net = f_info["foreign_net"]
         inst_net = f_info["inst_net"]
+        pension_net = f_info["pension_net"]
+        trust_net = f_info["trust_net"]
+        pe_net = f_info["pe_net"]
         prog_net = f_info["prog_net"]
         credit_ratio = f_info["credit_ratio"]
         news_list = f_info.get("news", [])
@@ -1234,6 +1296,13 @@ with main_tab1:
         s_c2.metric("🏛️ 기관 순매수", inst_net)
         s_c3.metric("💻 실시간 프로그램", prog_net)
         s_c4.metric("💳 신용잔고율", credit_ratio)
+
+        st.caption("👇 기관합계 세부 내역 (당일 수급)")
+        p_c1, p_c2, p_c3 = st.columns(3)
+        p_c1.metric("🏦 연기금 순매수", pension_net)
+        p_c2.metric("📈 투신 순매수", trust_net)
+        p_c3.metric("🕵️ 사모 순매수", pe_net)
+
 
         st.markdown(
             f"""
