@@ -115,19 +115,16 @@ def resolve_code_or_name(user_input):
     return "252670", "코스나인"
 
 
-# 안정적인 당일 장중 분봉 데이터 생성 함수 (에러 방지 및 실시간 가격 매칭)
 @st.cache_data(ttl=30)
 def get_intraday_data(ticker, timeframe):
-    # 종목별 기준 가격 설정 (코스나인 등 입력된 종목 코드별 맞춤 가격)
     base_prices = {
-        "252670": 1850,  # 코스나인 예시 가격
-        "067290": 2455,  # JW신약
-        "005930": 72500, # 삼성전자
-        "000660": 188500,# SK하이닉스
+        "252670": 1850,
+        "067290": 2455,
+        "005930": 72500,
+        "000660": 188500,
     }
     base_price = base_prices.get(ticker, 5000)
 
-    # 09:00부터 현재 시간까지의 분봉 타임스탬프 생성
     market_open = pd.Timestamp.today().normalize() + pd.Timedelta(hours=9, minutes=0)
     current_time = datetime.datetime.now()
     if current_time < market_open:
@@ -145,7 +142,6 @@ def get_intraday_data(ticker, timeframe):
     df_intra = pd.DataFrame({"시간": dates, "종가": closes, "거래량": volumes})
     df_intra.set_index("시간", inplace=True)
 
-    # 세력평단 (VWAP 계산)
     df_intra["TPV"] = df_intra["종가"] * df_intra["거래량"]
     df_intra["누적거래대금"] = df_intra["TPV"].cumsum()
     df_intra["누적거래량"] = df_intra["거래량"].cumsum()
@@ -248,7 +244,10 @@ with main_tab1:
         template="plotly_white",
         height=450,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        yaxis=dict(title=""),
+        yaxis=dict(
+            title="",
+            tickformat=",d"  # 천 단위 콤마 및 K 표기 제거 (7000 형식으로 출력)
+        ),
     )
     fig.update_xaxes(nticks=10, tickangle=0)
 
