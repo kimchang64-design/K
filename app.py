@@ -318,20 +318,22 @@ STUDY_MAPPING_HTML_TEMPLATE = """
   const D = __DATA_JSON__;
   const N = D.close.length;
 
-  function cumAvgFrom(startIdx) {
+  function cumAvgFrom(startIdx, volArr, origArr) {
       const out = new Array(N).fill(null);
       let cumTPV = 0, cumVol = 0;
       for (let i = startIdx; i < N; i++) {
-          cumTPV += D.close[i] * (D.volume[i] || 0);
-          cumVol += (D.volume[i] || 0);
-          out[i] = cumVol > 0 ? cumTPV / cumVol : D.close[i];
+          cumTPV += D.close[i] * (volArr[i] || 0);
+          cumVol += (volArr[i] || 0);
+          out[i] = cumVol > 0 ? cumTPV / cumVol : (out[i-1] !== undefined ? out[i-1] : D.close[i]);
       }
-      for (let i = 0; i < startIdx; i++) { out[i] = D.origAvg[i]; }
+      for (let i = 0; i < startIdx; i++) { out[i] = origArr[i]; }
       return out;
   }
 
   let anchorIdx = 0;
   let avgSeries = D.origAvg.slice();
+  let buyAvgSeries = D.origBuyAvg.slice();
+  let sellAvgSeries = D.origSellAvg.slice();
   let padLeft = 5, padRight = 5;
 
   const traceClose = {
@@ -340,9 +342,19 @@ STUDY_MAPPING_HTML_TEMPLATE = """
       hovertemplate: '%{x}<br>종가: %{y:,.0f}원<extra></extra>'
   };
   const traceAvg = {
-      x: D.dates, y: avgSeries, mode: 'lines', name: '세력평단(누적)',
+      x: D.dates, y: avgSeries, mode: 'lines', name: '세력평단(전체)',
       line: { color: '#f08c00', width: 2.6 },
       hovertemplate: '%{x}<br>세력평단: %{y:,.0f}원<extra></extra>'
+  };
+  const traceBuyAvg = {
+      x: D.dates, y: buyAvgSeries, mode: 'lines', name: '세력매수평단',
+      line: { color: '#d32f2f', width: 1.7, dash: 'dashdot' },
+      hovertemplate: '%{x}<br>세력매수평단: %{y:,.0f}원<extra></extra>'
+  };
+  const traceSellAvg = {
+      x: D.dates, y: sellAvgSeries, mode: 'lines', name: '세력매도평단',
+      line: { color: '#1971c2', width: 1.7, dash: 'dashdot' },
+      hovertemplate: '%{x}<br>세력매도평단: %{y:,.0f}원<extra></extra>'
   };
 
   const layout = {
@@ -355,7 +367,7 @@ STUDY_MAPPING_HTML_TEMPLATE = """
       shapes: [],
   };
 
-  Plotly.newPlot('sm_plot', [traceClose, traceAvg], layout, {displaylogo:false, responsive:true});
+  Plotly.newPlot('sm_plot', [traceClose, traceAvg, traceBuyAvg, traceSellAvg], layout, {displaylogo:false, responsive:true});
   const plotDiv = document.getElementById('sm_plot');
 
   function fmt(n) { return Math.round(n).toLocaleString('ko-KR'); }
@@ -370,6 +382,8 @@ STUDY_MAPPING_HTML_TEMPLATE = """
       const lastIdx = N - 1;
       const close_v = D.close[lastIdx];
       const avg_v = avgSeries[lastIdx];
+      const buy_v = buyAvgSeries[lastIdx];
+      const sell_v = sellAvgSeries[lastIdx];
       const disp = ((close_v - avg_v) / avg_v * 100);
       const box = document.getElementById('sm_latest_box');
       box.style.display = 'block';
@@ -378,13 +392,18 @@ STUDY_MAPPING_HTML_TEMPLATE = """
         '<div class="sm-info-title">📍 ' + D.dates[0] + ' ~ ' + D.dates[lastIdx] + '</div>' +
         '<div class="sm-info-row"><span class="sm-info-label">종가</span><span class="sm-info-value" data-copy="' + Math.round(close_v) + '">' + fmt(close_v) + '원</span></div>' +
         '<div class="sm-info-row"><span class="sm-info-label">세력평단</span><span class="sm-info-value" style="color:#f08c00;" data-copy="' + Math.round(avg_v) + '">' + fmt(avg_v) + '원</span></div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">괴리율</span><span class="sm-info-value" style="color:' + (disp>=0?'#d32f2f':'#1971c2') + ';">' + (disp>=0?'+':'') + disp.toFixed(2) + '%</span></div>';
+        '<div class="sm-info-row"><span class="sm-info-label">세력매수평단</span><span class="sm-info-value" style="color:#d32f2f;" data-copy="' + Math.round(buy_v) + '">' + fmt(buy_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">세력매도평단</span><span class="sm-info-value" style="color:#1971c2;" data-copy="' + Math.round(sell_v) + '">' + fmt(sell_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">괴리율(전체평단)</span><span class="sm-info-value" style="color:' + (disp>=0?'#d32f2f':'#1971c2') + ';">' + (disp>=0?'+':'') + disp.toFixed(2) + '%</span></div>' +
+        '<div style="font-size:10px; color:#adb5bd; margin-top:4px;">숫자를 누르면 가격만 복사됩니다 (키움 라인 붙여넣기용)</div>';
       bindCopy(box);
   }
 
   function showAnchorBox(idx) {
       const close_v = D.close[idx];
       const avg_v = avgSeries[idx];
+      const buy_v = buyAvgSeries[idx];
+      const sell_v = sellAvgSeries[idx];
       const disp = ((close_v - avg_v) / avg_v * 100);
       const box = document.getElementById('sm_anchor_box');
       box.style.display = 'block';
@@ -393,13 +412,19 @@ STUDY_MAPPING_HTML_TEMPLATE = """
         '<div class="sm-info-title">📌 ' + D.dates[idx] + ' 기준 (재계산 시작점)</div>' +
         '<div class="sm-info-row"><span class="sm-info-label">종가</span><span class="sm-info-value" data-copy="' + Math.round(close_v) + '">' + fmt(close_v) + '원</span></div>' +
         '<div class="sm-info-row"><span class="sm-info-label">세력평단</span><span class="sm-info-value" style="color:#f08c00;" data-copy="' + Math.round(avg_v) + '">' + fmt(avg_v) + '원</span></div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">괴리율</span><span class="sm-info-value">' + (disp>=0?'+':'') + disp.toFixed(2) + '%</span></div>';
+        '<div class="sm-info-row"><span class="sm-info-label">세력매수평단</span><span class="sm-info-value" style="color:#d32f2f;" data-copy="' + Math.round(buy_v) + '">' + fmt(buy_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">세력매도평단</span><span class="sm-info-value" style="color:#1971c2;" data-copy="' + Math.round(sell_v) + '">' + fmt(sell_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">괴리율(전체평단)</span><span class="sm-info-value">' + (disp>=0?'+':'') + disp.toFixed(2) + '%</span></div>';
       bindCopy(box);
   }
 
   function redraw() {
-      avgSeries = cumAvgFrom(anchorIdx);
+      avgSeries = cumAvgFrom(anchorIdx, D.volume, D.origAvg);
+      buyAvgSeries = cumAvgFrom(anchorIdx, D.buyVolume, D.origBuyAvg);
+      sellAvgSeries = cumAvgFrom(anchorIdx, D.sellVolume, D.origSellAvg);
       Plotly.restyle('sm_plot', {y: [avgSeries]}, [1]);
+      Plotly.restyle('sm_plot', {y: [buyAvgSeries]}, [2]);
+      Plotly.restyle('sm_plot', {y: [sellAvgSeries]}, [3]);
       const shapes = anchorIdx > 0 ? [{
           type: 'line', x0: D.dates[anchorIdx], x1: D.dates[anchorIdx],
           yref: 'paper', y0: 0, y1: 1,
@@ -456,7 +481,9 @@ STUDY_MAPPING_HTML_TEMPLATE = """
       let text = '■ [' + D.stockName + '(' + D.code + ') - ' + D.timeframe + ']\\n' +
                  '• 종가: ' + fmt(D.close[lastIdx]) + '원\\n' +
                  '• 세력평단: ' + fmt(avgSeries[lastIdx]) + '원\\n' +
-                 '• 괴리율: ' + (disp>=0?'+':'') + disp.toFixed(2) + '%';
+                 '• 세력매수평단: ' + fmt(buyAvgSeries[lastIdx]) + '원\\n' +
+                 '• 세력매도평단: ' + fmt(sellAvgSeries[lastIdx]) + '원\\n' +
+                 '• 괴리율(전체평단): ' + (disp>=0?'+':'') + disp.toFixed(2) + '%';
       if (anchorIdx > 0) { text += '\\n• 기준점(' + D.dates[anchorIdx] + ') 이후 재계산됨'; }
       navigator.clipboard.writeText(text);
   };
@@ -485,20 +512,28 @@ def render_study_mapping_chart(df, stock_name, code, selected_timeframe):
     dates = [d.strftime("%Y-%m-%d") for d in df.index]
     close = [float(v) for v in df["종가"]]
     volume = [float(v) for v in df["거래량"]]
+    buy_volume = [float(v) for v in df["매수거래량"]]
+    sell_volume = [float(v) for v in df["매도거래량"]]
     orig_avg = [float(v) if pd.notna(v) else None for v in df["평단가"]]
+    orig_buy_avg = [float(v) if pd.notna(v) else None for v in df["세력매수평단"]]
+    orig_sell_avg = [float(v) if pd.notna(v) else None for v in df["세력매도평단"]]
 
     payload = {
         "dates": dates,
         "close": close,
         "volume": volume,
+        "buyVolume": buy_volume,
+        "sellVolume": sell_volume,
         "origAvg": orig_avg,
+        "origBuyAvg": orig_buy_avg,
+        "origSellAvg": orig_sell_avg,
         "stockName": stock_name,
         "code": code,
         "timeframe": selected_timeframe,
     }
     data_json = json.dumps(payload, ensure_ascii=False)
     html = STUDY_MAPPING_HTML_TEMPLATE.replace("__DATA_JSON__", data_json)
-    components.html(html, height=640, scrolling=False)
+    components.html(html, height=680, scrolling=False)
 
 
 # ---------------------------------------------------------
@@ -618,16 +653,26 @@ with main_tab1:
         
         df_temp["가격변화"] = df_temp["종가"].diff().fillna(0)
         df_temp["매수거래량"] = df_temp.apply(lambda r: r["거래량"] if r["가격변화"] >= 0 else r["거래량"] * 0.4, axis=1)
-        df_temp["순매수증감"] = df_temp["매수거래량"] - df_temp.apply(lambda r: r["거래량"] * 0.6 if r["가격변화"] < 0 else r["거래량"] * 0.2, axis=1)
-        
+        df_temp["매도거래량"] = df_temp.apply(lambda r: r["거래량"] * 0.6 if r["가격변화"] < 0 else r["거래량"] * 0.2, axis=1)
+        df_temp["순매수증감"] = df_temp["매수거래량"] - df_temp["매도거래량"]
+
+        # 세력매수평단 / 세력매도평단: 상승일(매수우위)/하락일(매도우위) 거래량으로 가중평균한
+        # "매수 쪽에 실린 평단" / "매도 쪽에 실린 평단". 전체 평단(v_val)과는 다른 값입니다.
+        buy_tpv_tmp = (df_temp["종가"] * df_temp["매수거래량"]).cumsum()
+        buy_vol_tmp = df_temp["매수거래량"].cumsum().replace(0, pd.NA)
+        sell_tpv_tmp = (df_temp["종가"] * df_temp["매도거래량"]).cumsum()
+        sell_vol_tmp = df_temp["매도거래량"].cumsum().replace(0, pd.NA)
+        buy_vwap_tmp = (buy_tpv_tmp / buy_vol_tmp).ffill()
+        sell_vwap_tmp = (sell_tpv_tmp / sell_vol_tmp).ffill()
+
         t_vol = int(df_temp["거래량"].iloc[-1])
         c_buy = int(df_temp["매수거래량"].sum())
         n_qty = int(df_temp["순매수증감"].iloc[-1])
         r_buy = (df_temp["매수거래량"].iloc[-1] / t_vol * 100) if t_vol > 0 else 0.0
         r_net = (n_qty / t_vol * 100) if t_vol > 0 else 0.0
         v_val = int(vwap_tmp.iloc[-1])
-        b_vwap = int(v_val * 1.0035)
-        s_vwap = int(v_val * 0.9812)
+        b_vwap = int(buy_vwap_tmp.iloc[-1]) if pd.notna(buy_vwap_tmp.iloc[-1]) else v_val
+        s_vwap = int(sell_vwap_tmp.iloc[-1]) if pd.notna(sell_vwap_tmp.iloc[-1]) else v_val
     else:
         t_vol, c_buy, n_qty, r_buy, r_net, v_val, b_vwap, s_vwap = 1599258, 285894, -109492, 17.88, -6.85, 198465, 199134, 195719
 
@@ -783,9 +828,23 @@ with main_tab1:
         df["순매수증감"] = df["매수거래량"] - df["매도거래량"]
         df["누적순매수증감"] = df["순매수증감"].cumsum()
 
+        # 세력매수평단 / 세력매도평단
+        # - 평단가(=세력평단): 전체 거래량으로 가중평균한 누적 평단선 (매수/매도 구분 없음)
+        # - 세력매수평단: 상승(매수우위)일 거래량에 실린 가격만 누적 가중평균 → "사들인 자리"의 평단
+        # - 세력매도평단: 하락(매도우위)일 거래량에 실린 가격만 누적 가중평균 → "덜어낸 자리"의 평단
+        # 세 값은 서로 다릅니다. 평단가(전체)를 기준으로 보통 세력매수평단이 위, 세력매도평단이 아래에 위치합니다.
+        buy_cum_tpv = (df["종가"] * df["매수거래량"]).cumsum()
+        buy_cum_vol = df["매수거래량"].cumsum().replace(0, pd.NA)
+        sell_cum_tpv = (df["종가"] * df["매도거래량"]).cumsum()
+        sell_cum_vol = df["매도거래량"].cumsum().replace(0, pd.NA)
+        df["세력매수평단"] = (buy_cum_tpv / buy_cum_vol).ffill()
+        df["세력매도평단"] = (sell_cum_tpv / sell_cum_vol).ffill()
+
         last_close = int(df["종가"].iloc[-1])
         last_vwap = int(df["평단가"].iloc[-1])
         disparity = ((last_close - last_vwap) / last_vwap) * 100
+        last_buy_vwap = int(df["세력매수평단"].iloc[-1]) if pd.notna(df["세력매수평단"].iloc[-1]) else last_vwap
+        last_sell_vwap = int(df["세력매도평단"].iloc[-1]) if pd.notna(df["세력매도평단"].iloc[-1]) else last_vwap
 
         f_info = get_financial_info(code)
         mcap_val = f_info["mcap"]
@@ -858,6 +917,16 @@ with main_tab1:
                 <div style="font-size:13px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원</div>
             </div>
 
+            <div onclick="navigator.clipboard.writeText('{last_buy_vwap}');" style="background:#fff9db; border:1px solid #ffe066; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
+                <div style="font-size:11px; color:#d9480f; font-weight:bold;">🟠 세력매수평단</div>
+                <div style="font-size:13px; font-weight:bold; color:#d32f2f; margin-top:2px;">{last_buy_vwap:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{last_sell_vwap}');" style="background:#e7f5ff; border:1px solid #74c0fc; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
+                <div style="font-size:11px; color:#1864ab; font-weight:bold;">🔵 세력매도평단</div>
+                <div style="font-size:13px; font-weight:bold; color:#1971c2; margin-top:2px;">{last_sell_vwap:,}원</div>
+            </div>
+
             <div onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 1차목표(+5%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_1st:,}원</div>
@@ -889,7 +958,7 @@ with main_tab1:
             </div>
         </div>
         """
-        components.html(metrics_click_copy_html, height=85)
+        components.html(metrics_click_copy_html, height=150)
 
         with st.expander("📝 텍스트 요약 및 전체 복사 기능"):
             copy_summary = (
@@ -948,6 +1017,32 @@ with main_tab1:
                     line=dict(color="#ff7f0e", width=2.5),
                 )
             )
+            # 2-1. 세력매수평단 선
+            hover_buy_vwap = [f"세력매수평단: {int(val):,}원" if pd.notna(val) else "세력매수평단: -" for val in df["세력매수평단"]]
+            fig.add_trace(
+                go.Scatter(
+                    x=hover_x,
+                    y=df["세력매수평단"],
+                    mode="lines",
+                    name="세력매수평단",
+                    text=hover_buy_vwap,
+                    hovertemplate="<b>%{x}</b><br>%{text}<extra>세력매수평단</extra>",
+                    line=dict(color="#d32f2f", width=1.6, dash="dashdot"),
+                )
+            )
+            # 2-2. 세력매도평단 선
+            hover_sell_vwap = [f"세력매도평단: {int(val):,}원" if pd.notna(val) else "세력매도평단: -" for val in df["세력매도평단"]]
+            fig.add_trace(
+                go.Scatter(
+                    x=hover_x,
+                    y=df["세력매도평단"],
+                    mode="lines",
+                    name="세력매도평단",
+                    text=hover_sell_vwap,
+                    hovertemplate="<b>%{x}</b><br>%{text}<extra>세력매도평단</extra>",
+                    line=dict(color="#1971c2", width=1.6, dash="dashdot"),
+                )
+            )
             # 3. 순매수 증감 추세선 (보조 축 활용)
             fig.add_trace(
                 go.Scatter(
@@ -963,6 +1058,20 @@ with main_tab1:
             )
 
             # 차트 내 다단계 목표가 및 다단계 손절선 가이드 라인 추가
+            fig.add_hline(
+                y=last_buy_vwap,
+                line_dash="dashdot",
+                line_color="#d32f2f",
+                annotation_text=f"🟠 세력매수평단: {last_buy_vwap:,}원",
+                annotation_position="top right",
+            )
+            fig.add_hline(
+                y=last_sell_vwap,
+                line_dash="dashdot",
+                line_color="#1971c2",
+                annotation_text=f"🔵 세력매도평단: {last_sell_vwap:,}원",
+                annotation_position="bottom right",
+            )
             fig.add_hline(
                 y=target_3rd,
                 line_dash="dot",
