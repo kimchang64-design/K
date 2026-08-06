@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
+import xml.etree.ElementTree as ET
 from pykrx import stock
 
 # ---------------------------------------------------------
@@ -70,6 +71,82 @@ def patch_today_with_realtime(df: pd.DataFrame, code: str) -> pd.DataFrame:
         df.loc[today] = last_row
 
     return df
+
+
+# ---------------------------------------------------------
+# 분봉(실제 장중 1분봉) 데이터
+# ---------------------------------------------------------
+# ⚠ pykrx는 분봉 API를 제공하지 않습니다. get_market_ohlcv_by_date(freq="m")의
+#   "m"은 "월봉(month)"이라서, 분봉을 pykrx로 받으려 하면 사실상 월봉을
+#   억지로 리샘플하는 것이라 실제 장중 흐름과 전혀 다른 데이터가 나옵니다.
+#   그래서 분봉은 네이버 증권 차트 API(1분봉 원본)로 따로 받아옵니다.
+@st.cache_data(ttl=15)  # 15초 캐시: 장중 갱신은 유지하면서 과도한 호출 방지
+def fetch_naver_minute_ohlcv(code: str, count: int = 500) -> pd.DataFrame:
+    """
+    네이버 증권 1분봉 원본 데이터를 가져온다. (기본 최근 count개 캔들)
+    반환: index=datetime, columns=[시가,고가,저가,종가,거래량]
+    실패 시 빈 DataFrame 반환.
+    """
+    try:
+        url = (
+            f"https://fchart.stock.naver.com/sise.nhn?"
+            f"symbol={code}&timeframe=minute&count={count}&requestType=0"
+        )
+        resp = requests.get(url, timeout=3)
+        resp.raise_for_status()
+        root = ET.fromstring(resp.content)
+        rows = []
+        for item in root.iter("item"):
+            data_str = item.attrib.get("data", "")
+            parts = data_str.split("|")
+            if len(parts) < 6:
+                continue
+            dt_str, o, h, l, c, v = parts[:6]
+            try:
+                dt = datetime.datetime.strptime(dt_str, "%Y%m%d%H%M")
+                rows.append(
+                    {
+                        "datetime": dt,
+                        "시가": float(o),
+                        "고가": float(h),
+                        "저가": float(l),
+                        "종가": float(c),
+                        "거래량": float(v),
+                    }
+                )
+            except (ValueError, TypeError):
+                continue
+        if not rows:
+            return pd.DataFrame()
+        out = pd.DataFrame(rows).set_index("datetime").sort_index()
+        return out
+    except Exception:
+        return pd.DataFrame()
+
+
+def get_today_minute_df(code: str, interval_minutes: int) -> pd.DataFrame:
+    """
+    당일(09:00~15:30) 분봉만 골라 원하는 분단위(1/3/5/10...)로 리샘플해서 반환.
+    """
+    raw = fetch_naver_minute_ohlcv(code, count=500)
+    if raw.empty:
+        return raw
+
+    today = datetime.datetime.now().date()
+    raw = raw[raw.index.date == today]
+    if raw.empty:
+        return raw
+
+    if interval_minutes > 1:
+        raw = raw.resample(f"{interval_minutes}T").agg(
+            {"시가": "first", "고가": "max", "저가": "min", "종가": "last", "거래량": "sum"}
+        )
+        raw = raw.dropna()
+
+    return raw
+
+
+
 
 # 페이지 기본 설정
 st.set_page_config(
@@ -509,7 +586,9 @@ STUDY_MAPPING_HTML_TEMPLATE = """
 
 
 def render_study_mapping_chart(df, stock_name, code, selected_timeframe):
-    dates = [d.strftime("%Y-%m-%d") for d in df.index]
+    is_minute = selected_timeframe.endswith("분봉")
+    x_fmt = "%H:%M" if is_minute else "%Y-%m-%d"
+    dates = [d.strftime(x_fmt) for d in df.index]
     close = [float(v) for v in df["종가"]]
     volume = [float(v) for v in df["거래량"]]
     buy_volume = [float(v) for v in df["매수거래량"]]
@@ -719,34 +798,60 @@ with main_tab1:
     """
     components.html(hts_top_panel_html, height=135)
 
-    st.markdown("📅 **조회 기간 설정 (연도·월·일 상세 선택)**")
-    d_cols = st.columns(6)
+    is_minute_mode = selected_timeframe.endswith("분봉")
 
-    with d_cols[0]:
-        s_year = st.selectbox(
-            "시작 연도", [2022, 2023, 2024, 2025, 2026], index=2, key="sy"
+    if is_minute_mode:
+        today = datetime.date.today()
+        st.info(
+            f"⏱️ 분봉 모드 — 단타용이라 **당일({today.strftime('%Y-%m-%d')}) 09:00 장 시작~15:30 장 마감**만 자동 조회됩니다. "
+            f"(참고: 한국거래소 정규장은 08:00이 아니라 **09:00 시작·15:30 종료**가 맞습니다. "
+            f"08:00~09:00은 '시간외 단일가/동시호가' 구간이라 분봉 차트엔 안 잡혀요.)"
         )
-    with d_cols[1]:
-        s_mon = st.selectbox(
-            "시작 월", list(range(1, 13)), index=0, key="sm"
-        )
-    with d_cols[2]:
-        s_day = st.selectbox(
-            "시작 일", list(range(1, 32)), index=0, key="sd"
-        )
+        s_year, s_mon, s_day = today.year, today.month, today.day
+        e_year, e_mon, e_day = today.year, today.month, today.day
+        with st.expander("📅 조회 기간 수동으로 바꾸기 (기본은 당일 자동)"):
+            d_cols = st.columns(6)
+            with d_cols[0]:
+                s_year = st.selectbox("시작 연도", [2022, 2023, 2024, 2025, 2026], index=[2022, 2023, 2024, 2025, 2026].index(today.year), key="sy")
+            with d_cols[1]:
+                s_mon = st.selectbox("시작 월", list(range(1, 13)), index=today.month - 1, key="sm")
+            with d_cols[2]:
+                s_day = st.selectbox("시작 일", list(range(1, 32)), index=today.day - 1, key="sd")
+            with d_cols[3]:
+                e_year = st.selectbox("종료 연도", [2022, 2023, 2024, 2025, 2026], index=[2022, 2023, 2024, 2025, 2026].index(today.year), key="ey")
+            with d_cols[4]:
+                e_mon = st.selectbox("종료 월", list(range(1, 13)), index=today.month - 1, key="em")
+            with d_cols[5]:
+                e_day = st.selectbox("종료 일", list(range(1, 32)), index=today.day - 1, key="ed")
+    else:
+        st.markdown("📅 **조회 기간 설정 (연도·월·일 상세 선택)**")
+        d_cols = st.columns(6)
 
-    with d_cols[3]:
-        e_year = st.selectbox(
-            "종료 연도", [2022, 2023, 2024, 2025, 2026], index=4, key="ey"
-        )
-    with d_cols[4]:
-        e_mon = st.selectbox(
-            "종료 월", list(range(1, 13)), index=7, key="em"
-        )
-    with d_cols[5]:
-        e_day = st.selectbox(
-            "종료 일", list(range(1, 32)), index=4, key="ed"
-        )
+        with d_cols[0]:
+            s_year = st.selectbox(
+                "시작 연도", [2022, 2023, 2024, 2025, 2026], index=2, key="sy"
+            )
+        with d_cols[1]:
+            s_mon = st.selectbox(
+                "시작 월", list(range(1, 13)), index=0, key="sm"
+            )
+        with d_cols[2]:
+            s_day = st.selectbox(
+                "시작 일", list(range(1, 32)), index=0, key="sd"
+            )
+
+        with d_cols[3]:
+            e_year = st.selectbox(
+                "종료 연도", [2022, 2023, 2024, 2025, 2026], index=4, key="ey"
+            )
+        with d_cols[4]:
+            e_mon = st.selectbox(
+                "종료 월", list(range(1, 13)), index=7, key="em"
+            )
+        with d_cols[5]:
+            e_day = st.selectbox(
+                "종료 일", list(range(1, 32)), index=4, key="ed"
+            )
 
     try:
         start_date = datetime.date(s_year, s_mon, s_day)
@@ -779,20 +884,13 @@ with main_tab1:
     elif selected_timeframe == "월봉":
         df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
     else:
-        df = stock.get_market_ohlcv_by_date(s_date, e_date, code, "m")
-        if not df.empty:
-            minutes = selected_timeframe.replace("분봉", "") + "T"
-            if minutes != "1T":
-                df = df.resample(minutes).agg(
-                    {
-                        "시가": "first",
-                        "고가": "max",
-                        "저가": "min",
-                        "종가": "last",
-                        "거래량": "sum",
-                    }
-                )
-            df = df.dropna()
+        interval_minutes = int(selected_timeframe.replace("분봉", ""))
+        df = get_today_minute_df(code, interval_minutes)
+        if df.empty:
+            st.warning(
+                "당일 분봉 데이터를 아직 받아오지 못했습니다. "
+                "장 시작(09:00) 이전이거나 네트워크 문제일 수 있습니다."
+            )
 
     # 실시간(준실시간) 시세 보정 - 키움 체결가와의 괴리 축소
     rt_col1, rt_col2 = st.columns([1, 5])
@@ -987,7 +1085,7 @@ with main_tab1:
         else:
             fig = go.Figure()
 
-            hover_x = [d.strftime("%Y-%m-%d") for d in df.index]
+            hover_x = [d.strftime("%H:%M" if is_minute_mode else "%Y-%m-%d") for d in df.index]
 
             hover_close = [f"종가: {int(val):,}원 ({disparity:+.2f}%)" for val in df["종가"]]
             hover_vwap = [f"누적 평단가: {int(val):,}원" if pd.notna(val) else "누적 평단가: -" for val in df["평단가"]]
@@ -1139,7 +1237,7 @@ with main_tab1:
         
         card_rows_html = ""
         for dt_idx, row in recent_df.iterrows():
-            d_str = dt_idx.strftime("%Y-%m-%d") if hasattr(dt_idx, "strftime") else str(dt_idx)[:10]
+            d_str = dt_idx.strftime("%H:%M" if is_minute_mode else "%Y-%m-%d") if hasattr(dt_idx, "strftime") else str(dt_idx)[:10]
             c_val = int(row["종가"])
             v_val = int(row["평단가"]) if pd.notna(row["평단가"]) else 0
             n_val = int(row["순매수증감"])
