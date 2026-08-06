@@ -8,7 +8,7 @@ from pykrx import stock
 
 # 페이지 기본 설정
 st.set_page_config(
-    page_title="Day trading Mapping - 세력 평단 분석",
+    page_title="Day trading Mapping - 세력 평단 및 목표/손절 분석",
     layout="wide",
 )
 
@@ -144,7 +144,6 @@ def get_intraday_data(ticker, timeframe):
     else:
         base_price = base_prices.get(ticker, 1250000)
 
-    # 당일 장 시작(09:00)부터 현재 시각까지만 생성 (미래 시간 제거)
     market_open = pd.Timestamp.today().normalize() + pd.Timedelta(hours=9, minutes=0)
     current_time = datetime.datetime.now()
     market_close = pd.Timestamp.today().normalize() + pd.Timedelta(hours=15, minutes=30)
@@ -239,12 +238,19 @@ with main_tab1:
     
     last_close = int(df_chart["종가"].iloc[-1])
     last_vwap = int(df_chart["세력평단"].iloc[-1])
+    
+    # 세력평단 기준 매수/매도 평단 및 목표가/손절가 산출
     buy_vwap_val = last_vwap + int(last_vwap * 0.015)
     sell_vwap_val = last_vwap - int(last_vwap * 0.01)
+    
+    target_1st = int(last_vwap * 1.03)  # 1차 목표가 (+3%)
+    target_2nd = int(last_vwap * 1.06)  # 2차 목표가 (+6%)
+    stop_1st = int(last_vwap * 0.985)   # 1차 손절선 (-1.5%)
+    stop_absolute = int(last_vwap * 0.97) # 절대사수 손절가 (-3%)
 
     fig = go.Figure()
 
-    # 종가 선 (진한 검은색 실선으로 뚜렷하게 표시)
+    # 종가 선
     fig.add_trace(
         go.Scatter(
             x=df_chart.index.strftime("%H:%M"),
@@ -256,7 +262,7 @@ with main_tab1:
         )
     )
 
-    # 세력평단 선 (오렌지색 곡선)
+    # 세력평단 선
     fig.add_trace(
         go.Scatter(
             x=df_chart.index.strftime("%H:%M"),
@@ -268,6 +274,12 @@ with main_tab1:
         )
     )
 
+    # 차트 내 목표가 및 손절선 가이드라인 추가
+    fig.add_hline(y=target_1st, line_dash="dot", line_color="#2b8a3e", annotation_text=f"🎯 1차목표: {target_1st:,}원", annotation_position="top left")
+    fig.add_hline(y=target_2nd, line_dash="dot", line_color="#2b8a3e", annotation_text=f"🎯 2차목표: {target_2nd:,}원", annotation_position="top left")
+    fig.add_hline(y=stop_1st, line_dash="dash", line_color="#f59f00", annotation_text=f"🛑 1차손절: {stop_1st:,}원", annotation_position="bottom left")
+    fig.add_hline(y=stop_absolute, line_dash="dash", line_color="#e03131", annotation_text=f"🚨 절대사수: {stop_absolute:,}원", annotation_position="bottom left")
+
     tf_label = "3분봉" if current_tf == "3T" else ("1분봉" if current_tf == "1T" else "5분봉")
     fig.update_layout(
         title=f"KOSPI/KOSDAQ {stock_name} ({code}) ({tf_label})",
@@ -276,26 +288,48 @@ with main_tab1:
         template="plotly_white",
         height=450,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        yaxis=dict(
-            title="",
-            tickformat=",d"
-        ),
+        yaxis=dict(title="", tickformat=",d"),
     )
     fig.update_xaxes(nticks=10, tickangle=0)
 
     st.plotly_chart(fig, use_container_width=True)
 
+    # 하단 패널에 세력 평단뿐만 아니라 목표가/손절가 복사 버튼 패널 확장 추가
     bottom_panel_html = f"""
-    <div style="display: flex; gap: 15px; background: #111b27; padding: 12px 15px; border-radius: 8px; border: 1px solid #1f2c3a; align-items: center; justify-content: flex-end;">
-        <div style="display: flex; align-items: center; gap: 10px; background: #182232; padding: 8px 14px; border-radius: 6px; border: 1px solid #2a3b4c;">
-            <span style="color: #f59f00; font-size: 12px; font-weight: bold;">세력 매수 평단</span>
-            <span style="color: #ffffff; font-size: 14px; font-weight: bold;">{buy_vwap_val:,} 원</span>
-            <button onclick="navigator.clipboard.writeText('{buy_vwap_val}');" style="background: #2a3b4c; color: #fff; border: none; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">복사</button>
+    <div style="display: flex; gap: 10px; background: #111b27; padding: 12px 15px; border-radius: 8px; border: 1px solid #1f2c3a; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 6px; background: #182232; padding: 6px 10px; border-radius: 6px; border: 1px solid #2a3b4c;">
+                <span style="color: #f59f00; font-size: 11px; font-weight: bold;">세력매수</span>
+                <span style="color: #ffffff; font-size: 12px; font-weight: bold;">{buy_vwap_val:,}원</span>
+                <button onclick="navigator.clipboard.writeText('{buy_vwap_val}');" style="background: #2a3b4c; color: #fff; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 10px;">복사</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; background: #182232; padding: 6px 10px; border-radius: 6px; border: 1px solid #2a3b4c;">
+                <span style="color: #4dabf7; font-size: 11px; font-weight: bold;">세력매도</span>
+                <span style="color: #ffffff; font-size: 12px; font-weight: bold;">{sell_vwap_val:,}원</span>
+                <button onclick="navigator.clipboard.writeText('{sell_vwap_val}');" style="background: #2a3b4c; color: #fff; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 10px;">복사</button>
+            </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px; background: #182232; padding: 8px 14px; border-radius: 6px; border: 1px solid #2a3b4c;">
-            <span style="color: #4dabf7; font-size: 12px; font-weight: bold;">세력 매도 평단</span>
-            <span style="color: #ffffff; font-size: 14px; font-weight: bold;">{sell_vwap_val:,} 원</span>
-            <button onclick="navigator.clipboard.writeText('{sell_vwap_val}');" style="background: #2a3b4c; color: #fff; border: none; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">복사</button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 6px; background: #182232; padding: 6px 10px; border-radius: 6px; border: 1px solid #2a3b4c;">
+                <span style="color: #40c057; font-size: 11px; font-weight: bold;">🎯 1차목표</span>
+                <span style="color: #ffffff; font-size: 12px; font-weight: bold;">{target_1st:,}원</span>
+                <button onclick="navigator.clipboard.writeText('{target_1st}');" style="background: #2a3b4c; color: #fff; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 10px;">복사</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; background: #182232; padding: 6px 10px; border-radius: 6px; border: 1px solid #2a3b4c;">
+                <span style="color: #40c057; font-size: 11px; font-weight: bold;">🎯 2차목표</span>
+                <span style="color: #ffffff; font-size: 12px; font-weight: bold;">{target_2nd:,}원</span>
+                <button onclick="navigator.clipboard.writeText('{target_2nd}');" style="background: #2a3b4c; color: #fff; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 10px;">복사</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; background: #182232; padding: 6px 10px; border-radius: 6px; border: 1px solid #2a3b4c;">
+                <span style="color: #fcc419; font-size: 11px; font-weight: bold;">🛑 1차손절</span>
+                <span style="color: #ffffff; font-size: 12px; font-weight: bold;">{stop_1st:,}원</span>
+                <button onclick="navigator.clipboard.writeText('{stop_1st}');" style="background: #2a3b4c; color: #fff; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 10px;">복사</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; background: #182232; padding: 6px 10px; border-radius: 6px; border: 1px solid #2a3b4c;">
+                <span style="color: #ff6b6b; font-size: 11px; font-weight: bold;">🚨 절대사수</span>
+                <span style="color: #ffffff; font-size: 12px; font-weight: bold;">{stop_absolute:,}원</span>
+                <button onclick="navigator.clipboard.writeText('{stop_absolute}');" style="background: #2a3b4c; color: #fff; border: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 10px;">복사</button>
+            </div>
         </div>
     </div>
     """
