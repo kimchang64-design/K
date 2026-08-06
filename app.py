@@ -80,12 +80,11 @@ def resolve_code_or_name(user_input):
 
 
 # ---------------------------------------------------------
-# 세션 상태 초기화
+# 세션 상태 초기화 및 상단 컨트롤 (왼쪽 밀착 배치)
 # ---------------------------------------------------------
 if "target_stock" not in st.session_state:
   st.session_state.target_stock = "삼성전기"
 
-# [요청 반영] 모든 조작 버튼(입력, 조회, 분봉 선택)을 왼쪽으로 밀착 배치
 col_input, col_btn, col_tf, col_space = st.columns([1.5, 0.6, 1.8, 3.1])
 
 with col_input:
@@ -114,7 +113,6 @@ with col_tf:
       label_visibility="collapsed",
   )
 
-# 현재 선택된 종목 표시 뱃지
 st.markdown(
     f"""
     <div style="background: #1f2428; border: 1px solid #383f45; padding: 6px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; font-weight: bold; color: #f0f6fc;">
@@ -124,24 +122,24 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # ---------------------------------------------------------
-# 데이터 동기화 및 분봉 주기별 시뮬레이션 계산
+# 데이터 동기화 및 분봉 주기별 연동 함수
 # ---------------------------------------------------------
 @st.cache_data(ttl=15)
-def get_sync_intraday_data(ticker, timeframe):
+def get_intraday_data(ticker, timeframe):
   base_prices = {
       "009150": 1250000,
+      "005930": 72500,
+      "000660": 1551000,
       "073240": 7400,
       "264850": 7400,
       "327260": 7350,
       "067290": 2455,
       "252670": 1850,
-      "005930": 72500,
-      "000660": 1551000,
   }
-  base_price = base_prices.get(ticker, 1250000)
+  base_price = base_prices.get(ticker, 10000)
 
-  # 분봉 주기에 따른 데이터 간격 설정 (1분봉, 3분봉, 5분봉 동기화)
   freq_map = {"1분봉": "1T", "3분봉": "3T", "5분봉": "5T"}
   tf_code = freq_map.get(timeframe, "3T")
 
@@ -180,7 +178,6 @@ def get_sync_intraday_data(ticker, timeframe):
 
 
 df_chart = get_intraday_data(code, selected_tf)
-last_close = int(df_chart["종가"].iloc[-1])
 base_vwap = int(df_chart["세력평단"].iloc[-1])
 
 buy_vwap = int(base_vwap * 1.015)
@@ -221,7 +218,7 @@ summary_panel_html = f"""
 """
 components.html(summary_panel_html, height=55)
 
-# Plotly 차트 생성 (분봉 선택에 따라 동기화된 데이터 반영)
+# Plotly 차트 생성
 fig = go.Figure()
 
 fig.add_trace(
