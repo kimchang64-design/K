@@ -1,9 +1,75 @@
 import datetime
+import json
 import pandas as pd
 import plotly.graph_objects as go
+import requests
 import streamlit as st
 import streamlit.components.v1 as components
 from pykrx import stock
+
+# ---------------------------------------------------------
+# 실시간(준실시간) 시세 보정
+# ---------------------------------------------------------
+# pykrx는 KRX 정식 종가 기준 데이터라서 장중에는 "오늘" 데이터가
+# 아예 없거나(장 시작 전) 전일 종가로 채워지는 경우가 많습니다.
+# 그래서 키움 HTS 실시간 체결가와 차이가 나는 겁니다.
+# 아래 함수는 네이버 금융의 준실시간 시세(수 초 지연) API를 붙여서
+# "오늘"의 종가를 최대한 실시간에 가깝게 덮어씌우는 보정용입니다.
+# ⚠ 완전한 틱 단위 실시간(키움과 100% 동일)을 원하면 키움 Open API+
+#    (OCX, 로컬 PC + 로그인 필요)를 직접 연동해야 하며, 이 부분은
+#    순수 파이썬 웹앱(streamlit cloud 등)에서는 대체가 불가능합니다.
+@st.cache_data(ttl=5)  # 5초 캐시: 너무 잦은 호출 방지, 그래도 준실시간 유지
+def fetch_realtime_price(code: str):
+    """
+    네이버 금융 준실시간 시세를 가져온다.
+    반환: dict(현재가, 등락률, 거래량, 시각) 또는 실패 시 None
+    """
+    try:
+        url = f"https://polling.finance.naver.com/api/realtime/domestic/stock/{code}"
+        resp = requests.get(url, timeout=2)
+        resp.raise_for_status()
+        data = resp.json()
+        item = data["datas"][0]
+        return {
+            "price": int(item["closePrice"].replace(",", "")),
+            "change_rate": float(item["fluctuationsRatio"]),
+            "volume": int(item["accumulatedTradingVolume"].replace(",", "")),
+            "time": datetime.datetime.now().strftime("%H:%M:%S"),
+        }
+    except Exception:
+        return None
+
+
+def patch_today_with_realtime(df: pd.DataFrame, code: str) -> pd.DataFrame:
+    """
+    df(pykrx 일봉)의 '오늘' 행을 준실시간 시세로 덮어써서
+    키움 실시간 체결가와의 괴리를 줄인다.
+    - 오늘 날짜 행이 아예 없으면 새로 추가
+    - 있으면 종가/거래량을 실시간 값으로 교체
+    거래량이 없으면(장중 누적거래량 조회 실패) 직전 거래량으로 대체.
+    """
+    rt = fetch_realtime_price(code)
+    if rt is None or df is None or df.empty:
+        return df
+
+    today = pd.Timestamp(datetime.datetime.now().date())
+    df = df.copy()
+
+    if today in df.index:
+        df.loc[today, "종가"] = rt["price"]
+        if rt["volume"] > 0:
+            df.loc[today, "거래량"] = rt["volume"]
+    else:
+        last_row = df.iloc[-1].copy()
+        last_row["종가"] = rt["price"]
+        last_row["시가"] = last_row.get("시가", rt["price"])
+        last_row["고가"] = max(last_row.get("고가", rt["price"]), rt["price"])
+        last_row["저가"] = min(last_row.get("저가", rt["price"]), rt["price"])
+        if rt["volume"] > 0:
+            last_row["거래량"] = rt["volume"]
+        df.loc[today] = last_row
+
+    return df
 
 # 페이지 기본 설정
 st.set_page_config(
@@ -191,6 +257,248 @@ def get_financial_info(code):
             ],
         },
     )
+
+
+# ---------------------------------------------------------
+# Study Mapping 스타일 차트 (2번째/3번째 참고 이미지 재현)
+# - 차트의 특정 지점을 클릭하면 그 지점을 새 기준점(앵커)으로 삼아
+#   세력평단(누적평단)을 그 지점부터 다시 계산
+# - 기준점 정보 박스 + 최신(현재) 정보 박스를 함께 표시, 클릭 시 즉시 복사
+# - 여백 좌/우 조절, 시간표시 토글, 전체범위 복원, 결과/이미지 복사 버튼 포함
+# ---------------------------------------------------------
+STUDY_MAPPING_HTML_TEMPLATE = """
+<div id="sm_root" style="font-family: -apple-system, 'Malgun Gothic', sans-serif;">
+  <div id="sm_toolbar" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px; font-size:12px;">
+      <button id="sm_btn_copy_result" class="sm-btn sm-btn-blue">📋 결과 복사</button>
+      <button id="sm_btn_copy_img" class="sm-btn sm-btn-purple">🖼 차트 이미지 복사</button>
+      <button id="sm_btn_save_img" class="sm-btn sm-btn-green">⬇ 차트 이미지 저장</button>
+      <button id="sm_btn_reset_range" class="sm-btn sm-btn-gray">↺ 전체 범위 복원</button>
+      <button id="sm_btn_reset_anchor" class="sm-btn sm-btn-orange">📌 기준점 초기화</button>
+      <span style="margin-left:8px;">여백 좌:</span>
+      <input type="range" id="sm_pad_left" min="0" max="60" value="5" style="width:80px;">
+      <span>우:</span>
+      <input type="range" id="sm_pad_right" min="0" max="60" value="5" style="width:80px;">
+      <label style="margin-left:8px;"><input type="checkbox" id="sm_show_time" checked> 시간 보이기</label>
+      <span id="sm_clock" style="margin-left:auto; font-weight:bold; color:#1a73e8;"></span>
+  </div>
+
+  <div style="position:relative; border:1px solid #e0e0e0; border-radius:8px; padding:6px; background:#ffffff;">
+    <div id="sm_anchor_box" class="sm-info-box" style="display:none; left:10px; top:10px;"></div>
+    <div id="sm_latest_box" class="sm-info-box" style="display:none; right:10px; top:10px;"></div>
+    <div id="sm_plot" style="width:100%; height:480px;"></div>
+  </div>
+  <div style="font-size:11px; color:#888; margin-top:4px;">
+    ※ 차트 위 아무 지점이나 클릭하면 그 지점부터 세력평단(누적평단)이 다시 계산됩니다. (기준점 표시: 분홍 점선)
+  </div>
+</div>
+
+<style>
+  .sm-btn { border:none; border-radius:5px; padding:6px 10px; font-size:11px; font-weight:bold; cursor:pointer; color:#fff; }
+  .sm-btn-blue { background:#1a73e8; }
+  .sm-btn-purple { background:#7048e8; }
+  .sm-btn-green { background:#2b8a3e; }
+  .sm-btn-gray { background:#868e96; }
+  .sm-btn-orange { background:#f08c00; }
+  .sm-info-box {
+      position:absolute; z-index:5; background:#ffffff; border:1px solid #dee2e6;
+      border-radius:8px; padding:8px 10px; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.12);
+      min-width:190px;
+  }
+  .sm-info-box .sm-close { position:absolute; top:4px; right:6px; cursor:pointer; color:#adb5bd; font-weight:bold; }
+  .sm-info-title { font-weight:bold; font-size:11px; color:#495057; margin-bottom:4px; }
+  .sm-info-row { display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .sm-info-label { color:#666; }
+  .sm-info-value { font-weight:bold; cursor:pointer; }
+  .sm-info-value:hover { text-decoration:underline; }
+</style>
+
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<script>
+(function() {
+  const D = __DATA_JSON__;
+  const N = D.close.length;
+
+  function cumAvgFrom(startIdx) {
+      const out = new Array(N).fill(null);
+      let cumTPV = 0, cumVol = 0;
+      for (let i = startIdx; i < N; i++) {
+          cumTPV += D.close[i] * (D.volume[i] || 0);
+          cumVol += (D.volume[i] || 0);
+          out[i] = cumVol > 0 ? cumTPV / cumVol : D.close[i];
+      }
+      for (let i = 0; i < startIdx; i++) { out[i] = D.origAvg[i]; }
+      return out;
+  }
+
+  let anchorIdx = 0;
+  let avgSeries = D.origAvg.slice();
+  let padLeft = 5, padRight = 5;
+
+  const traceClose = {
+      x: D.dates, y: D.close, mode: 'lines', name: '종가',
+      line: { color: '#212529', width: 1.4 },
+      hovertemplate: '%{x}<br>종가: %{y:,.0f}원<extra></extra>'
+  };
+  const traceAvg = {
+      x: D.dates, y: avgSeries, mode: 'lines', name: '세력평단(누적)',
+      line: { color: '#f08c00', width: 2.6 },
+      hovertemplate: '%{x}<br>세력평단: %{y:,.0f}원<extra></extra>'
+  };
+
+  const layout = {
+      margin: {l: 50, r: 30, t: 20, b: 40},
+      hovermode: 'x unified',
+      showlegend: true,
+      legend: {orientation: 'h', y: 1.08},
+      xaxis: {type: 'category'},
+      yaxis: {title: '가격(원)'},
+      shapes: [],
+  };
+
+  Plotly.newPlot('sm_plot', [traceClose, traceAvg], layout, {displaylogo:false, responsive:true});
+  const plotDiv = document.getElementById('sm_plot');
+
+  function fmt(n) { return Math.round(n).toLocaleString('ko-KR'); }
+
+  function bindCopy(container) {
+      container.querySelectorAll('[data-copy]').forEach(function(el) {
+          el.onclick = function() { navigator.clipboard.writeText(el.getAttribute('data-copy')); };
+      });
+  }
+
+  function showLatestBox() {
+      const lastIdx = N - 1;
+      const close_v = D.close[lastIdx];
+      const avg_v = avgSeries[lastIdx];
+      const disp = ((close_v - avg_v) / avg_v * 100);
+      const box = document.getElementById('sm_latest_box');
+      box.style.display = 'block';
+      box.innerHTML =
+        '<span class="sm-close" onclick="document.getElementById(\\'sm_latest_box\\').style.display=\\'none\\';">✕</span>' +
+        '<div class="sm-info-title">📍 ' + D.dates[0] + ' ~ ' + D.dates[lastIdx] + '</div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">종가</span><span class="sm-info-value" data-copy="' + Math.round(close_v) + '">' + fmt(close_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">세력평단</span><span class="sm-info-value" style="color:#f08c00;" data-copy="' + Math.round(avg_v) + '">' + fmt(avg_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">괴리율</span><span class="sm-info-value" style="color:' + (disp>=0?'#d32f2f':'#1971c2') + ';">' + (disp>=0?'+':'') + disp.toFixed(2) + '%</span></div>';
+      bindCopy(box);
+  }
+
+  function showAnchorBox(idx) {
+      const close_v = D.close[idx];
+      const avg_v = avgSeries[idx];
+      const disp = ((close_v - avg_v) / avg_v * 100);
+      const box = document.getElementById('sm_anchor_box');
+      box.style.display = 'block';
+      box.innerHTML =
+        '<span class="sm-close" onclick="document.getElementById(\\'sm_anchor_box\\').style.display=\\'none\\';">✕</span>' +
+        '<div class="sm-info-title">📌 ' + D.dates[idx] + ' 기준 (재계산 시작점)</div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">종가</span><span class="sm-info-value" data-copy="' + Math.round(close_v) + '">' + fmt(close_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">세력평단</span><span class="sm-info-value" style="color:#f08c00;" data-copy="' + Math.round(avg_v) + '">' + fmt(avg_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">괴리율</span><span class="sm-info-value">' + (disp>=0?'+':'') + disp.toFixed(2) + '%</span></div>';
+      bindCopy(box);
+  }
+
+  function redraw() {
+      avgSeries = cumAvgFrom(anchorIdx);
+      Plotly.restyle('sm_plot', {y: [avgSeries]}, [1]);
+      const shapes = anchorIdx > 0 ? [{
+          type: 'line', x0: D.dates[anchorIdx], x1: D.dates[anchorIdx],
+          yref: 'paper', y0: 0, y1: 1,
+          line: { color: '#e64980', width: 1.5, dash: 'dot' }
+      }] : [];
+      Plotly.relayout('sm_plot', {shapes: shapes});
+      showLatestBox();
+      if (anchorIdx > 0) { showAnchorBox(anchorIdx); }
+      else { document.getElementById('sm_anchor_box').style.display = 'none'; }
+  }
+
+  plotDiv.on('plotly_click', function(evt) {
+      if (!evt.points || !evt.points.length) return;
+      anchorIdx = evt.points[0].pointIndex;
+      redraw();
+  });
+
+  document.getElementById('sm_btn_reset_anchor').onclick = function() {
+      anchorIdx = 0;
+      redraw();
+  };
+
+  document.getElementById('sm_btn_reset_range').onclick = function() {
+      Plotly.relayout('sm_plot', {'xaxis.autorange': true, 'yaxis.autorange': true});
+      padLeft = 5; padRight = 5;
+      document.getElementById('sm_pad_left').value = 5;
+      document.getElementById('sm_pad_right').value = 5;
+      Plotly.relayout('sm_plot', {'margin.l': 50, 'margin.r': 30});
+  };
+
+  function applyPadding() {
+      Plotly.relayout('sm_plot', {'margin.l': 50 + padLeft, 'margin.r': 30 + padRight});
+  }
+  document.getElementById('sm_pad_left').oninput = function(e) { padLeft = parseInt(e.target.value, 10); applyPadding(); };
+  document.getElementById('sm_pad_right').oninput = function(e) { padRight = parseInt(e.target.value, 10); applyPadding(); };
+
+  document.getElementById('sm_show_time').onchange = function(e) {
+      document.getElementById('sm_clock').style.display = e.target.checked ? 'inline' : 'none';
+  };
+
+  function tickClock() {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      document.getElementById('sm_clock').textContent =
+          now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + ' ' +
+          pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  document.getElementById('sm_btn_copy_result').onclick = function() {
+      const lastIdx = N - 1;
+      const disp = ((D.close[lastIdx] - avgSeries[lastIdx]) / avgSeries[lastIdx] * 100);
+      let text = '■ [' + D.stockName + '(' + D.code + ') - ' + D.timeframe + ']\\n' +
+                 '• 종가: ' + fmt(D.close[lastIdx]) + '원\\n' +
+                 '• 세력평단: ' + fmt(avgSeries[lastIdx]) + '원\\n' +
+                 '• 괴리율: ' + (disp>=0?'+':'') + disp.toFixed(2) + '%';
+      if (anchorIdx > 0) { text += '\\n• 기준점(' + D.dates[anchorIdx] + ') 이후 재계산됨'; }
+      navigator.clipboard.writeText(text);
+  };
+
+  document.getElementById('sm_btn_save_img').onclick = function() {
+      Plotly.downloadImage('sm_plot', {format:'png', filename: D.stockName + '_' + D.timeframe + '_chart'});
+  };
+
+  document.getElementById('sm_btn_copy_img').onclick = function() {
+      Plotly.toImage(plotDiv, {format:'png', width:1200, height:600}).then(function(url) {
+          fetch(url).then(function(r) { return r.blob(); }).then(function(blob) {
+              if (navigator.clipboard && window.ClipboardItem) {
+                  navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+              }
+          });
+      });
+  };
+
+  redraw();
+})();
+</script>
+"""
+
+
+def render_study_mapping_chart(df, stock_name, code, selected_timeframe):
+    dates = [d.strftime("%Y-%m-%d") for d in df.index]
+    close = [float(v) for v in df["종가"]]
+    volume = [float(v) for v in df["거래량"]]
+    orig_avg = [float(v) if pd.notna(v) else None for v in df["평단가"]]
+
+    payload = {
+        "dates": dates,
+        "close": close,
+        "volume": volume,
+        "origAvg": orig_avg,
+        "stockName": stock_name,
+        "code": code,
+        "timeframe": selected_timeframe,
+    }
+    data_json = json.dumps(payload, ensure_ascii=False)
+    html = STUDY_MAPPING_HTML_TEMPLATE.replace("__DATA_JSON__", data_json)
+    components.html(html, height=640, scrolling=False)
 
 
 # ---------------------------------------------------------
@@ -441,6 +749,25 @@ with main_tab1:
                 )
             df = df.dropna()
 
+    # 실시간(준실시간) 시세 보정 - 키움 체결가와의 괴리 축소
+    rt_col1, rt_col2 = st.columns([1, 5])
+    with rt_col1:
+        use_realtime_patch = st.checkbox("⚡ 실시간 시세 보정", value=True, key="rt_patch_toggle")
+    rt_info = None
+    if use_realtime_patch and df is not None and not df.empty:
+        rt_info = fetch_realtime_price(code)
+        df = patch_today_with_realtime(df, code)
+    with rt_col2:
+        if use_realtime_patch and rt_info:
+            st.caption(
+                f"🟢 준실시간 반영됨 (네이버 시세 기준, {rt_info['time']} 조회) · "
+                f"현재가 {rt_info['price']:,}원 · 완전한 틱 단위 일치는 키움 Open API+ 직접 연동이 필요합니다."
+            )
+        elif use_realtime_patch:
+            st.caption("🟡 실시간 시세 조회 실패 — 네트워크 차단 또는 API 응답 오류. pykrx 기본값(전일/EOD)으로 표시됩니다.")
+        else:
+            st.caption("⚪ 실시간 보정 꺼짐 — pykrx 종가(EOD/지연) 기준으로 표시됩니다.")
+
     if df is None or df.empty:
         st.warning("선택한 조건에 해당하는 거래 데이터가 없습니다.")
     else:
@@ -578,113 +905,124 @@ with main_tab1:
             )
             st.code(copy_summary, language="text")
 
-        fig = go.Figure()
-        
-        hover_x = [d.strftime("%Y-%m-%d") for d in df.index]
-        
-        hover_close = [f"종가: {int(val):,}원 ({disparity:+.2f}%)" for val in df["종가"]]
-        hover_vwap = [f"누적 평단가: {int(val):,}원" if pd.notna(val) else "누적 평단가: -" for val in df["평단가"]]
-        hover_net_inc = [f"순매수 증감: {int(val):,}주" for val in df["누적순매수증감"]]
+        st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+        chart_mode = st.radio(
+            "차트 스타일",
+            ["📊 기본 목표가 차트", "🧭 Study Mapping 스타일 (클릭 기준점 리셋)"],
+            horizontal=True,
+            key="chart_display_mode",
+        )
 
-        # 1. 종가 선
-        fig.add_trace(
-            go.Scatter(
-                x=hover_x,
-                y=df["종가"],
-                mode="lines",
-                name="종가",
-                text=hover_close,
-                hovertemplate="<b>%{x}</b><br>%{text}<extra>종가</extra>",
-                line=dict(color="#1f77b4", width=1.5),
+        if chart_mode == "🧭 Study Mapping 스타일 (클릭 기준점 리셋)":
+            render_study_mapping_chart(df, stock_name, code, selected_timeframe)
+        else:
+            fig = go.Figure()
+
+            hover_x = [d.strftime("%Y-%m-%d") for d in df.index]
+
+            hover_close = [f"종가: {int(val):,}원 ({disparity:+.2f}%)" for val in df["종가"]]
+            hover_vwap = [f"누적 평단가: {int(val):,}원" if pd.notna(val) else "누적 평단가: -" for val in df["평단가"]]
+            hover_net_inc = [f"순매수 증감: {int(val):,}주" for val in df["누적순매수증감"]]
+
+            # 1. 종가 선
+            fig.add_trace(
+                go.Scatter(
+                    x=hover_x,
+                    y=df["종가"],
+                    mode="lines",
+                    name="종가",
+                    text=hover_close,
+                    hovertemplate="<b>%{x}</b><br>%{text}<extra>종가</extra>",
+                    line=dict(color="#1f77b4", width=1.5),
+                )
             )
-        )
-        # 2. 누적 평단가 선
-        fig.add_trace(
-            go.Scatter(
-                x=hover_x,
-                y=df["평단가"],
-                mode="lines",
-                name=f"누적 평단가 ({selected_timeframe})",
-                text=hover_vwap,
-                hovertemplate="<b>%{x}</b><br>%{text}<extra>평단가</extra>",
-                line=dict(color="#ff7f0e", width=2.5),
+            # 2. 누적 평단가 선
+            fig.add_trace(
+                go.Scatter(
+                    x=hover_x,
+                    y=df["평단가"],
+                    mode="lines",
+                    name=f"누적 평단가 ({selected_timeframe})",
+                    text=hover_vwap,
+                    hovertemplate="<b>%{x}</b><br>%{text}<extra>평단가</extra>",
+                    line=dict(color="#ff7f0e", width=2.5),
+                )
             )
-        )
-        # 3. 순매수 증감 추세선 (보조 축 활용)
-        fig.add_trace(
-            go.Scatter(
-                x=hover_x,
-                y=df["누적순매수증감"],
-                mode="lines",
-                name="누적 순매수 증감",
-                text=hover_net_inc,
-                hovertemplate="<b>%{x}</b><br>%{text}<extra>순매수증감</extra>",
-                line=dict(color="#2b8a3e", width=2, dash="dot"),
-                yaxis="y2"
+            # 3. 순매수 증감 추세선 (보조 축 활용)
+            fig.add_trace(
+                go.Scatter(
+                    x=hover_x,
+                    y=df["누적순매수증감"],
+                    mode="lines",
+                    name="누적 순매수 증감",
+                    text=hover_net_inc,
+                    hovertemplate="<b>%{x}</b><br>%{text}<extra>순매수증감</extra>",
+                    line=dict(color="#2b8a3e", width=2, dash="dot"),
+                    yaxis="y2"
+                )
             )
-        )
 
-        # 차트 내 다단계 목표가 및 다단계 손절선 가이드 라인 추가
-        fig.add_hline(
-            y=target_3rd,
-            line_dash="dot",
-            line_color="#2b8a3e",
-            annotation_text=f"🎯 3차 목표가 (+15%): {target_3rd:,}원",
-            annotation_position="top left",
-        )
-        fig.add_hline(
-            y=target_2nd,
-            line_dash="dot",
-            line_color="#2b8a3e",
-            annotation_text=f"🎯 2차 목표가 (+10%): {target_2nd:,}원",
-            annotation_position="top left",
-        )
-        fig.add_hline(
-            y=target_1st,
-            line_dash="dot",
-            line_color="#2b8a3e",
-            annotation_text=f"🎯 1차 목표가 (+5%): {target_1st:,}원",
-            annotation_position="top left",
-        )
-        fig.add_hline(
-            y=stop_1st,
-            line_dash="dash",
-            line_color="#f59f00",
-            annotation_text=f"🛑 1차 손절가 (-2%): {stop_1st:,}원",
-            annotation_position="bottom left",
-        )
-        fig.add_hline(
-            y=stop_2nd,
-            line_dash="dash",
-            line_color="#f08c00",
-            annotation_text=f"🛑 2차 손절가 (-3%): {stop_2nd:,}원",
-            annotation_position="bottom left",
-        )
-        fig.add_hline(
-            y=absolute_stop_loss,
-            line_dash="dash",
-            line_color="#e03131",
-            annotation_text=f"🚨 절대사수 손절가 (-4%): {absolute_stop_loss:,}원",
-            annotation_position="bottom left",
-        )
+            # 차트 내 다단계 목표가 및 다단계 손절선 가이드 라인 추가
+            fig.add_hline(
+                y=target_3rd,
+                line_dash="dot",
+                line_color="#2b8a3e",
+                annotation_text=f"🎯 3차 목표가 (+15%): {target_3rd:,}원",
+                annotation_position="top left",
+            )
+            fig.add_hline(
+                y=target_2nd,
+                line_dash="dot",
+                line_color="#2b8a3e",
+                annotation_text=f"🎯 2차 목표가 (+10%): {target_2nd:,}원",
+                annotation_position="top left",
+            )
+            fig.add_hline(
+                y=target_1st,
+                line_dash="dot",
+                line_color="#2b8a3e",
+                annotation_text=f"🎯 1차 목표가 (+5%): {target_1st:,}원",
+                annotation_position="top left",
+            )
+            fig.add_hline(
+                y=stop_1st,
+                line_dash="dash",
+                line_color="#f59f00",
+                annotation_text=f"🛑 1차 손절가 (-2%): {stop_1st:,}원",
+                annotation_position="bottom left",
+            )
+            fig.add_hline(
+                y=stop_2nd,
+                line_dash="dash",
+                line_color="#f08c00",
+                annotation_text=f"🛑 2차 손절가 (-3%): {stop_2nd:,}원",
+                annotation_position="bottom left",
+            )
+            fig.add_hline(
+                y=absolute_stop_loss,
+                line_dash="dash",
+                line_color="#e03131",
+                annotation_text=f"🚨 절대사수 손절가 (-4%): {absolute_stop_loss:,}원",
+                annotation_position="bottom left",
+            )
 
-        fig.update_layout(
-            title=f"{stock_name} ({code}) - 다단계 목표가 및 손절선 차트",
-            margin=dict(l=20, r=20, t=35, b=20),
-            hovermode="x unified",
-            template="plotly_white",
-            height=400,
-            yaxis=dict(title="가격 (원)"),
-            yaxis2=dict(title="누적 순매수 증감 (주)", overlaying="y", side="right", showgrid=False)
-        )
+            fig.update_layout(
+                title=f"{stock_name} ({code}) - 다단계 목표가 및 손절선 차트",
+                margin=dict(l=20, r=20, t=35, b=20),
+                hovermode="x unified",
+                template="plotly_white",
+                height=400,
+                yaxis=dict(title="가격 (원)"),
+                yaxis2=dict(title="누적 순매수 증감 (주)", overlaying="y", side="right", showgrid=False)
+            )
 
-        fig.update_xaxes(
-            type="category",
-            tickangle=0,
-            nticks=10,
-        )
+            fig.update_xaxes(
+                type="category",
+                tickangle=0,
+                nticks=10,
+            )
 
-        st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True)
 
         # 📌 최근 날짜별 상세 수치 카드 (클릭 즉시 복사)
         st.markdown("### 📋 최근 날짜별 상세 수치 복사 (원하시는 가격 글자를 클릭하면 즉시 복사됩니다)")
