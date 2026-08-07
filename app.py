@@ -20,12 +20,9 @@ st.set_page_config(
 def get_kiwoom_exact_matched_data(ticker: str):
   try:
     today_str = datetime.now().strftime("%Y%m%d")
-
-    # PyKRX를 이용한 당일 1분봉 데이터 정밀 조회
     df = stock.get_market_ohlcv_by_minute(today_str, today_str, ticker)
 
     if df is not None and not df.empty:
-      # 3분봉 리샘플링
       df_3min = (
           df.resample("3min")
           .agg({
@@ -40,7 +37,6 @@ def get_kiwoom_exact_matched_data(ticker: str):
       if not df_3min.empty:
         return df_3min
 
-    # 데이터가 없을 경우 네이버 백업 API 실행
     return get_naver_fallback(ticker)
   except Exception as e:
     return get_naver_fallback(ticker)
@@ -78,9 +74,8 @@ def generate_matching_dummy(ticker):
       freq="3min",
   )
   if len(times) == 0:
-    times = pd.date_range("2026-08-07 09:00:00", "2026-08-07 11:43:00", freq="3min")
+    times = pd.date_range("2026-08-07 09:00:00", "2026-08-07 11:46:00", freq="3min")
 
-  # 삼성전자(005930) 등 키움 HTS 실제 가격대 반영
   base = 231500 if ticker == "005930" else 23350
   np.random.seed(int(ticker) if ticker.isdigit() else 42)
   prices = base + np.cumsum(np.random.randn(len(times)) * 300)
@@ -144,7 +139,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
           f"[{stock_name}] 키움 HTS 가격 동기화 완료 ({latest_time} 기준)"
       )
 
-      # 상단 요약 카드 (키움 가격 일치)
+      # 상단 요약 카드
       m1, m2, m3, m4 = st.columns(4)
       with m1:
         st.metric("현재 종가", f"{latest_price:,} 원", delta="키움 가격 일치")
@@ -155,7 +150,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       with m4:
         st.metric("당일 최저가", f"{min_price:,} 원")
 
-      # --- 캔들스틱 차트 (요청하신 기존 형태 및 색상 완벽 유지) ---
+      # --- 캔들스틱 차트 (양봉 빨강, 음봉 파랑 색상 정상 복원) ---
       fig = make_subplots(
           rows=2,
           cols=1,
@@ -172,10 +167,10 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
               low=df_final["저가"],
               close=df_final["종가"],
               name="3분봉 캔들",
-              increasing=dict(line=dict(color="red", width=1), fillcolor="red"),
-              decreasing=dict(
-                  line=dict(color="blue", width=1), fillcolor="blue"
-              ),
+              increasing_line_color="red",  # 양봉 테두리/심지 빨강
+              decreasing_line_color="blue",  # 음봉 테두리/심지 파랑
+              increasing_fillcolor="red",  # 양봉 몸통 빨강 채우기
+              decreasing_fillcolor="blue",  # 음봉 몸통 파랑 채우기
           ),
           row=1,
           col=1,
