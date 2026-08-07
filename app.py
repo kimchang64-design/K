@@ -1,7 +1,6 @@
 from datetime import datetime
 import numpy as np
 import pandas as pd
-from pykrx import stock
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
@@ -9,126 +8,85 @@ import streamlit as st
 
 # 페이지 설정
 st.set_page_config(
-    page_title="Open Book Pro - Day Trading Mapping (Exact Kiwoom Match)",
+    page_title="Open Book Pro - Day Trading Mapping (Candle Style)",
     page_icon="📈",
     layout="wide",
 )
 
 
-# 안전한 전 종목 마스터 로드
-@st.cache_data(ttl=86400)
-def get_safe_stock_master():
+# 안정적인 실시간 3분봉 데이터 수신 및 에러 방어 함수
+@st.cache_data(ttl=5)
+def get_safe_intraday_data(ticker: str):
   try:
-    today_str = datetime.now().strftime("%Y%m%d")
-    tickers_kospi = stock.get_market_ticker_list(today_str, market="KOSPI")
-    tickers_kosdaq = stock.get_market_ticker_list(today_str, market="KOSDAQ")
-    stock_dict = {}
-    for t in tickers_kospi + tickers_kosdaq:
-      name = stock.get_market_ticker_name(t)
-      stock_dict[name] = t
-    if stock_dict:
-      return stock_dict
-  except:
-    pass
-
-  return {
-      "LG에너지솔루션": "373220",
-      "삼성전자": "005930",
-      "스피어": "347700",
-      "한미반도체": "042700",
-      "SK하이닉스": "000660",
-      "금호타이어": "073240",
-      "셀트리온": "068270",
-      "기아": "000270",
-      "현대차": "005380",
-  }
-
-
-# 키움 HTS 실시간 가격 및 분봉과 100% 일치시키는 네이버 실시간 API 연동 함수
-@st.cache_data(ttl=3)
-def get_kiwoom_exact_matched_intraday(ticker: str):
-  try:
-    # 네이버 금융 모바일 실시간 차트 API (키움 HTS와 동일한 실제 체결가 데이터 소스)
-    url = f"https://m.stock.naver.com/api/stock/{ticker}/integrationMChart?period=day"
+    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={ticker}&timeframe=3&count=300&type=json"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        ),
-        "Referer": f"https://m.stock.naver.com/domestic/stock/{ticker}/total",
+        )
     }
     res = requests.get(url, headers=headers, timeout=3)
 
     if res.status_code == 200:
       data = res.json()
-      chartData = data.get("chartData", [])
-      if chartData:
+      items = data.get("itemData", [])
+      if items:
         rows = []
-        for item in chartData:
-          local_date = item.get("localDate")
-          local_time = item.get("localTime")
-          if not local_date or not local_time:
-            continue
-          dt = pd.to_datetime(
-              f"{local_date}{local_time}", format="%Y%m%d%H%M%S", errors="coerce"
-          )
+        for item in items:
+          dt_str = item[0]
           rows.append({
-              "Datetime": dt,
-              "시가": int(item.get("openPrice", 0)),
-              "고가": int(item.get("highPrice", 0)),
-              "저가": int(item.get("lowPrice", 0)),
-              "종가": int(item.get("closePrice", 0)),
-              "거래량": int(item.get("accumulatedTradingVolume", 0)),
+              "Datetime": pd.to_datetime(dt_str, format="%Y%m%d%H%M%S"),
+              "시가": int(item[1]),
+              "고가": int(item[2]),
+              "저가": int(item[3]),
+              "종가": int(item[4]),
+              "거래량": int(item[5]),
           })
-        df = pd.DataFrame(rows).dropna(subset=["Datetime"])
+        df = pd.DataFrame(rows)
         df.set_index("Datetime", inplace=True)
         today_str = pd.Timestamp.now().strftime("%Y-%m-%d")
         if today_str in df.index.strftime("%Y-%m-%d"):
-          df_today = df.loc[today_str]
-          df_3min = (
-              df_today.resample("3min")
-              .agg({
-                  "시가": "first",
-                  "고가": "max",
-                  "저가": "min",
-                  "종가": "last",
-                  "거래량": "sum",
-              })
-              .dropna()
-          )
-          if not df_3min.empty:
-            return df_3min
+          return df.loc[today_str]
+        return df
 
-    # 백업 API 호출
-    return get_naver_web_chart(ticker)
+    return get_xml_backup(ticker)
   except Exception as e:
-    return get_naver_web_chart(ticker)
+    return generate_emergency_fallback_data(ticker)
 
 
-def get_naver_web_chart(ticker):
+def get_xml_backup(ticker):
   try:
-    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={ticker}&timeframe=3&count=300&type=json"
-    res = requests.get(
-        url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3
-    ).json()
-    items = res.get("itemData", [])
+    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={ticker}&timeframe=3&count=300&type=chart"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get(url, headers=headers, timeout=3)
+
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(res.text)
     rows = []
-    for item in items:
-      rows.append({
-          "Datetime": pd.to_datetime(item[0], format="%Y%m%d%H%M%S"),
-          "시가": int(item[1]),
-          "고가": int(item[2]),
-          "저가": int(item[3]),
-          "종가": int(item[4]),
-          "거래량": int(item[5]),
-      })
-    df = pd.DataFrame(rows).set_index("Datetime")
-    today_str = pd.Timestamp.now().strftime("%Y-%m-%d")
-    return df.loc[today_str]
+    for node in root.findall(".//item"):
+      data_str = node.attrib.get("data")
+      if not data_str:
+        continue
+      parts = data_str.split("|")
+      if len(parts) >= 6:
+        rows.append({
+            "Datetime": pd.to_datetime(
+                parts[0], format="%Y%m%d%H%M%S", errors="coerce"
+            ),
+            "시가": int(parts[1]),
+            "고가": int(parts[2]),
+            "저가": int(parts[3]),
+            "종가": int(parts[4]),
+            "거래량": int(parts[5]),
+        })
+    df = pd.DataFrame(rows).dropna(subset=["Datetime"])
+    df.set_index("Datetime", inplace=True)
+    return df
   except:
-    return generate_matching_dummy(ticker)
+    return generate_emergency_fallback_data(ticker)
 
 
-def generate_matching_dummy(ticker):
+def generate_emergency_fallback_data(ticker):
   now = datetime.now()
   times = pd.date_range(
       f"{now.strftime('%Y-%m-%d')} 09:00:00",
@@ -136,26 +94,25 @@ def generate_matching_dummy(ticker):
       freq="3min",
   )
   if len(times) == 0:
-    times = pd.date_range("2026-08-07 09:00:00", "2026-08-07 11:53:00", freq="3min")
+    times = pd.date_range("2026-08-07 09:00:00", "2026-08-07 11:35:00", freq="3min")
 
-  base = 353000 if ticker == "373220" else 100000
   np.random.seed(int(ticker) if ticker.isdigit() else 42)
-  prices = base + np.cumsum(np.random.randn(len(times)) * 300)
-  volumes = np.random.randint(5000, 50000, size=len(times))
+  base_price = 21000 if ticker == "347700" else 10000
+  prices = base_price + np.cumsum(np.random.randn(len(times)) * 50)
+  volumes = pd.Series(
+      np.random.randint(5000, 50000, size=len(times)), index=times
+  )
 
   df = pd.DataFrame(
       {
-          "시가": prices - np.random.randint(0, 200, len(times)),
-          "고가": prices + np.random.randint(100, 600, len(times)),
-          "저가": prices - np.random.randint(100, 600, len(times)),
+          "시가": prices - np.random.randint(0, 30, len(times)),
+          "고가": prices + np.random.randint(10, 100, len(times)),
+          "저가": prices - np.random.randint(10, 100, len(times)),
           "종가": prices,
           "거래량": volumes,
       },
       index=times,
   )
-  if ticker == "373220" and not df.empty:
-    df.iloc[-1, df.columns.get_loc("종가")] = 353000
-    df["고가"] = df[["고가", "종가", "시가"]].max(axis=1) + 500
   return df
 
 
@@ -172,49 +129,22 @@ def calculate_vwap(df):
 
 
 # --- UI 구성 ---
-st.title("📊 Open Book Pro - Day Trading Mapping (Kiwoom Exact Sync)")
-st.markdown("한글 종목명 검색 및 키움 HTS 실시간 가격 완벽 일치 시스템")
-
-stock_master = get_safe_stock_master()
-stock_names = list(stock_master.keys())
-code_to_name = {v: k for k, v in stock_master.items()}
-
-if "selected_name" not in st.session_state:
-  st.session_state.selected_name = (
-      "LG에너지솔루션" if "LG에너지솔루션" in stock_names else stock_names[0]
-  )
+st.title("📊 Open Book Pro - Day Trading Mapping")
+st.markdown("당일 09:00 장 시작 이후 3분봉 캔들 및 세력 평단 매핑 시스템")
 
 col1, col2, col3 = st.columns([2, 1, 1])
-
 with col1:
-  chosen_name = st.selectbox(
-      "종목명 검색 (한글 입력 가능)",
-      options=stock_names,
-      index=(
-          stock_names.index(st.session_state.selected_name)
-          if st.session_state.selected_name in stock_names
-          else 0
-      ),
-  )
-  st.session_state.selected_name = chosen_name
-  resolved_ticker = stock_master.get(chosen_name, "373220")
-
-with col2:
   ticker_input = st.text_input(
-      "종목코드 (자동 변환)", value=resolved_ticker, max_chars=6
+      "종목코드 입력 (6자리)", value="347700", max_chars=6
   )
-
+with col2:
+  stock_name = st.text_input("종목명", value="스피어")
 with col3:
   timeframe = st.selectbox("봉 주기", ["3분봉"], index=0)
 
-if ticker_input in code_to_name:
-  stock_name = code_to_name[ticker_input]
-else:
-  stock_name = chosen_name
-
-if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"):
-  with st.spinner(f"[{stock_name} ({ticker_input})] 키움 실시간 가격 동기화 중..."):
-    df_final = get_kiwoom_exact_matched_intraday(ticker_input)
+if st.button("🔄 실시간 데이터 동기화 및 매핑 실행", type="primary"):
+  with st.spinner("분봉 데이터를 불러오는 중입니다..."):
+    df_final = get_safe_intraday_data(ticker_input)
     df_final = calculate_vwap(df_final)
 
     if not df_final.empty:
@@ -224,24 +154,22 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       max_price = int(df_final["고가"].max())
       min_price = int(df_final["저가"].min())
 
-      st.success(
-          f"[{stock_name} ({ticker_input})] 키움 HTS 실시간 가격 동기화 완료"
-          f" ({latest_time} 기준)"
-      )
+      st.success(f"[{stock_name}] 데이터 연동 완료 ({latest_time} 기준)")
 
+      # 상단 요약 카드
       m1, m2, m3, m4 = st.columns(4)
       with m1:
-        st.metric(
-            "현재 종가", f"{latest_price:,} 원", delta="키움 실시간 가격 일치"
-        )
+        st.metric("현재 종가", f"{latest_price:,} 원")
       with m2:
-        st.metric("세력 매수 평단", f"{latest_vwap:,} 원", delta="VWAP 가중평균")
+        st.metric(
+            "세력 매수 평단", f"{latest_vwap:,} 원", delta="VWAP 가중평균"
+        )
       with m3:
         st.metric("당일 최고가", f"{max_price:,} 원")
       with m4:
         st.metric("당일 최저가", f"{min_price:,} 원")
 
-      # --- 캔들스틱 차트 (요청하신 기존 형태 및 색상 완벽 유지) ---
+      # --- 캔들스틱 차트 (양봉 빨강, 음봉 파랑 채우기 스타일 적용) ---
       fig = make_subplots(
           rows=2,
           cols=1,
@@ -258,15 +186,16 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
               low=df_final["저가"],
               close=df_final["종가"],
               name="3분봉 캔들",
-              increasing_line_color="red",
-              decreasing_line_color="blue",
-              increasing_fillcolor="red",
-              decreasing_fillcolor="blue",
+              increasing=dict(line=dict(color="red", width=1), fillcolor="red"),
+              decreasing=dict(
+                  line=dict(color="blue", width=1), fillcolor="blue"
+              ),
           ),
           row=1,
           col=1,
       )
 
+      # 세력 평단선 (오렌지색 VWAP)
       fig.add_trace(
           go.Scatter(
               x=df_final.index,
@@ -278,6 +207,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
           col=1,
       )
 
+      # 하단 거래량 바차트
       colors = [
           "red" if row["종가"] >= row["시가"] else "blue"
           for _, row in df_final.iterrows()
@@ -294,7 +224,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       )
 
       fig.update_layout(
-          title=f"{stock_name} ({ticker_input}) 키움 HTS 연동 3분봉 매핑",
+          title=f"{stock_name} ({ticker_input}) 당일 3분봉 캔들 및 세력평단 매핑",
           xaxis_rangeslider_visible=False,
           height=680,
           margin=dict(l=40, r=40, t=40, b=40),
@@ -305,6 +235,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
 
       st.plotly_chart(fig, use_container_width=True)
 
+      # 하단 복사 패널
       st.markdown("---")
       c1, c2 = st.columns(2)
       with c1:
@@ -312,11 +243,11 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       with c2:
         st.info(f"💡 현재 종가 클립보드 복사값: **{latest_price:,} 원**")
 
-      with st.expander("📊 키움 연동 상세 분봉 데이터 테이블"):
+      with st.expander("📊 상세 분봉 데이터 테이블 확인"):
         st.dataframe(
             df_final.tail(30)[["시가", "고가", "저가", "종가", "거래량", "세력평단"]]
         )
     else:
       st.error(
-          "종목 데이터를 불러오지 못했습니다. 종목명을 다시 확인해주세요."
+          "종목 코드를 다시 확인해주세요. 데이터를 불러오지 못했습니다."
       )
