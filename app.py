@@ -86,14 +86,14 @@ def fetch_naver_minute_ohlcv(code: str, count: int = 500) -> pd.DataFrame:
     """
     네이버 증권 1분봉 원본 데이터를 가져온다. (기본 최근 count개 캔들)
     반환: index=datetime, columns=[시가,고가,저가,종가,거래량]
-    실패 시 빈 DataFrame 반환.
+    실패 시 빈 DataFrame 반환하고 실패 사유를 session_state["_minute_fetch_error"]에 남긴다.
     """
     try:
         url = (
             f"https://fchart.stock.naver.com/sise.nhn?"
             f"symbol={code}&timeframe=minute&count={count}&requestType=0"
         )
-        resp = requests.get(url, timeout=3)
+        resp = requests.get(url, timeout=4, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
         resp.raise_for_status()
         root = ET.fromstring(resp.content)
         rows = []
@@ -118,10 +118,19 @@ def fetch_naver_minute_ohlcv(code: str, count: int = 500) -> pd.DataFrame:
             except (ValueError, TypeError):
                 continue
         if not rows:
+            st.session_state["_minute_fetch_error"] = "응답은 받았지만 파싱 가능한 캔들 데이터가 0개였습니다 (장 시작 전이거나 페이지 구조 변경 가능성)."
             return pd.DataFrame()
+        st.session_state["_minute_fetch_error"] = None
         out = pd.DataFrame(rows).set_index("datetime").sort_index()
         return out
-    except Exception:
+    except requests.exceptions.Timeout:
+        st.session_state["_minute_fetch_error"] = "요청 시간 초과(4초) - 배포 서버에서 fchart.stock.naver.com으로 나가는 네트워크가 느리거나 막혀있을 수 있습니다."
+        return pd.DataFrame()
+    except requests.exceptions.RequestException as e:
+        st.session_state["_minute_fetch_error"] = f"HTTP 요청 실패: {e}"
+        return pd.DataFrame()
+    except Exception as e:
+        st.session_state["_minute_fetch_error"] = f"알 수 없는 오류: {e}"
         return pd.DataFrame()
 
 
@@ -242,6 +251,35 @@ main_tab1, main_tab2, main_tab3, main_tab4, main_tab5 = st.tabs(
 )
 
 
+def jump_to_chart(code, name, timeframe):
+    """
+    다른 탭(실시간 랭킹 등)의 '⚡단타'/'🎓스터디' 버튼에서 호출.
+    평단선 차트 탭의 종목/차트주기를 세팅하고, 화면도 그 탭으로 전환한다.
+    ⚠ Streamlit 공식 API로는 탭을 코드로 전환할 수 없어서, 탭 버튼을 자바스크립트로
+    직접 클릭하는 방식을 쓴다(비공식 트릭이라 스트림릿 버전에 따라 안 먹힐 수 있음).
+    """
+    st.session_state["target_stock"] = name
+    st.session_state["stock_input_field"] = name
+    st.session_state["direct_timeframe_select"] = timeframe
+    st.session_state["_jump_to_tab1_pending"] = True
+
+
+if st.session_state.get("_jump_to_tab1_pending"):
+    st.session_state["_jump_to_tab1_pending"] = False
+    components.html(
+        """
+        <script>
+        setTimeout(function() {
+            const doc = window.parent.document;
+            const tabs = doc.querySelectorAll('button[data-baseweb="tab"]');
+            if (tabs && tabs.length > 0) { tabs[0].click(); }
+        }, 150);
+        </script>
+        """,
+        height=0,
+    )
+
+
 # ---------------------------------------------------------
 # 공통 함수 (한글 종목명 및 매핑 강화)
 # ---------------------------------------------------------
@@ -349,134 +387,162 @@ def resolve_code_or_name(user_input):
 
 
 @st.cache_data(ttl=120)
-def fetch_real_financial_info(code: str):
+@st.cache_data(ttl=30)
+def fetch_naver_integration_info(code: str):
     """
-    실제 pykrx 데이터로 상장주식수 / EPS / 외국인·기관·연기금·투신·사모 순매수(수량)를 가져온다.
-
-    ⚠ 시가총액을 이 함수가 별도로 조회한 "과거 특정일자 종가 × 상장주식수"로
-    계산하면, 그 날짜가 화면에 표시 중인 현재가와 다를 때 시가총액이 실제와
-    어긋나 보일 수 있다(제보해주신 씨젠 4,500억원 vs 실제 14,989억원 같은 현상).
-    그래서 이 함수는 시가총액을 직접 계산하지 않고 "상장주식수"만 반환하며,
-    호출부(get_financial_info)에서 화면에 실제로 표시 중인 현재가와 곱해
-    항상 같은 값끼리 동기화되도록 한다.
-
-    추정 순이익도 같은 이유로 "시가총액 ÷ PER"(가격 의존) 대신
-    "EPS × 상장주식수"(가격과 무관, 분기 실적 기반)로 계산한다.
-
-    ⚠ pykrx는 '영업이익' 같은 손익계산서 데이터는 제공하지 않아 여기서도
-    구할 수 없다 (DART 전자공시 연동이 별도로 필요) — 그래서 이름은
-    "추정 순이익"이고 영업이익이 아니다.
-
-    당일 데이터가 아직 게시되지 않았으면(주말/공휴일/장 시작 전) 직전
-    영업일로 최대 10일 소급 조회한다.
+    네이버 증권 모바일 API(m.stock.naver.com)에서 시가총액/PER/EPS를 가져온다.
+    이미 실시간 시세 보정에 쓰는 polling.finance.naver.com과 같은 네이버
+    계열 API라 이 환경에서 안정적으로 응답하며, pykrx처럼 날짜를 여러 번
+    소급 조회할 필요가 없어 훨씬 빠르다(호출 1번).
     """
-    shares, eps = None, None
-    for back in range(10):
-        d = (datetime.datetime.now() - datetime.timedelta(days=back)).strftime("%Y%m%d")
-        try:
-            if shares is None:
-                cap_df = stock.get_market_cap(d, d, code)
-                if cap_df is not None and not cap_df.empty and "상장주식수" in cap_df.columns:
-                    shares = int(cap_df["상장주식수"].iloc[-1])
-            if eps is None:
-                fund_df = stock.get_market_fundamental(d, d, code)
-                if fund_df is not None and not fund_df.empty and "EPS" in fund_df.columns:
-                    eps_val = fund_df["EPS"].iloc[-1]
-                    if pd.notna(eps_val):
-                        eps = float(eps_val)
-            if shares is not None and eps is not None:
-                break
-        except Exception:
-            continue
+    try:
+        url = f"https://m.stock.naver.com/api/stock/{code}/integration"
+        resp = requests.get(url, timeout=3, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        data = resp.json()
+        info = {}
+        for item in data.get("totalInfos", []) or []:
+            k = item.get("key")
+            if k is not None:
+                info[k] = item.get("value")
 
-    foreign_net, inst_net, pension_net, trust_net, pe_net = None, None, None, None, None
-    for back in range(10):
+        def _num(*keys):
+            for k in keys:
+                v = info.get(k)
+                if v is None:
+                    continue
+                try:
+                    return float(str(v).replace(",", "").replace("%", ""))
+                except ValueError:
+                    continue
+            return None
+
+        price = _num("closePrice", "lastClosePrice", "now")
+        market_cap = _num("marketValue")
+        per = _num("per")
+        eps = _num("eps")
+
+        # marketValue 단위 방어: price 대비 내재 주식수가 비상식적으로 작으면
+        # (이미 억원 단위로 온 경우) 원 단위로 보정
+        if market_cap and price and price > 0:
+            implied_shares = market_cap / price
+            if implied_shares < 10_000:
+                market_cap *= 100_000_000
+
+        if market_cap is None and per is None and eps is None:
+            return None
+        return {"price": price, "market_cap": market_cap, "per": per, "eps": eps}
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=60)
+def fetch_investor_flow(code: str):
+    """
+    외국인/기관(연기금·투신·사모 포함) 순매수 수량을 pykrx로 가져온다.
+    ⚠ 이 데이터는 KRX가 당일 장중에는 공개하지 않고, 정식 집계본은 보통
+    다음 영업일에야 게시된다 (증권사 HTS의 "실시간 추정치"와는 성격이 다름).
+    그래서 "당일 실시간"이 아니라 "최근 영업일 기준"이 될 수 있으며,
+    화면에 실제 기준일(as_of)을 표시해 어느 날짜 데이터인지 명확히 한다.
+    소급 조회는 속도를 위해 최대 3일로 제한한다.
+    """
+    for back in range(3):
         d = (datetime.datetime.now() - datetime.timedelta(days=back)).strftime("%Y%m%d")
         try:
             trade_df = stock.get_market_trading_volume_by_date(d, d, code)
             if trade_df is None or trade_df.empty:
                 continue
             row = trade_df.iloc[-1]
+            result = {"as_of": d}
             for col in trade_df.columns:
                 c = str(col)
-                if "외국인" in c and "기타" not in c and foreign_net is None:
-                    foreign_net = int(row[col])
-                elif "기관합계" in c and inst_net is None:
-                    inst_net = int(row[col])
-                elif "연기금" in c and pension_net is None:
-                    pension_net = int(row[col])
-                elif "투신" in c and trust_net is None:
-                    trust_net = int(row[col])
-                elif "사모" in c and pe_net is None:
-                    pe_net = int(row[col])
-            break
+                if "외국인" in c and "기타" not in c and "foreign_net" not in result:
+                    result["foreign_net"] = int(row[col])
+                elif "기관합계" in c and "inst_net" not in result:
+                    result["inst_net"] = int(row[col])
+                elif "연기금" in c and "pension_net" not in result:
+                    result["pension_net"] = int(row[col])
+                elif "투신" in c and "trust_net" not in result:
+                    result["trust_net"] = int(row[col])
+                elif "사모" in c and "pe_net" not in result:
+                    result["pe_net"] = int(row[col])
+            if len(result) > 1:
+                return result
         except Exception:
             continue
+    return None
 
-    if shares is None and eps is None and foreign_net is None and inst_net is None:
-        return None
 
-    return {
-        "shares": shares,
-        "eps": eps,
-        "foreign_net": foreign_net,
-        "inst_net": inst_net,
-        "pension_net": pension_net,
-        "trust_net": trust_net,
-        "pe_net": pe_net,
-    }
-
+@st.cache_data(ttl=300)
+def fetch_shares_outstanding(code: str):
+    """상장주식수(느리게 변하는 값) - pykrx, 최대 3일 소급."""
+    for back in range(3):
+        d = (datetime.datetime.now() - datetime.timedelta(days=back)).strftime("%Y%m%d")
+        try:
+            cap_df = stock.get_market_cap(d, d, code)
+            if cap_df is not None and not cap_df.empty and "상장주식수" in cap_df.columns:
+                return int(cap_df["상장주식수"].iloc[-1])
+        except Exception:
+            continue
+    return None
 
 
 def get_financial_info(code, current_price=None):
     """
-    종목코드별로 실제 동기화되는 재무/수급 정보를 반환한다.
+    종목코드별로 실제 동기화되는 재무/수급 정보를 반환한다. (오늘/현재 기준)
 
-    - 시가총액 = 화면에 표시 중인 현재가(current_price) × 상장주식수(pykrx)
-      → 별도로 조회한 과거 날짜의 가격을 쓰지 않기 때문에 화면 다른 곳의
-      가격/시가총액과 항상 같은 기준으로 동기화된다.
-    - 추정 순이익 = EPS(pykrx, 분기 실적 기반) × 상장주식수
-      → 가격에 의존하지 않아 날짜가 다소 어긋나도 크게 틀어지지 않는다.
-      ⚠ pykrx는 영업이익(손익계산서) 자체는 제공하지 않아 "추정 순이익"이며
+    - 시가총액/PER/EPS: 네이버 모바일 API 1회 호출 (fetch_naver_integration_info)
+      → pykrx로 날짜를 여러 번 소급 조회하던 이전 방식보다 훨씬 빠르고,
+      실시간 시세 보정과 같은 네이버 계열 API라 이 환경에서 더 안정적으로 응답한다.
+      실패 시에만 pykrx(상장주식수 × 현재가)로 대체한다.
+    - 추정 순이익 = 시가총액 ÷ PER (네이버 값이 서로 같은 시점 기준이라 동기화됨)
+      ⚠ pykrx/네이버 모두 '영업이익'(손익계산서) 자체는 제공하지 않아 "추정 순이익"이며
       영업이익이 아니다 (DART 전자공시 연동이 별도로 필요).
-    - 외국인/기관/연기금/투신/사모 순매수(수량): pykrx 실데이터
+    - 외국인/기관/연기금/투신/사모 순매수(수량): pykrx 실데이터. KRX가 이 데이터를
+      장중에는 공개하지 않아 "최근 영업일 기준"일 수 있고, 그 기준일을 as_of로 표시한다.
     - 매매성향: 종목코드 기반으로 산출
-    - 실시간 프로그램 순매수 / 신용잔고율: pykrx 무료 API로는 조회 불가 → 종목코드 기반
+    - 실시간 프로그램 순매수 / 신용잔고율: 무료 공개 API로는 조회 불가 → 종목코드 기반
       샘플값 (실제 서비스 연동 시 증권사 API/유료 데이터로 교체 필요)
     """
-    real = fetch_real_financial_info(code)
     seed = int(code) if code and code.isdigit() else abs(hash(code or "")) % 100000
 
-    shares = real.get("shares") if real else None
-    eps = real.get("eps") if real else None
+    naver_info = fetch_naver_integration_info(code)
+    mcap_eok, per, op_profit_label = None, None, None
 
-    if current_price and shares:
-        mcap_eok = int(current_price * shares / 100_000_000)  # 원 -> 억원
-    elif real and real.get("shares"):
-        mcap_eok = None  # 가격 정보가 없으면 시가총액을 계산하지 않고 아래에서 대체값 사용
-    else:
-        mcap_eok = None
+    if naver_info and naver_info.get("market_cap"):
+        mcap_eok = int(naver_info["market_cap"] / 100_000_000)
+        per = naver_info.get("per")
+    elif current_price:
+        shares = fetch_shares_outstanding(code)
+        if shares:
+            mcap_eok = int(current_price * shares / 100_000_000)
 
     if mcap_eok is None:
-        mcap_eok = 3000 + (seed % 500) * 50  # 대체값 (실데이터 실패 시에도 종목마다 값이 달라지도록)
+        mcap_eok = 3000 + (seed % 500) * 50  # 최종 대체값 (모든 실데이터 조회 실패 시)
+        mcap_source_failed = True
+    else:
+        mcap_source_failed = False
 
-    if eps and shares:
-        op_profit_eok = int(eps * shares / 100_000_000)
-        op_profit_label = "💵 추정 순이익 (EPS×상장주식수, 영업이익 아님)"
+    if per and per > 0:
+        op_profit_eok = int(mcap_eok / per)
+        op_profit_label = "💵 추정 순이익 (시가총액÷PER, 영업이익 아님)"
     else:
         op_profit_eok = int(mcap_eok * 0.03)
-        op_profit_label = "💵 추정 순이익 (데이터 조회 실패 - 대체값)"
+        op_profit_label = "💵 추정 순이익 (PER 조회 실패 - 대체값)" if not mcap_source_failed else "💵 추정 순이익 (데이터 조회 실패 - 대체값)"
+
+    flow = fetch_investor_flow(code)
+    flow_as_of = flow.get("as_of") if flow else None
 
     def _fmt_net(val, seed_range):
         if val is not None:
             return f"{val:+,}주"
         return f"{(seed % seed_range) - seed_range // 2:+,}주 (추정)"
 
-    foreign_net = _fmt_net(real.get("foreign_net") if real else None, 9000)
-    inst_net = _fmt_net(real.get("inst_net") if real else None, 6000)
-    pension_net = _fmt_net(real.get("pension_net") if real else None, 4000)
-    trust_net = _fmt_net(real.get("trust_net") if real else None, 3000)
-    pe_net = _fmt_net(real.get("pe_net") if real else None, 2000)
+    foreign_net = _fmt_net(flow.get("foreign_net") if flow else None, 9000)
+    inst_net = _fmt_net(flow.get("inst_net") if flow else None, 6000)
+    pension_net = _fmt_net(flow.get("pension_net") if flow else None, 4000)
+    trust_net = _fmt_net(flow.get("trust_net") if flow else None, 3000)
+    pe_net = _fmt_net(flow.get("pe_net") if flow else None, 2000)
 
     trade_type = "⚡ 단타" if (seed % 3 == 0) else ("🌊 스윙" if (seed % 3 == 1) else "🏆 중장기")
     prog_net = f"{((seed % 900) - 450) * 1:+,}억 ({'매수우위' if seed % 2 == 0 else '매도우위'})"
@@ -507,6 +573,7 @@ def get_financial_info(code, current_price=None):
         "pension_net": pension_net,
         "trust_net": trust_net,
         "pe_net": pe_net,
+        "flow_as_of": flow_as_of,
         "prog_net": prog_net,
         "credit_ratio": credit_ratio,
         "news": news_list,
@@ -871,22 +938,59 @@ for _t_name, _stocks in THEME_SEED:
 THEME_DATA = dict(sorted(THEME_DATA.items(), key=lambda kv: kv[1]["change_val"], reverse=True))
 
 
-@st.cache_data(ttl=60)
-def fetch_market_ranking(market: str = "ALL") -> pd.DataFrame:
+@st.cache_data(ttl=30)
+def fetch_naver_live_ranking() -> pd.DataFrame:
     """
-    당일(직전 거래일) 시장 전체 종목의 OHLCV+거래대금을 가져온다.
-    거래량 상위 / 거래대금 상위 TOP10 산출에 사용.
+    네이버 금융 '거래량 상위' 페이지에서 거래량+거래대금+등락률을 함께 가져온다.
+    ⚠ pykrx의 get_market_ohlcv_by_ticker는 KRX 정식 종가(EOD) 기준이라
+    장중에는 "당일" 데이터가 아예 없어서 실시간 랭킹에 못 씁니다.
+    이 페이지는 네이버가 장중에도 실시간으로 갱신하는 페이지라 장중에도 값이 보입니다.
+    (비공식 HTML 파싱 - 페이지 구조가 바뀌면 깨질 수 있음, 실패 시 빈 DataFrame)
     """
-    today = datetime.datetime.now().strftime("%Y%m%d")
     try:
-        df = stock.get_market_ohlcv_by_ticker(today, market=market)
-        if df is None or df.empty:
-            # 주말/공휴일 등으로 당일 데이터가 없으면 최근 영업일로 보정
-            prev = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y%m%d")
-            df = stock.get_market_ohlcv_by_ticker(prev, market=market)
-        df = df[df["거래량"] > 0].copy()
-        df["종목명"] = [stock.get_market_ticker_name(c) for c in df.index]
-        return df
+        url = "https://finance.naver.com/sise/sise_quant.naver"
+        resp = requests.get(url, timeout=4, headers={"User-Agent": "Mozilla/5.0"})
+        resp.encoding = "euc-kr"
+        html = resp.text
+
+        code_name_pairs = re.findall(r'/item/main\.naver\?code=(\d{6})"[^>]*>([^<]+)</a>', html)
+        code_map = {}
+        for code, name in code_name_pairs:
+            name = name.strip()
+            if name and name not in code_map:
+                code_map[name] = code
+
+        import io as _io
+        tables = pd.read_html(_io.StringIO(html))
+        target = None
+        for t in tables:
+            cols = [str(c) for c in t.columns]
+            if any("종목명" in c for c in cols) and any("거래량" in c for c in cols):
+                target = t.copy()
+                break
+        if target is None:
+            return pd.DataFrame()
+
+        target.columns = [str(c) for c in target.columns]
+        target = target.dropna(subset=["종목명"])
+        target = target[target["종목명"].astype(str).str.strip() != ""]
+
+        def _to_num(series):
+            return pd.to_numeric(
+                series.astype(str).str.replace(",", "").str.replace("%", ""), errors="coerce"
+            )
+
+        out = pd.DataFrame()
+        out["종목명"] = target["종목명"].astype(str).str.strip()
+        out["코드"] = out["종목명"].map(code_map)
+        out["현재가"] = _to_num(target.get("현재가", pd.Series(dtype=float)))
+        out["등락률"] = _to_num(target.get("등락률", pd.Series(dtype=float)))
+        out["거래량"] = _to_num(target.get("거래량", pd.Series(dtype=float)))
+        amt_col = next((c for c in target.columns if "거래대금" in c), None)
+        out["거래대금"] = _to_num(target[amt_col]) * 1_000_000 if amt_col else None  # 표시 단위: 백만원
+
+        out = out.dropna(subset=["코드", "현재가", "거래량"])
+        return out
     except Exception:
         return pd.DataFrame()
 
@@ -979,6 +1083,47 @@ with main_tab1:
             """,
             unsafe_allow_html=True,
         )
+
+        st.session_state.setdefault("watchlist", [])
+        wl_codes = [w["code"] for w in st.session_state.watchlist]
+        is_in_wl = code in wl_codes
+
+        def _add_to_watchlist(c, n):
+            if c not in [w["code"] for w in st.session_state.watchlist]:
+                st.session_state.watchlist.insert(0, {"code": c, "name": n})
+
+        def _remove_from_watchlist(c):
+            st.session_state.watchlist = [w for w in st.session_state.watchlist if w["code"] != c]
+
+        def _select_watchlist(c, n):
+            st.session_state.target_stock = n
+            st.session_state.stock_input_field = n
+
+        wl_btn_col1, wl_btn_col2 = st.columns([1, 4])
+        with wl_btn_col1:
+            if is_in_wl:
+                st.button("★ 관심종목 해제", key="wl_remove_btn", on_click=_remove_from_watchlist, args=(code,), use_container_width=True)
+            else:
+                st.button("☆ 관심종목 추가", key="wl_add_btn", on_click=_add_to_watchlist, args=(code, stock_name), use_container_width=True)
+        with wl_btn_col2:
+            st.caption("⚠ 관심종목은 이 브라우저 세션 동안만 유지되며, 새로고침하면 초기화됩니다 (서버 DB 연동 시 영구 저장 가능)")
+
+        if st.session_state.watchlist:
+            st.markdown(
+                f"<span style='font-size:11px; color:#666;'>⭐ 관심종목 ({len(st.session_state.watchlist)}개):</span>",
+                unsafe_allow_html=True,
+            )
+            wl_list = st.session_state.watchlist[:12]
+            wl_cols = st.columns(len(wl_list))
+            for idx, w in enumerate(wl_list):
+                with wl_cols[idx]:
+                    st.button(
+                        f"⭐ {w['name']}",
+                        key=f"wl_btn_{idx}",
+                        on_click=_select_watchlist,
+                        args=(w["code"], w["name"]),
+                        use_container_width=True,
+                    )
 
         if st.session_state.search_history:
             st.markdown(
@@ -1103,9 +1248,20 @@ with main_tab1:
     components.html(hts_top_panel_html, height=135)
 
     is_minute_mode = selected_timeframe.endswith("분봉")
+    today = datetime.date.today()
+    year_options = list(range(today.year - 4, today.year + 1))  # 항상 올해를 포함하도록 동적 생성
+    one_year_ago = today - datetime.timedelta(days=365)
+
+    if st.session_state.get("_reset_to_today_pending"):
+        st.session_state["sy"] = one_year_ago.year
+        st.session_state["sm"] = one_year_ago.month
+        st.session_state["sd"] = one_year_ago.day
+        st.session_state["ey"] = today.year
+        st.session_state["em"] = today.month
+        st.session_state["ed"] = today.day
+        st.session_state["_reset_to_today_pending"] = False
 
     if is_minute_mode:
-        today = datetime.date.today()
         st.info(
             f"⏱️ 분봉 모드 — 단타용이라 **당일({today.strftime('%Y-%m-%d')}) 09:00 장 시작~15:30 장 마감**만 자동 조회됩니다. "
             f"(참고: 한국거래소 정규장은 08:00이 아니라 **09:00 시작·15:30 종료**가 맞습니다. "
@@ -1116,45 +1272,52 @@ with main_tab1:
         with st.expander("📅 조회 기간 수동으로 바꾸기 (기본은 당일 자동)"):
             d_cols = st.columns(6)
             with d_cols[0]:
-                s_year = st.selectbox("시작 연도", [2022, 2023, 2024, 2025, 2026], index=[2022, 2023, 2024, 2025, 2026].index(today.year), key="sy")
+                s_year = st.selectbox("시작 연도", year_options, index=year_options.index(today.year), key="sy")
             with d_cols[1]:
                 s_mon = st.selectbox("시작 월", list(range(1, 13)), index=today.month - 1, key="sm")
             with d_cols[2]:
                 s_day = st.selectbox("시작 일", list(range(1, 32)), index=today.day - 1, key="sd")
             with d_cols[3]:
-                e_year = st.selectbox("종료 연도", [2022, 2023, 2024, 2025, 2026], index=[2022, 2023, 2024, 2025, 2026].index(today.year), key="ey")
+                e_year = st.selectbox("종료 연도", year_options, index=year_options.index(today.year), key="ey")
             with d_cols[4]:
                 e_mon = st.selectbox("종료 월", list(range(1, 13)), index=today.month - 1, key="em")
             with d_cols[5]:
                 e_day = st.selectbox("종료 일", list(range(1, 32)), index=today.day - 1, key="ed")
     else:
-        st.markdown("📅 **조회 기간 설정 (연도·월·일 상세 선택)**")
+        hdr_col, btn_col = st.columns([5, 1])
+        with hdr_col:
+            st.markdown("📅 **조회 기간 설정 (연도·월·일 상세 선택)**")
+        with btn_col:
+            if st.button("📌 오늘로", key="reset_to_today_btn", help="시작일을 1년 전, 종료일을 오늘로 즉시 설정합니다"):
+                st.session_state["_reset_to_today_pending"] = True
+                st.rerun()
+
         d_cols = st.columns(6)
 
         with d_cols[0]:
             s_year = st.selectbox(
-                "시작 연도", [2022, 2023, 2024, 2025, 2026], index=2, key="sy"
+                "시작 연도", year_options, index=year_options.index(one_year_ago.year), key="sy"
             )
         with d_cols[1]:
             s_mon = st.selectbox(
-                "시작 월", list(range(1, 13)), index=0, key="sm"
+                "시작 월", list(range(1, 13)), index=one_year_ago.month - 1, key="sm"
             )
         with d_cols[2]:
             s_day = st.selectbox(
-                "시작 일", list(range(1, 32)), index=0, key="sd"
+                "시작 일", list(range(1, 32)), index=one_year_ago.day - 1, key="sd"
             )
 
         with d_cols[3]:
             e_year = st.selectbox(
-                "종료 연도", [2022, 2023, 2024, 2025, 2026], index=4, key="ey"
+                "종료 연도", year_options, index=year_options.index(today.year), key="ey"
             )
         with d_cols[4]:
             e_mon = st.selectbox(
-                "종료 월", list(range(1, 13)), index=7, key="em"
+                "종료 월", list(range(1, 13)), index=today.month - 1, key="em"
             )
         with d_cols[5]:
             e_day = st.selectbox(
-                "종료 일", list(range(1, 32)), index=4, key="ed"
+                "종료 일", list(range(1, 32)), index=today.day - 1, key="ed"
             )
 
     try:
@@ -1191,10 +1354,14 @@ with main_tab1:
         interval_minutes = int(selected_timeframe.replace("분봉", ""))
         df = get_today_minute_df(code, interval_minutes)
         if df.empty:
-            st.warning(
-                "당일 분봉 데이터를 아직 받아오지 못했습니다. "
-                "장 시작(09:00) 이전이거나 네트워크 문제일 수 있습니다."
-            )
+            err_detail = st.session_state.get("_minute_fetch_error")
+            warn_msg = "당일 분봉 데이터를 아직 받아오지 못했습니다. 장 시작(09:00) 이전이거나 네트워크 문제일 수 있습니다."
+            if err_detail:
+                warn_msg += f"\n\n**실패 사유:** {err_detail}"
+            st.warning(warn_msg)
+            if st.button("🔄 분봉 다시 시도", key="minute_retry_btn"):
+                fetch_naver_minute_ohlcv.clear()
+                st.rerun()
 
     # 실시간(준실시간) 시세 보정 - 키움 체결가와의 괴리 축소
     rt_col1, rt_col2 = st.columns([1, 5])
@@ -1258,6 +1425,7 @@ with main_tab1:
         pension_net = f_info["pension_net"]
         trust_net = f_info["trust_net"]
         pe_net = f_info["pe_net"]
+        flow_as_of = f_info.get("flow_as_of")
         prog_net = f_info["prog_net"]
         credit_ratio = f_info["credit_ratio"]
         news_list = f_info.get("news", [])
@@ -1297,7 +1465,23 @@ with main_tab1:
         s_c3.metric("💻 실시간 프로그램", prog_net)
         s_c4.metric("💳 신용잔고율", credit_ratio)
 
-        st.caption("👇 기관합계 세부 내역 (당일 수급)")
+        flow_note_col, flow_btn_col = st.columns([5, 1])
+        with flow_note_col:
+            if flow_as_of:
+                as_of_fmt = f"{flow_as_of[:4]}-{flow_as_of[4:6]}-{flow_as_of[6:]}"
+                today_str = datetime.datetime.now().strftime("%Y%m%d")
+                if flow_as_of == today_str:
+                    st.caption(f"👇 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (당일)")
+                else:
+                    st.caption(f"👇 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (KRX가 당일 장중엔 투자자별 수급을 공개하지 않아 최근 영업일 기준입니다)")
+            else:
+                st.caption("👇 기관합계 세부 내역 · ⚠ 수급 데이터 조회 실패 (아래 값은 종목코드 기반 추정치)")
+        with flow_btn_col:
+            if st.button("🔄 새로고침", key="flow_refresh_btn"):
+                fetch_investor_flow.clear()
+                fetch_naver_integration_info.clear()
+                st.rerun()
+
         p_c1, p_c2, p_c3 = st.columns(3)
         p_c1.metric("🏦 연기금 순매수", pension_net)
         p_c2.metric("📈 투신 순매수", trust_net)
@@ -1978,84 +2162,87 @@ with main_tab5:
     top_head1, top_head2 = st.columns([4, 1])
     with top_head1:
         st.markdown("### 🔴 실시간 랭킹")
-        st.caption("네이버 증권 공식 시세 데이터를 기반으로 당일 최고 거래량, 거래대금 및 실시간 인기 검색 순위를 제공합니다.")
+        st.caption(
+            f"네이버 증권 실시간 페이지 기반 · 갱신: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
+            "(장중에도 갱신되는 페이지를 사용합니다 - 예전에 쓰던 pykrx는 장마감 데이터라 장중엔 항상 비어있었습니다)"
+        )
     with top_head2:
-        st.button("🔄 새로고침", key="rt_rank_refresh")
+        if st.button("🔄 새로고침", key="rt_rank_refresh"):
+            fetch_naver_live_ranking.clear()
+            fetch_naver_popular_search.clear()
+            st.rerun()
 
-    rank_market = st.radio(
-        "시장 선택", ["ALL", "KOSPI", "KOSDAQ"], horizontal=True, key="rt_rank_market"
-    )
+    market_df = fetch_naver_live_ranking()
 
-    market_df = fetch_market_ranking(rank_market)
-
-    def _render_rank_list(rows, value_label, value_fmt, height=430):
-        html_rows = ""
+    def _render_rank_rows(rows, value_fmt):
+        """네이티브 스트림릿 위젯으로 랭킹 행을 그린다 (⚡단타/🎓스터디 버튼 클릭 가능하게)."""
         for i, r in enumerate(rows, start=1):
-            chg = r.get("등락률", 0.0)
+            chg = r.get("등락률", 0.0) or 0.0
             chg_color = "#d32f2f" if chg >= 0 else "#1971c2"
             chg_sign = "+" if chg >= 0 else ""
-            html_rows += f"""
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 4px; border-bottom:1px solid #f0f0f0; font-size:12px;">
-                <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-                    <span style="color:#868e96; font-weight:bold; width:18px;">{i}</span>
-                    <span style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{r['name']}</span>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-weight:bold;">{value_fmt(r)}</div>
-                    <div style="color:{chg_color}; font-size:11px;">{chg_sign}{chg:.2f}%</div>
-                </div>
-            </div>
-            """
-        components.html(
-            f'<div style="border:1px solid #e0e0e0; border-radius:8px; padding:6px 10px; background:#fff;">{html_rows}</div>',
-            height=height, scrolling=True,
-        )
+            row_c1, row_c2, row_c3, row_c4 = st.columns([3, 2, 1, 1])
+            with row_c1:
+                st.markdown(
+                    f"<div style='font-size:12px; padding-top:6px;'>"
+                    f"<span style='color:#868e96; font-weight:bold;'>{i}</span> "
+                    f"<span style='font-weight:bold;'>{r['name']}</span></div>",
+                    unsafe_allow_html=True,
+                )
+            with row_c2:
+                st.markdown(
+                    f"<div style='text-align:right; font-size:12px; padding-top:6px;'>"
+                    f"<b>{value_fmt(r)}</b> "
+                    f"<span style='color:{chg_color};'>{chg_sign}{chg:.2f}%</span></div>",
+                    unsafe_allow_html=True,
+                )
+            with row_c3:
+                st.button(
+                    "⚡단타", key=f"jump_day_{r.get('_key', i)}_{value_fmt(r)}",
+                    on_click=jump_to_chart, args=(r.get("code"), r["name"], "3분봉"),
+                    use_container_width=True,
+                )
+            with row_c4:
+                st.button(
+                    "🎓스터디", key=f"jump_study_{r.get('_key', i)}_{value_fmt(r)}",
+                    on_click=jump_to_chart, args=(r.get("code"), r["name"], "일봉"),
+                    use_container_width=True,
+                )
 
     rank_col1, rank_col2, rank_col3 = st.columns(3)
 
     with rank_col1:
         st.markdown("#### 📊 거래량 상위 TOP10")
         if market_df.empty:
-            st.warning("데이터를 불러오지 못했습니다. 장 시작 이후 다시 시도해주세요.")
+            st.warning("데이터를 불러오지 못했습니다. 🔄 새로고침을 눌러 다시 시도해보세요.")
         else:
             top_vol = market_df.sort_values("거래량", ascending=False).head(10)
             rows = [
-                {"name": row["종목명"], "거래량": row["거래량"], "등락률": row["등락률"]}
-                for _, row in top_vol.iterrows()
+                {"name": row["종목명"], "code": row["코드"], "거래량": row["거래량"], "등락률": row["등락률"], "_key": f"vol{idx}"}
+                for idx, (_, row) in enumerate(top_vol.iterrows())
             ]
-            _render_rank_list(rows, "거래량", lambda r: f"{r['거래량']:,}주")
+            _render_rank_rows(rows, lambda r: f"{int(r['거래량']):,}주")
 
     with rank_col2:
         st.markdown("#### 💰 거래대금 상위 TOP10")
-        if market_df.empty:
-            st.warning("데이터를 불러오지 못했습니다. 장 시작 이후 다시 시도해주세요.")
+        if market_df.empty or market_df["거래대금"].isna().all():
+            st.warning("데이터를 불러오지 못했습니다. 🔄 새로고침을 눌러 다시 시도해보세요.")
         else:
-            top_amt = market_df.sort_values("거래대금", ascending=False).head(10)
+            top_amt = market_df.dropna(subset=["거래대금"]).sort_values("거래대금", ascending=False).head(10)
             rows = [
-                {"name": row["종목명"], "거래대금": row["거래대금"], "등락률": row["등락률"]}
-                for _, row in top_amt.iterrows()
+                {"name": row["종목명"], "code": row["코드"], "거래대금": row["거래대금"], "등락률": row["등락률"], "_key": f"amt{idx}"}
+                for idx, (_, row) in enumerate(top_amt.iterrows())
             ]
-            _render_rank_list(rows, "거래대금", lambda r: f"{r['거래대금']//1000000:,}백만")
+            _render_rank_rows(rows, lambda r: f"{int(r['거래대금']//1_000_000):,}백만")
 
     with rank_col3:
         st.markdown("#### 🔍 검색 상위 TOP10")
         st.caption("⚠ 비공식 스크래핑 기반이라 실패할 수 있습니다")
         search_rows = fetch_naver_popular_search()
         if not search_rows:
-            st.info("검색 순위를 지금은 불러올 수 없습니다. 잠시 후 새로고침 해보세요.")
+            st.info("검색 순위를 지금은 불러올 수 없습니다. 🔄 새로고침을 눌러보세요.")
         else:
-            html_rows = ""
-            for r in search_rows:
-                html_rows += f"""
-                <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 4px; border-bottom:1px solid #f0f0f0; font-size:12px;">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="color:#868e96; font-weight:bold; width:18px;">{r['rank']}</span>
-                        <span style="font-weight:bold;">{r['name']}</span>
-                    </div>
-                    <div style="text-align:right; font-weight:bold;">{r['price']}원</div>
-                </div>
-                """
-            components.html(
-                f'<div style="border:1px solid #e0e0e0; border-radius:8px; padding:6px 10px; background:#fff;">{html_rows}</div>',
-                height=430, scrolling=True,
-            )
+            rows = [
+                {"name": r["name"], "code": r["code"], "가격": r.get("price", "-"), "등락률": 0.0, "_key": f"srch{idx}"}
+                for idx, r in enumerate(search_rows)
+            ]
+            _render_rank_rows(rows, lambda r: f"{r['가격']}원")
