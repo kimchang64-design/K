@@ -49,12 +49,6 @@ def patch_today_with_realtime(df: pd.DataFrame, code: str) -> pd.DataFrame:
     - 오늘 날짜 행이 아예 없으면 새로 추가
     - 있으면 종가/거래량을 실시간 값으로 교체
     거래량이 없으면(장중 누적거래량 조회 실패) 직전 거래량으로 대체.
-
-    ⚠ 이 함수는 "일봉(하루=한 행)" 데이터 전용입니다. 분봉처럼 하루 안에
-    여러 행(09:03, 09:06 ...)이 있는 데이터에 그대로 쓰면, "오늘 자정(00:00)"
-    이라는 존재하지 않는 시각의 행을 새로 끼워 넣어버려서 누적평단(세력평단)
-    계산 순서가 깨지고 차트에서 평단선이 이상해지거나 안 보이는 원인이 됩니다.
-    분봉 데이터는 patch_latest_row_with_realtime을 대신 쓰세요.
     """
     rt = fetch_realtime_price(code)
     if rt is None or df is None or df.empty:
@@ -77,23 +71,6 @@ def patch_today_with_realtime(df: pd.DataFrame, code: str) -> pd.DataFrame:
             last_row["거래량"] = rt["volume"]
         df.loc[today] = last_row
 
-    return df
-
-
-def patch_latest_row_with_realtime(df: pd.DataFrame, code: str) -> pd.DataFrame:
-    """
-    분봉(하루 안에 여러 행) 데이터용 실시간 보정. 새 행을 추가하지 않고
-    '가장 마지막 봉'의 종가만 준실시간 시세로 살짝 덮어써서 괴리를 줄인다.
-    (분봉 자체가 이미 15초 캐시로 자주 갱신되므로 이건 보조적인 보정입니다)
-    """
-    rt = fetch_realtime_price(code)
-    if rt is None or df is None or df.empty:
-        return df
-    df = df.copy()
-    last_idx = df.index[-1]
-    df.loc[last_idx, "종가"] = rt["price"]
-    df.loc[last_idx, "고가"] = max(df.loc[last_idx, "고가"], rt["price"])
-    df.loc[last_idx, "저가"] = min(df.loc[last_idx, "저가"], rt["price"])
     return df
 
 
@@ -1393,10 +1370,7 @@ with main_tab1:
     rt_info = None
     if use_realtime_patch and df is not None and not df.empty:
         rt_info = fetch_realtime_price(code)
-        if is_minute_mode:
-            df = patch_latest_row_with_realtime(df, code)
-        else:
-            df = patch_today_with_realtime(df, code)
+        df = patch_today_with_realtime(df, code)
     with rt_col2:
         if use_realtime_patch and rt_info:
             st.caption(
