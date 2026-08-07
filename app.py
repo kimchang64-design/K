@@ -25,17 +25,12 @@ def fetch_naver_realtime_price(ticker: str):
   """네이버 금융 크롤링/JSON API를 통해 지연 없는 실시간 현재가 및 등락 정보를 가져옴"""
   try:
     url = f"https://finance.naver.com/item/sise.naver?code={ticker}"
-    # 네이버 금융 모바일/웹 페이지에서 실시간 호가 및 체결가 데이터를 스크래핑하기 위한 헤더 설정
-    headers = {"User-Agent": "Mozilla/5.0"}
     html_list = pd.read_html(url, encoding="euc-kr")
 
-    # 실시간 체결가 테이블 추출 시도
     for df in html_list:
       if len(df) > 5 and ("현재가" in df.values or "체결가" in df.values):
-        # 파싱 로직 적용
         pass
 
-    # 안정적인 JSON API 대안 (네이버페이/증권 모바일 API 엔드포인트 활용)
     api_url = f"https://api.stock.naver.com/stock/{ticker}/integration"
     res = requests.get(api_url, headers={"User-Agent": "Mozilla/5.0"})
     if res.status_code == 200:
@@ -66,10 +61,9 @@ def get_kiwoom_synced_intraday_data(ticker: str):
     if df is None or df.empty:
       df = generate_fallback_realtime_data(ticker, today_str)
 
-    # 실시간 현재가가 존재하고, 분봉 데이터의 마지막 종가와 다를 경우 최신 현재가로 동기화 (PC 시간 동기화처럼 맞춤)
+    # 실시간 현재가가 존재하고, 분봉 데이터의 마지막 종가와 다를 경우 최신 현재가로 동기화
     if live_price and live_price > 0 and not df.empty:
       last_idx = df.index[-1]
-      # 마지막 캔들의 종가, 고가, 저가 오차 보정 (현재가 기준으로 스냅샷 일치화)
       df.loc[last_idx, "종가"] = live_price
       if live_price > df.loc[last_idx, "고가"]:
         df.loc[last_idx, "고가"] = live_price
@@ -235,15 +229,15 @@ if st.button("🔄 실시간 현재가 동기화 및 매핑 실행", type="prima
         ax1.legend(loc="upper left")
         ax1.grid(True, linestyle="--", alpha=0.5)
 
-        # 거래량 바차트
+        # 거래량 바차트 (오류 원인 수정 완료: '종가가격' -> '종가')
         colors = [
-            "red" if r["종가가격"] >= r["시가"] else "blue"
+            "red" if r["종가"] >= r["시가"] else "blue"
             for _, r in df_final.iterrows()
         ]
         ax2.bar(
             df_final.index,
             df_final["거래량"],
-            color=["red" if c >= o else "blue" for c, o in zip(df_final['종가'], df_final['시가'])],
+            color=colors,
             width=0.0015,
         )
         ax2.set_title("Volume", fontsize=9)
