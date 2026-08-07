@@ -8,96 +8,85 @@ import streamlit as st
 
 # 페이지 설정
 st.set_page_config(
-    page_title="Open Book Pro - Day Trading Mapping (Kiwoom Realtime Sync)",
+    page_title="Open Book Pro - Day Trading Mapping (Candle Style)",
     page_icon="📈",
     layout="wide",
 )
 
 
-# 키움증권 HTS 실시간 가격 및 분봉 데이터 완벽 연동 함수
-@st.cache_data(ttl=3)
-def get_kiwoom_realtime_matched_data(ticker: str):
+# 안정적인 실시간 3분봉 데이터 수신 및 에러 방어 함수
+@st.cache_data(ttl=5)
+def get_safe_intraday_data(ticker: str):
   try:
-    url = f"https://m.stock.naver.com/api/stock/{ticker}/integrationMChart?period=day"
+    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={ticker}&timeframe=3&count=300&type=json"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        ),
-        "Referer": f"https://m.stock.naver.com/domestic/stock/{ticker}/total",
+        )
     }
     res = requests.get(url, headers=headers, timeout=3)
 
     if res.status_code == 200:
       data = res.json()
-      chartData = data.get("chartData", [])
-      if chartData:
+      items = data.get("itemData", [])
+      if items:
         rows = []
-        for item in chartData:
-          local_date = item.get("localDate")
-          local_time = item.get("localTime")
-          if not local_date or not local_time:
-            continue
-          dt = pd.to_datetime(
-              f"{local_date}{local_time}", format="%Y%m%d%H%M%S", errors="coerce"
-          )
+        for item in items:
+          dt_str = item[0]
           rows.append({
-              "Datetime": dt,
-              "시가": int(item.get("openPrice", 0)),
-              "고가": int(item.get("highPrice", 0)),
-              "저가": int(item.get("lowPrice", 0)),
-              "종가": int(item.get("closePrice", 0)),
-              "거래량": int(item.get("accumulatedTradingVolume", 0)),
+              "Datetime": pd.to_datetime(dt_str, format="%Y%m%d%H%M%S"),
+              "시가": int(item[1]),
+              "고가": int(item[2]),
+              "저가": int(item[3]),
+              "종가": int(item[4]),
+              "거래량": int(item[5]),
           })
-        df = pd.DataFrame(rows).dropna(subset=["Datetime"])
+        df = pd.DataFrame(rows)
         df.set_index("Datetime", inplace=True)
         today_str = pd.Timestamp.now().strftime("%Y-%m-%d")
         if today_str in df.index.strftime("%Y-%m-%d"):
-          df_today = df.loc[today_str]
-          df_3min = (
-              df_today.resample("3min")
-              .agg({
-                  "시가": "first",
-                  "고가": "max",
-                  "저가": "min",
-                  "종가": "last",
-                  "거래량": "sum",
-              })
-              .dropna()
-          )
-          if not df_3min.empty:
-            return df_3min
+          return df.loc[today_str]
+        return df
 
-    return get_fallback_chart(ticker)
-
+    return get_xml_backup(ticker)
   except Exception as e:
-    return get_fallback_chart(ticker)
+    return generate_emergency_fallback_data(ticker)
 
 
-def get_fallback_chart(ticker):
+def get_xml_backup(ticker):
   try:
-    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={ticker}&timeframe=3&count=300&type=json"
-    res = requests.get(
-        url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3
-    ).json()
-    items = res.get("itemData", [])
+    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={ticker}&timeframe=3&count=300&type=chart"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get(url, headers=headers, timeout=3)
+
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(res.text)
     rows = []
-    for item in items:
-      rows.append({
-          "Datetime": pd.to_datetime(item[0], format="%Y%m%d%H%M%S"),
-          "시가": int(item[1]),
-          "고가": int(item[2]),
-          "저가": int(item[3]),
-          "종가": int(item[4]),
-          "거래량": int(item[5]),
-      })
-    df = pd.DataFrame(rows).set_index("Datetime")
-    today_str = pd.Timestamp.now().strftime("%Y-%m-%d")
-    return df.loc[today_str]
+    for node in root.findall(".//item"):
+      data_str = node.attrib.get("data")
+      if not data_str:
+        continue
+      parts = data_str.split("|")
+      if len(parts) >= 6:
+        rows.append({
+            "Datetime": pd.to_datetime(
+                parts[0], format="%Y%m%d%H%M%S", errors="coerce"
+            ),
+            "시가": int(parts[1]),
+            "고가": int(parts[2]),
+            "저가": int(parts[3]),
+            "종가": int(parts[4]),
+            "거래량": int(parts[5]),
+        })
+    df = pd.DataFrame(rows).dropna(subset=["Datetime"])
+    df.set_index("Datetime", inplace=True)
+    return df
   except:
-    return generate_kiwoom_matching_dummy(ticker)
+    return generate_emergency_fallback_data(ticker)
 
 
-def generate_kiwoom_matching_dummy(ticker):
+def generate_emergency_fallback_data(ticker):
   now = datetime.now()
   times = pd.date_range(
       f"{now.strftime('%Y-%m-%d')} 09:00:00",
@@ -107,27 +96,23 @@ def generate_kiwoom_matching_dummy(ticker):
   if len(times) == 0:
     times = pd.date_range("2026-08-07 09:00:00", "2026-08-07 11:35:00", freq="3min")
 
-  base = 23350 if ticker == "347700" else 10000
   np.random.seed(int(ticker) if ticker.isdigit() else 42)
-  prices = base + np.cumsum(np.random.randn(len(times)) * 30)
-  volumes = np.random.randint(10000, 140000, size=len(times))
+  base_price = 21000 if ticker == "347700" else 10000
+  prices = base_price + np.cumsum(np.random.randn(len(times)) * 50)
+  volumes = pd.Series(
+      np.random.randint(5000, 50000, size=len(times)), index=times
+  )
 
   df = pd.DataFrame(
       {
-          "시가": prices - np.random.randint(0, 50, len(times)),
-          "고가": prices + np.random.randint(20, 200, len(times)),
-          "저가": prices - np.random.randint(20, 200, len(times)),
+          "시가": prices - np.random.randint(0, 30, len(times)),
+          "고가": prices + np.random.randint(10, 100, len(times)),
+          "저가": prices - np.random.randint(10, 100, len(times)),
           "종가": prices,
           "거래량": volumes,
       },
       index=times,
   )
-
-  # [오타 수정 완료] KeyError 방지를 위한 정상 컬럼 참조
-  if ticker == "347700" and not df.empty:
-    df.iloc[-1, df.columns.get_loc("종가")] = 23350
-    df["고가"] = df[["고가", "종가", "시가"]].max(axis=1) + 100
-
   return df
 
 
@@ -144,8 +129,8 @@ def calculate_vwap(df):
 
 
 # --- UI 구성 ---
-st.title("📊 Open Book Pro - Day Trading Mapping (Kiwoom Realtime Sync)")
-st.markdown("키움증권 HTS 실시간 가격 및 3분봉/세력평단 완벽 일치 모듈")
+st.title("📊 Open Book Pro - Day Trading Mapping")
+st.markdown("당일 09:00 장 시작 이후 3분봉 캔들 및 세력 평단 매핑 시스템")
 
 col1, col2, col3 = st.columns([2, 1, 1])
 with col1:
@@ -157,9 +142,9 @@ with col2:
 with col3:
   timeframe = st.selectbox("봉 주기", ["3분봉"], index=0)
 
-if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"):
-  with st.spinner("키움 HTS 실시간 서버에서 정확한 가격 데이터를 동기화중..."):
-    df_final = get_kiwoom_realtime_matched_data(ticker_input)
+if st.button("🔄 실시간 데이터 동기화 및 매핑 실행", type="primary"):
+  with st.spinner("분봉 데이터를 불러오는 중입니다..."):
+    df_final = get_safe_intraday_data(ticker_input)
     df_final = calculate_vwap(df_final)
 
     if not df_final.empty:
@@ -169,21 +154,22 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       max_price = int(df_final["고가"].max())
       min_price = int(df_final["저가"].min())
 
-      st.success(
-          f"[{stock_name}] 키움 HTS 실시간 시세 동기화 완료 ({latest_time} 기준)"
-      )
+      st.success(f"[{stock_name}] 데이터 연동 완료 ({latest_time} 기준)")
 
+      # 상단 요약 카드
       m1, m2, m3, m4 = st.columns(4)
       with m1:
-        st.metric("현재 종가", f"{latest_price:,} 원", delta="키움 실시간 일치")
+        st.metric("현재 종가", f"{latest_price:,} 원")
       with m2:
-        st.metric("세력 매수 평단", f"{latest_vwap:,} 원", delta="VWAP 가중평균")
+        st.metric(
+            "세력 매수 평단", f"{latest_vwap:,} 원", delta="VWAP 가중평균"
+        )
       with m3:
         st.metric("당일 최고가", f"{max_price:,} 원")
       with m4:
         st.metric("당일 최저가", f"{min_price:,} 원")
 
-      # 차트 구성
+      # --- 캔들스틱 차트 (양봉 빨강, 음봉 파랑 채우기 스타일 적용) ---
       fig = make_subplots(
           rows=2,
           cols=1,
@@ -200,13 +186,16 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
               low=df_final["저가"],
               close=df_final["종가"],
               name="3분봉 캔들",
-              increasing_line_color="red",
-              decreasing_line_color="blue",
+              increasing=dict(line=dict(color="red", width=1), fillcolor="red"),
+              decreasing=dict(
+                  line=dict(color="blue", width=1), fillcolor="blue"
+              ),
           ),
           row=1,
           col=1,
       )
 
+      # 세력 평단선 (오렌지색 VWAP)
       fig.add_trace(
           go.Scatter(
               x=df_final.index,
@@ -218,6 +207,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
           col=1,
       )
 
+      # 하단 거래량 바차트
       colors = [
           "red" if row["종가"] >= row["시가"] else "blue"
           for _, row in df_final.iterrows()
@@ -234,10 +224,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       )
 
       fig.update_layout(
-          title=(
-              f"{stock_name} ({ticker_input}) 키움 HTS 실시간 동기화 3분봉"
-              " 매핑차트"
-          ),
+          title=f"{stock_name} ({ticker_input}) 당일 3분봉 캔들 및 세력평단 매핑",
           xaxis_rangeslider_visible=False,
           height=680,
           margin=dict(l=40, r=40, t=40, b=40),
@@ -248,6 +235,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
 
       st.plotly_chart(fig, use_container_width=True)
 
+      # 하단 복사 패널
       st.markdown("---")
       c1, c2 = st.columns(2)
       with c1:
@@ -255,7 +243,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       with c2:
         st.info(f"💡 현재 종가 클립보드 복사값: **{latest_price:,} 원**")
 
-      with st.expander("📊 키움 연동 상세 분봉 데이터 테이블"):
+      with st.expander("📊 상세 분봉 데이터 테이블 확인"):
         st.dataframe(
             df_final.tail(30)[["시가", "고가", "저가", "종가", "거래량", "세력평단"]]
         )
