@@ -9,13 +9,27 @@ import streamlit as st
 
 # 페이지 설정
 st.set_page_config(
-    page_title="Open Book Pro - Day Trading Mapping (Kiwoom Exact Match)",
+    page_title="Open Book Pro - Day Trading Mapping (Auto Ticker Sync)",
     page_icon="📈",
     layout="wide",
 )
 
 
-# 한국거래소(PyKRX) 기반 키움증권 HTS 가격 일치형 당일 분봉 수신 함수
+# 전 종목 마스터 데이터 캐싱 (한글 종목명 <-> 종목코드 자동 변환용)
+@st.cache_data(ttl=86400)
+def get_all_stock_market_master():
+  today_str = datetime.now().strftime("%Y%m%d")
+  tickers_kospi = stock.get_market_ticker_list(today_str, market="KOSPI")
+  tickers_kosdaq = stock.get_market_ticker_list(today_str, market="KOSDAQ")
+
+  stock_dict = {}
+  for t in tickers_kospi + tickers_kosdaq:
+    name = stock.get_market_ticker_name(t)
+    stock_dict[name] = t
+  return stock_dict
+
+
+# 한국거래소 기반 당일 3분봉 수신 함수
 @st.cache_data(ttl=5)
 def get_kiwoom_exact_matched_data(ticker: str):
   try:
@@ -74,26 +88,23 @@ def generate_matching_dummy(ticker):
       freq="3min",
   )
   if len(times) == 0:
-    times = pd.date_range("2026-08-07 09:00:00", "2026-08-07 11:46:00", freq="3min")
+    times = pd.date_range("2026-08-07 09:00:00", "2026-08-07 11:50:00", freq="3min")
 
-  base = 231500 if ticker == "005930" else 23350
+  base = 100000
   np.random.seed(int(ticker) if ticker.isdigit() else 42)
-  prices = base + np.cumsum(np.random.randn(len(times)) * 300)
-  volumes = np.random.randint(10000, 150000, size=len(times))
+  prices = base + np.cumsum(np.random.randn(len(times)) * 200)
+  volumes = np.random.randint(10000, 100000, size=len(times))
 
   df = pd.DataFrame(
       {
-          "시가": prices - np.random.randint(0, 200, len(times)),
-          "고가": prices + np.random.randint(100, 800, len(times)),
-          "저가": prices - np.random.randint(100, 800, len(times)),
+          "시가": prices - np.random.randint(0, 100, len(times)),
+          "고가": prices + np.random.randint(50, 400, len(times)),
+          "저가": prices - np.random.randint(50, 400, len(times)),
           "종가": prices,
           "거래량": volumes,
       },
       index=times,
   )
-  if ticker == "005930" and not df.empty:
-    df.iloc[-1, df.columns.get_loc("종가")] = 231500
-    df["고가"] = df[["고가", "종가", "시가"]].max(axis=1) + 500
   return df
 
 
@@ -109,22 +120,54 @@ def calculate_vwap(df):
   return df
 
 
-# --- UI 구성 ---
-st.title("📊 Open Book Pro - Day Trading Mapping (Kiwoom Sync)")
-st.markdown("키움증권 HTS 가격 및 3분봉 완벽 일치 모듈")
+# --- UI 구성 및 전 종목 자동 매핑 로직 ---
+st.title("📊 Open Book Pro - Day Trading Mapping (Auto Search)")
+st.markdown(
+    "한글 종목명 입력 시 2,700여 개 전 종목 코드 자동 변환 및 키움 동기화"
+)
+
+# 1. 전 종목 사전 로드
+stock_master = get_all_stock_market_master()
+stock_names = list(stock_master.keys())
+code_to_name = {v: k for k, v in stock_master.items()}
+
+# 세션 상태 초기화
+if "selected_name" not in st.session_state:
+  st.session_state.selected_name = "삼성전자"
 
 col1, col2, col3 = st.columns([2, 1, 1])
+
 with col1:
-  ticker_input = st.text_input(
-      "종목코드 입력 (6자리)", value="005930", max_chars=6
+  # 한글 종목명 검색 셀렉트박스 (직접 타이핑하여 검색 가능)
+  chosen_name = st.selectbox(
+      "종목명 검색 (한글 입력 가능)",
+      options=stock_names,
+      index=(
+          stock_names.index(st.session_state.selected_name)
+          if st.session_state.selected_name in stock_names
+          else 0
+      ),
   )
+  st.session_state.selected_name = chosen_name
+  resolved_ticker = stock_master[chosen_name]
+
 with col2:
-  stock_name = st.text_input("종목명", value="삼성전자")
+  # 종목명에 따라 자동으로 연동되는 6자리 종목코드 출력 폼
+  ticker_input = st.text_input(
+      "종목코드 (자동 변환)", value=resolved_ticker, max_chars=6
+  )
+
 with col3:
   timeframe = st.selectbox("봉 주기", ["3분봉"], index=0)
 
-if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"):
-  with st.spinner("키움 HTS 가격 데이터와 동기화하는 중..."):
+# 만약 사용자가 코드를 직접 입력한 경우 처리
+if ticker_input in code_to_name:
+  stock_name = code_to_name[ticker_input]
+else:
+  stock_name = chosen_name
+
+if st.button("🔄 실시간 시세 및 차트 동기화", type="primary"):
+  with st.spinner(f"[{stock_name} ({ticker_input})] 데이터 동기화 중..."):
     df_final = get_kiwoom_exact_matched_data(ticker_input)
     df_final = calculate_vwap(df_final)
 
@@ -136,13 +179,13 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       min_price = int(df_final["저가"].min())
 
       st.success(
-          f"[{stock_name}] 키움 HTS 가격 동기화 완료 ({latest_time} 기준)"
+          f"[{stock_name} ({ticker_input})] 실시간 동기화 완료 ({latest_time} 기준)"
       )
 
       # 상단 요약 카드
       m1, m2, m3, m4 = st.columns(4)
       with m1:
-        st.metric("현재 종가", f"{latest_price:,} 원", delta="키움 가격 일치")
+        st.metric("현재 종가", f"{latest_price:,} 원", delta="실시간 일치")
       with m2:
         st.metric("세력 매수 평단", f"{latest_vwap:,} 원", delta="VWAP 가중평균")
       with m3:
@@ -150,7 +193,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       with m4:
         st.metric("당일 최저가", f"{min_price:,} 원")
 
-      # --- 캔들스틱 차트 (양봉 빨강, 음봉 파랑 색상 정상 복원) ---
+      # --- 캔들스틱 차트 (요청하신 기존 형태 및 색상 완벽 유지) ---
       fig = make_subplots(
           rows=2,
           cols=1,
@@ -167,10 +210,10 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
               low=df_final["저가"],
               close=df_final["종가"],
               name="3분봉 캔들",
-              increasing_line_color="red",  # 양봉 테두리/심지 빨강
-              decreasing_line_color="blue",  # 음봉 테두리/심지 파랑
-              increasing_fillcolor="red",  # 양봉 몸통 빨강 채우기
-              decreasing_fillcolor="blue",  # 음봉 몸통 파랑 채우기
+              increasing_line_color="red",
+              decreasing_line_color="blue",
+              increasing_fillcolor="red",
+              decreasing_fillcolor="blue",
           ),
           row=1,
           col=1,
@@ -203,7 +246,7 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       )
 
       fig.update_layout(
-          title=f"{stock_name} ({ticker_input}) 키움 HTS 연동 3분봉 매핑",
+          title=f"{stock_name} ({ticker_input}) 당일 3분봉 매핑",
           xaxis_rangeslider_visible=False,
           height=680,
           margin=dict(l=40, r=40, t=40, b=40),
@@ -221,11 +264,11 @@ if st.button("🔄 키움 실시간 시세 및 차트 동기화", type="primary"
       with c2:
         st.info(f"💡 현재 종가 클립보드 복사값: **{latest_price:,} 원**")
 
-      with st.expander("📊 키움 연동 상세 분봉 데이터 테이블"):
+      with st.expander("📊 상세 분봉 데이터 테이블"):
         st.dataframe(
             df_final.tail(30)[["시가", "고가", "저가", "종가", "거래량", "세력평단"]]
         )
     else:
       st.error(
-          "종목 코드를 다시 확인해주세요. 데이터를 불러오지 못했습니다."
+          "종목 데이터를 불러오지 못했습니다. 종목명을 다시 확인해주세요."
       )
