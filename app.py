@@ -1,5 +1,6 @@
 import datetime
 import json
+import os
 import pandas as pd
 import plotly.graph_objects as go
 import re
@@ -8,6 +9,31 @@ import streamlit as st
 import streamlit.components.v1 as components
 import xml.etree.ElementTree as ET
 from pykrx import stock
+
+# ---------------------------------------------------------
+# 관심종목 (서버 파일 기반 영구 저장 - 새로고침해도 유지됨)
+# ---------------------------------------------------------
+# ⚠ 진짜 DB는 아니고 서버에 JSON 파일로 저장하는 방식입니다. 앱이 켜져있는
+# 동안은 계속 유지되지만, 호스팅 서비스가 재배포/재시작되면서 디스크가
+# 초기화되는 경우(예: Render 무료 플랜) 파일이 사라질 수 있습니다.
+WATCHLIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist_data.json")
+
+
+def load_watchlist():
+    try:
+        with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_watchlist(items):
+    try:
+        with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
 
 # ---------------------------------------------------------
 # 실시간(준실시간) 시세 보정
@@ -868,7 +894,115 @@ STUDY_MAPPING_HTML_TEMPLATE = """
 """
 
 
-def render_study_mapping_chart(df, stock_name, code, selected_timeframe):
+def compute_vwap_columns(df):
+    """
+    OHLCV df에 평단가(세력평단)/세력매수평단/세력매도평단/누적순매수증감 컬럼을 추가한다.
+    tab1 본문과 4분할 차트(일/주/월/분봉 동시보기)에서 공통으로 쓰는 로직.
+    """
+    df = df.copy()
+    df["TPV"] = df["종가"] * df["거래량"]
+    cum_volume = df["거래량"].cumsum()
+    df["평단가"] = df["TPV"].cumsum() / cum_volume.replace(0, pd.NA)
+    df["평단가"] = df["평단가"].ffill()
+
+    df["가격변화"] = df["종가"].diff().fillna(0)
+    df["매수거래량"] = df.apply(lambda r: r["거래량"] if r["가격변화"] >= 0 else r["거래량"] * 0.4, axis=1)
+    df["매도거래량"] = df.apply(lambda r: r["거래량"] * 0.6 if r["가격변화"] < 0 else r["거래량"] * 0.2, axis=1)
+    df["순매수증감"] = df["매수거래량"] - df["매도거래량"]
+    df["누적순매수증감"] = df["순매수증감"].cumsum()
+
+    buy_cum_tpv = (df["종가"] * df["매수거래량"]).cumsum()
+    buy_cum_vol = df["매수거래량"].cumsum().replace(0, pd.NA)
+    sell_cum_tpv = (df["종가"] * df["매도거래량"]).cumsum()
+    sell_cum_vol = df["매도거래량"].cumsum().replace(0, pd.NA)
+    df["세력매수평단"] = (buy_cum_tpv / buy_cum_vol).ffill()
+    df["세력매도평단"] = (sell_cum_tpv / sell_cum_vol).ffill()
+    return df
+
+
+@st.cache_data(ttl=60)
+def fetch_quad_timeframe_data(code: str):
+    """
+    일봉(1년)/주봉(3년)/월봉(5년)/분봉(당일 3분봉)을 한 번에 가져와서
+    각각 평단가/세력매수평단/세력매도평단까지 계산해 반환한다.
+    4분할("일·주·월·분봉 동시보기") 차트용.
+    """
+    today = datetime.datetime.now()
+    result = {}
+
+    try:
+        d_df = stock.get_market_ohlcv_by_date((today - datetime.timedelta(days=365)).strftime("%Y%m%d"), today.strftime("%Y%m%d"), code, "d")
+        result["일봉"] = compute_vwap_columns(d_df) if d_df is not None and not d_df.empty else None
+    except Exception:
+        result["일봉"] = None
+
+    try:
+        w_df = stock.get_market_ohlcv_by_date((today - datetime.timedelta(days=365 * 3)).strftime("%Y%m%d"), today.strftime("%Y%m%d"), code, "w")
+        result["주봉"] = compute_vwap_columns(w_df) if w_df is not None and not w_df.empty else None
+    except Exception:
+        result["주봉"] = None
+
+    try:
+        m_df = stock.get_market_ohlcv_by_date((today - datetime.timedelta(days=365 * 5)).strftime("%Y%m%d"), today.strftime("%Y%m%d"), code, "m")
+        result["월봉"] = compute_vwap_columns(m_df) if m_df is not None and not m_df.empty else None
+    except Exception:
+        result["월봉"] = None
+
+    try:
+        min_df = get_today_minute_df(code, 3)
+        result["분봉"] = compute_vwap_columns(min_df) if min_df is not None and not min_df.empty else None
+    except Exception:
+        result["분봉"] = None
+
+    return result
+
+
+def render_quad_timeframe_chart(code, stock_name):
+    """일봉/주봉/월봉/분봉 4개를 한 화면에 2x2로 동시에 보여준다."""
+    from plotly.subplots import make_subplots
+
+    data = fetch_quad_timeframe_data(code)
+    labels = ["일봉", "주봉", "월봉", "분봉"]
+
+    fig = make_subplots(rows=2, cols=2, subplot_titles=labels, vertical_spacing=0.12, horizontal_spacing=0.06)
+    positions = {"일봉": (1, 1), "주봉": (1, 2), "월봉": (2, 1), "분봉": (2, 2)}
+
+    any_data = False
+    for label in labels:
+        sub_df = data.get(label)
+        row, col = positions[label]
+        if sub_df is None or sub_df.empty:
+            continue
+        any_data = True
+        is_min = label == "분봉"
+        x_vals = [d.strftime("%H:%M" if is_min else "%Y-%m-%d") for d in sub_df.index]
+        fig.add_trace(
+            go.Scatter(x=x_vals, y=sub_df["종가"], mode="lines", name=f"종가({label})",
+                       line=dict(color="#1f77b4", width=1.3), showlegend=False),
+            row=row, col=col,
+        )
+        fig.add_trace(
+            go.Scatter(x=x_vals, y=sub_df["평단가"], mode="lines", name=f"평단가({label})",
+                       line=dict(color="#ff7f0e", width=2), showlegend=False),
+            row=row, col=col,
+        )
+        fig.update_xaxes(type="category", nticks=6, tickfont=dict(size=9), row=row, col=col)
+
+    fig.update_layout(
+        title=f"{stock_name} ({code}) - 일봉·주봉·월봉·분봉 동시 보기",
+        height=680,
+        template="plotly_white",
+        margin=dict(l=30, r=20, t=60, b=20),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    if not any_data:
+        st.warning("네 가지 차트 모두 데이터를 가져오지 못했습니다. 네트워크 문제일 수 있습니다.")
+    elif data.get("분봉") is None:
+        st.caption("⚠ 분봉만 데이터를 가져오지 못했습니다 (장 시작 전이거나 네트워크 문제) — 나머지 3개는 정상 표시됩니다.")
+
+
+
     is_minute = selected_timeframe.endswith("분봉")
     x_fmt = "%H:%M" if is_minute else "%Y-%m-%d"
     dates = [d.strftime(x_fmt) for d in df.index]
@@ -1123,45 +1257,55 @@ with main_tab1:
             unsafe_allow_html=True,
         )
 
-        st.session_state.setdefault("watchlist", [])
-        wl_codes = [w["code"] for w in st.session_state.watchlist]
-        is_in_wl = code in wl_codes
+        watchlist = load_watchlist()
+        wl_map = {w["code"]: w for w in watchlist}
+        is_in_wl = code in wl_map
 
-        def _add_to_watchlist(c, n):
-            if c not in [w["code"] for w in st.session_state.watchlist]:
-                st.session_state.watchlist.insert(0, {"code": c, "name": n})
+        def _toggle_watchlist():
+            wl = load_watchlist()
+            if code in [w["code"] for w in wl]:
+                wl = [w for w in wl if w["code"] != code]
+            else:
+                wl.insert(0, {"code": code, "name": stock_name, "memo": ""})
+            save_watchlist(wl)
 
-        def _remove_from_watchlist(c):
-            st.session_state.watchlist = [w for w in st.session_state.watchlist if w["code"] != c]
+        def _update_memo():
+            wl = load_watchlist()
+            for w in wl:
+                if w["code"] == code:
+                    w["memo"] = st.session_state.get("wl_memo_input", "")
+            save_watchlist(wl)
 
         def _select_watchlist(c, n):
             st.session_state.target_stock = n
             st.session_state.stock_input_field = n
 
-        wl_btn_col1, wl_btn_col2 = st.columns([1, 4])
-        with wl_btn_col1:
-            if is_in_wl:
-                st.button("★ 관심종목 해제", key="wl_remove_btn", on_click=_remove_from_watchlist, args=(code,), use_container_width=True)
-            else:
-                st.button("☆ 관심종목 추가", key="wl_add_btn", on_click=_add_to_watchlist, args=(code, stock_name), use_container_width=True)
-        with wl_btn_col2:
-            st.caption("⚠ 관심종목은 이 브라우저 세션 동안만 유지되며, 새로고침하면 초기화됩니다 (서버 DB 연동 시 영구 저장 가능)")
-
-        if st.session_state.watchlist:
-            st.markdown(
-                f"<span style='font-size:11px; color:#666;'>⭐ 관심종목 ({len(st.session_state.watchlist)}개):</span>",
-                unsafe_allow_html=True,
+        wl_col1, wl_col2 = st.columns([1, 4])
+        with wl_col1:
+            st.button(
+                "★ 관심종목 해제" if is_in_wl else "☆ 관심종목 추가",
+                key="wl_toggle_btn", on_click=_toggle_watchlist, use_container_width=True,
             )
-            wl_list = st.session_state.watchlist[:12]
+        with wl_col2:
+            if is_in_wl:
+                st.text_input(
+                    "메모", value=wl_map[code].get("memo", ""), key="wl_memo_input",
+                    on_change=_update_memo, placeholder="이 종목 메모 (자동 저장)",
+                    label_visibility="collapsed",
+                )
+            else:
+                st.caption("⭐ 관심종목은 서버 파일에 저장되어 새로고침해도 유지됩니다. 추가하면 메모도 남길 수 있어요.")
+
+        if watchlist:
+            wl_list = watchlist[:10]
             wl_cols = st.columns(len(wl_list))
             for idx, w in enumerate(wl_list):
                 with wl_cols[idx]:
+                    label = f"⭐ {w['name']}" + (" 📝" if w.get("memo") else "")
                     st.button(
-                        f"⭐ {w['name']}",
-                        key=f"wl_btn_{idx}",
-                        on_click=_select_watchlist,
-                        args=(w["code"], w["name"]),
-                        use_container_width=True,
+                        label, key=f"wl_btn_{idx}",
+                        on_click=_select_watchlist, args=(w["code"], w["name"]),
+                        use_container_width=True, help=w.get("memo") or None,
                     )
 
         if st.session_state.search_history:
@@ -1564,7 +1708,9 @@ with main_tab1:
 
         chart_mode = st.session_state.get("chart_display_mode", "📊 기본 목표가 차트")
 
-        if chart_mode == "🧭 Study Mapping 스타일 (클릭 기준점 리셋)":
+        if chart_mode == "🔲 일·주·월·분봉 동시보기":
+            render_quad_timeframe_chart(code, stock_name)
+        elif chart_mode == "🧭 Study Mapping 스타일 (클릭 기준점 리셋)":
             render_study_mapping_chart(df, stock_name, code, selected_timeframe)
         else:
             fig = go.Figure()
@@ -1718,7 +1864,7 @@ with main_tab1:
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
         st.radio(
             "차트 스타일",
-            ["📊 기본 목표가 차트", "🧭 Study Mapping 스타일 (클릭 기준점 리셋)"],
+            ["📊 기본 목표가 차트", "🧭 Study Mapping 스타일 (클릭 기준점 리셋)", "🔲 일·주·월·분봉 동시보기"],
             horizontal=True,
             key="chart_display_mode",
         )
