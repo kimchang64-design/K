@@ -118,7 +118,12 @@ def fetch_naver_minute_ohlcv(code: str, count: int = 500) -> pd.DataFrame:
         )
         resp = requests.get(url, timeout=4, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
         resp.raise_for_status()
-        root = ET.fromstring(resp.content)
+        # pyexpat(ET.fromstring)이 XML 선언부의 EUC-KR 같은 멀티바이트 인코딩을
+        # 직접 처리 못 해서 "multi-byte encodings are not supported" 오류가 남.
+        # 그래서 바이트를 직접 디코딩한 뒤, 인코딩 선언을 지우고 순수 str로 파싱한다.
+        raw_text = resp.content.decode("euc-kr", errors="replace")
+        raw_text = re.sub(r'encoding="[^"]*"', "", raw_text, count=1)
+        root = ET.fromstring(raw_text)
         rows = []
         for item in root.iter("item"):
             data_str = item.attrib.get("data", "")
@@ -498,13 +503,25 @@ def fetch_investor_flow(code: str):
 
 @st.cache_data(ttl=300)
 def fetch_shares_outstanding(code: str):
-    """상장주식수(느리게 변하는 값) - pykrx, 최대 3일 소급."""
+    """상장주식수(느리게 변하는 값) - pykrx, 최대 3일 소급 + market-wide 스냅샷 대체 경로."""
     for back in range(3):
         d = (datetime.datetime.now() - datetime.timedelta(days=back)).strftime("%Y%m%d")
         try:
             cap_df = stock.get_market_cap(d, d, code)
             if cap_df is not None and not cap_df.empty and "상장주식수" in cap_df.columns:
                 return int(cap_df["상장주식수"].iloc[-1])
+        except Exception:
+            continue
+    # 종목별 조회(get_market_cap)가 계속 실패하면, 시장 전체 스냅샷(get_market_cap_by_ticker)에서
+    # 해당 코드만 찾아본다 - 같은 KRX 데이터를 다른 방식으로 요청하는 것이라 한쪽만
+    # 막혀있거나 일시적으로 실패한 경우 다른 쪽이 성공할 수 있다.
+    for back in range(3):
+        d = (datetime.datetime.now() - datetime.timedelta(days=back)).strftime("%Y%m%d")
+        try:
+            for market in ("KOSPI", "KOSDAQ"):
+                snap = stock.get_market_cap_by_ticker(d, market=market)
+                if snap is not None and not snap.empty and code in snap.index and "상장주식수" in snap.columns:
+                    return int(snap.loc[code, "상장주식수"])
         except Exception:
             continue
     return None
@@ -541,35 +558,34 @@ def get_financial_info(code, current_price=None):
             mcap_eok = int(current_price * shares / 100_000_000)
 
     if mcap_eok is None:
-        mcap_eok = 3000 + (seed % 500) * 50  # 최종 대체값 (모든 실데이터 조회 실패 시)
-        mcap_source_failed = True
+        mcap_source_failed = True  # 실데이터 조회 완전 실패 - 그럴듯한 가짜 숫자 대신 "조회 실패"로 명시
     else:
         mcap_source_failed = False
 
-    if per and per > 0:
+    if per and per > 0 and mcap_eok is not None:
         op_profit_eok = int(mcap_eok / per)
         op_profit_label = "💵 추정 순이익 (시가총액÷PER, 영업이익 아님)"
     else:
-        op_profit_eok = int(mcap_eok * 0.03)
-        op_profit_label = "💵 추정 순이익 (PER 조회 실패 - 대체값)" if not mcap_source_failed else "💵 추정 순이익 (데이터 조회 실패 - 대체값)"
+        op_profit_eok = None
+        op_profit_label = "💵 추정 순이익 (조회 실패)"
 
     flow = fetch_investor_flow(code)
     flow_as_of = flow.get("as_of") if flow else None
 
-    def _fmt_net(val, seed_range):
+    def _fmt_net(val):
         if val is not None:
             return f"{val:+,}주"
-        return f"{(seed % seed_range) - seed_range // 2:+,}주 (추정)"
+        return "N/A (조회 실패)"
 
-    foreign_net = _fmt_net(flow.get("foreign_net") if flow else None, 9000)
-    inst_net = _fmt_net(flow.get("inst_net") if flow else None, 6000)
-    pension_net = _fmt_net(flow.get("pension_net") if flow else None, 4000)
-    trust_net = _fmt_net(flow.get("trust_net") if flow else None, 3000)
-    pe_net = _fmt_net(flow.get("pe_net") if flow else None, 2000)
+    foreign_net = _fmt_net(flow.get("foreign_net") if flow else None)
+    inst_net = _fmt_net(flow.get("inst_net") if flow else None)
+    pension_net = _fmt_net(flow.get("pension_net") if flow else None)
+    trust_net = _fmt_net(flow.get("trust_net") if flow else None)
+    pe_net = _fmt_net(flow.get("pe_net") if flow else None)
 
     trade_type = "⚡ 단타" if (seed % 3 == 0) else ("🌊 스윙" if (seed % 3 == 1) else "🏆 중장기")
-    prog_net = f"{((seed % 900) - 450) * 1:+,}억 ({'매수우위' if seed % 2 == 0 else '매도우위'})"
-    credit_ratio = f"{0.2 + (seed % 150) / 100:.2f}%"
+    prog_net = "N/A (무료 API로 조회 불가)"
+    credit_ratio = "N/A (무료 API로 조회 불가)"
 
     news_map = {
         "005930": [
@@ -1475,44 +1491,7 @@ with main_tab1:
         else:
             status_signal = "📊 추세유지"
 
-        f1, f2, f3, f4 = st.columns(4)
-        f1.metric("🏢 시가총액", f"{mcap_val:,} 억원")
-        f2.metric(
-            op_profit_label,
-            f"{op_profit:,} 억원",
-            "🟢 흑자" if op_profit > 0 else "🔴 적자",
-        )
-        f3.metric("🎯 매매 성향", trade_type)
-        f4.metric("⚡ 진단 상태", status_signal)
-
-        s_c1, s_c2, s_c3, s_c4 = st.columns(4)
-        s_c1.metric("🌐 외국인 순매수", foreign_net)
-        s_c2.metric("🏛️ 기관 순매수", inst_net)
-        s_c3.metric("💻 실시간 프로그램", prog_net)
-        s_c4.metric("💳 신용잔고율", credit_ratio)
-
-        flow_note_col, flow_btn_col = st.columns([5, 1])
-        with flow_note_col:
-            if flow_as_of:
-                as_of_fmt = f"{flow_as_of[:4]}-{flow_as_of[4:6]}-{flow_as_of[6:]}"
-                today_str = datetime.datetime.now().strftime("%Y%m%d")
-                if flow_as_of == today_str:
-                    st.caption(f"👇 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (당일)")
-                else:
-                    st.caption(f"👇 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (KRX가 당일 장중엔 투자자별 수급을 공개하지 않아 최근 영업일 기준입니다)")
-            else:
-                st.caption("👇 기관합계 세부 내역 · ⚠ 수급 데이터 조회 실패 (아래 값은 종목코드 기반 추정치)")
-        with flow_btn_col:
-            if st.button("🔄 새로고침", key="flow_refresh_btn"):
-                fetch_investor_flow.clear()
-                fetch_naver_integration_info.clear()
-                st.rerun()
-
-        p_c1, p_c2, p_c3 = st.columns(3)
-        p_c1.metric("🏦 연기금 순매수", pension_net)
-        p_c2.metric("📈 투신 순매수", trust_net)
-        p_c3.metric("🕵️ 사모 순매수", pe_net)
-
+        # (시가총액/추정순이익/매매성향/진단상태/수급 카드는 페이지 맨 아래로 이동됨)
 
         st.markdown(
             f"""
@@ -1810,6 +1789,48 @@ with main_tab1:
         </div>
         """
         components.html(recent_table_html, height=280)
+
+        st.markdown("<hr style='margin:16px 0 10px 0;'>", unsafe_allow_html=True)
+        st.markdown("### 📊 시가총액 · 수급 · 진단 정보")
+
+        f1, f2, f3, f4 = st.columns(4)
+        f1.metric("🏢 시가총액", f"{mcap_val:,} 억원" if mcap_val is not None else "N/A (조회 실패)")
+        f2.metric(
+            op_profit_label,
+            f"{op_profit:,} 억원" if op_profit is not None else "N/A",
+            ("🟢 흑자" if op_profit > 0 else "🔴 적자") if op_profit is not None else None,
+        )
+        f3.metric("🎯 매매 성향", trade_type)
+        f4.metric("⚡ 진단 상태", status_signal)
+
+        s_c1, s_c2, s_c3, s_c4 = st.columns(4)
+        s_c1.metric("🌐 외국인 순매수", foreign_net)
+        s_c2.metric("🏛️ 기관 순매수", inst_net)
+        s_c3.metric("💻 실시간 프로그램", prog_net)
+        s_c4.metric("💳 신용잔고율", credit_ratio)
+
+        flow_note_col, flow_btn_col = st.columns([5, 1])
+        with flow_note_col:
+            if flow_as_of:
+                as_of_fmt = f"{flow_as_of[:4]}-{flow_as_of[4:6]}-{flow_as_of[6:]}"
+                today_str = datetime.datetime.now().strftime("%Y%m%d")
+                if flow_as_of == today_str:
+                    st.caption(f"👇 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (당일)")
+                else:
+                    st.caption(f"👇 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (KRX가 당일 장중엔 투자자별 수급을 공개하지 않아 최근 영업일 기준입니다)")
+            else:
+                st.caption("👇 기관합계 세부 내역 · ⚠ 수급 데이터 조회 실패 (아래 값은 N/A로 표시됩니다)")
+        with flow_btn_col:
+            if st.button("🔄 새로고침", key="flow_refresh_btn"):
+                fetch_investor_flow.clear()
+                fetch_naver_integration_info.clear()
+                fetch_shares_outstanding.clear()
+                st.rerun()
+
+        p_c1, p_c2, p_c3 = st.columns(3)
+        p_c1.metric("🏦 연기금 순매수", pension_net)
+        p_c2.metric("📈 투신 순매수", trust_net)
+        p_c3.metric("🕵️ 사모 순매수", pe_net)
 
 
 # ---------------------------------------------------------
