@@ -22,7 +22,7 @@ except Exception:
 # ---------------------------------------------------------
 # 관심종목 (서버 파일 기반 영구 저장 - 새로고침해도 유지됨)
 # ---------------------------------------------------------
-# ⚠ 진짜 DB는 아니고 서버에 JSON 파일로 저장하는 방식입니다. 앱이 켜져있는
+# ? 진짜 DB는 아니고 서버에 JSON 파일로 저장하는 방식입니다. 앱이 켜져있는
 # 동안은 계속 유지되지만, 호스팅 서비스가 재배포/재시작되면서 디스크가
 # 초기화되는 경우(예: Render 무료 플랜) 파일이 사라질 수 있습니다.
 WATCHLIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist_data.json")
@@ -52,7 +52,7 @@ def save_watchlist(items):
 # 그래서 키움 HTS 실시간 체결가와 차이가 나는 겁니다.
 # 아래 함수는 네이버 금융의 준실시간 시세(수 초 지연) API를 붙여서
 # "오늘"의 종가를 최대한 실시간에 가깝게 덮어씌우는 보정용입니다.
-# ⚠ 완전한 틱 단위 실시간(키움과 100% 동일)을 원하면 키움 Open API+
+# ? 완전한 틱 단위 실시간(키움과 100% 동일)을 원하면 키움 Open API+
 #    (OCX, 로컬 PC + 로그인 필요)를 직접 연동해야 하며, 이 부분은
 #    순수 파이썬 웹앱(streamlit cloud 등)에서는 대체가 불가능합니다.
 @st.cache_data(ttl=5)  # 5초 캐시: 너무 잦은 호출 방지, 그래도 준실시간 유지
@@ -85,7 +85,7 @@ def patch_today_with_realtime(df: pd.DataFrame, code: str) -> pd.DataFrame:
     - 있으면 종가/거래량을 실시간 값으로 교체
     거래량이 없으면(장중 누적거래량 조회 실패) 직전 거래량으로 대체.
 
-    ⚠ 이 함수는 "일봉(하루=한 행)" 데이터 전용입니다. 분봉처럼 하루 안에
+    ? 이 함수는 "일봉(하루=한 행)" 데이터 전용입니다. 분봉처럼 하루 안에
     여러 행(09:03, 09:06 ...)이 있는 데이터에 그대로 쓰면, "오늘 자정(00:00)"
     이라는 존재하지 않는 시각의 행을 새로 끼워 넣어버려서 누적평단(세력평단)
     계산 순서가 깨지고 차트에서 평단선이 이상해지거나 안 보이는 원인이 됩니다.
@@ -135,7 +135,7 @@ def patch_latest_row_with_realtime(df: pd.DataFrame, code: str) -> pd.DataFrame:
 # ---------------------------------------------------------
 # 분봉(실제 장중 1분봉) 데이터
 # ---------------------------------------------------------
-# ⚠ pykrx는 분봉 API를 제공하지 않습니다. get_market_ohlcv_by_date(freq="m")의
+# ? pykrx는 분봉 API를 제공하지 않습니다. get_market_ohlcv_by_date(freq="m")의
 #   "m"은 "월봉(month)"이라서, 분봉을 pykrx로 받으려 하면 사실상 월봉을
 #   억지로 리샘플하는 것이라 실제 장중 흐름과 전혀 다른 데이터가 나옵니다.
 #   그래서 분봉은 네이버 증권 차트 API(1분봉 원본)로 따로 받아옵니다.
@@ -253,7 +253,7 @@ def get_today_minute_df(code: str, interval_minutes: int) -> pd.DataFrame:
     kiwoom_df = fetch_kiwoom_minute_df(code, interval_minutes)
     if not kiwoom_df.empty:
         st.session_state["_minute_fetch_error"] = None
-        st.session_state["_minute_data_source"] = "🟢 키움 REST API"
+        st.session_state["_minute_data_source"] = "?? 키움 REST API"
         return kiwoom_df
 
     raw = fetch_naver_minute_ohlcv(code, count=500)
@@ -271,7 +271,7 @@ def get_today_minute_df(code: str, interval_minutes: int) -> pd.DataFrame:
         )
         raw = raw.dropna()
 
-    st.session_state["_minute_data_source"] = "🟡 네이버 (키움 연동 실패/미설정 - 대체)"
+    st.session_state["_minute_data_source"] = "?? 네이버 (키움 연동 실패/미설정 - 대체)"
     return raw
 
 
@@ -333,31 +333,31 @@ st.markdown(
 ticker_bar_html = """
 <div style="display: flex; gap: 10px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px;">
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇰🇷 국내 지수</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">???? 국내 지수</div>
         <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">2,755.20 (+0.85%) <span style="color:#333; font-weight:normal;">(코스피)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇰🇷 코스닥 지수</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">???? 코스닥 지수</div>
         <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">872.40 (+1.12%) <span style="color:#333; font-weight:normal;">(코스닥)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 160px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">📈 파생 시장</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">?? 파생 시장</div>
         <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">362.85 (+0.92%) <span style="color:#333; font-weight:normal;">(선물지수)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">⚡ 베이시스 상태</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">? 베이시스 상태</div>
         <div style="font-size: 12px; font-weight: bold; color: #1971c2;">+0.65 (콘탱고) <span style="color:#333; font-weight:normal;">(시장 베이시스)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 160px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">🇺🇸 미국 증시</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">???? 미국 증시</div>
         <div style="font-size: 12px; font-weight: bold; color: #d32f2f;">17,928.30 (+1.45%) <span style="color:#333; font-weight:normal;">(나스닥)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 150px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">💱 외환 시장</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">?? 외환 시장</div>
         <div style="font-size: 12px; font-weight: bold; color: #1971c2;">1,372.50원 (-3.2원) <span style="color:#333; font-weight:normal;">(원/달러 환율)</span></div>
     </div>
     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 8px 12px; min-width: 180px; text-align: center;">
-        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">📊 프로그램 수급</div>
+        <div style="font-size: 11px; color: #6c757d; font-weight: bold;">?? 프로그램 수급</div>
         <div style="font-size: 11px; font-weight: bold; color: #d32f2f;">+2,150억 (차익+800) <span style="color:#333; font-weight:normal;">(프로그램 순매매)</span></div>
     </div>
 </div>
@@ -366,15 +366,15 @@ st.markdown(ticker_bar_html, unsafe_allow_html=True)
 
 # 4개의 상단 메인 탭 구성
 main_tab1, main_tab2, main_tab3, main_tab4, main_tab5 = st.tabs(
-    ["📈 평단선 차트", "⭐ 업종·테마 분석", "🔥 거래대금 TOP 30", "🌙 시간외 톱 30", "🔴 실시간 랭킹"]
+    ["?? 평단선 차트", "? 업종·테마 분석", "?? 거래대금 TOP 30", "?? 시간외 톱 30", "?? 실시간 랭킹"]
 )
 
 
 def jump_to_chart(code, name, timeframe):
     """
-    다른 탭(실시간 랭킹 등)의 '⚡단타'/'🎓스터디' 버튼에서 호출.
+    다른 탭(실시간 랭킹 등)의 '?단타'/'??스터디' 버튼에서 호출.
     평단선 차트 탭의 종목/차트주기를 세팅하고, 화면도 그 탭으로 전환한다.
-    ⚠ Streamlit 공식 API로는 탭을 코드로 전환할 수 없어서, 탭 버튼을 자바스크립트로
+    ? Streamlit 공식 API로는 탭을 코드로 전환할 수 없어서, 탭 버튼을 자바스크립트로
     직접 클릭하는 방식을 쓴다(비공식 트릭이라 스트림릿 버전에 따라 안 먹힐 수 있음).
     """
     st.session_state["target_stock"] = name
@@ -559,7 +559,7 @@ def fetch_naver_integration_info(code: str):
 def fetch_investor_flow(code: str):
     """
     외국인/기관(연기금·투신·사모 포함) 순매수 수량을 pykrx로 가져온다.
-    ⚠ 이 데이터는 KRX가 당일 장중에는 공개하지 않고, 정식 집계본은 보통
+    ? 이 데이터는 KRX가 당일 장중에는 공개하지 않고, 정식 집계본은 보통
     다음 영업일에야 게시된다 (증권사 HTS의 "실시간 추정치"와는 성격이 다름).
     그래서 "당일 실시간"이 아니라 "최근 영업일 기준"이 될 수 있으며,
     화면에 실제 기준일(as_of)을 표시해 어느 날짜 데이터인지 명확히 한다.
@@ -627,7 +627,7 @@ def get_financial_info(code, current_price=None):
       실시간 시세 보정과 같은 네이버 계열 API라 이 환경에서 더 안정적으로 응답한다.
       실패 시에만 pykrx(상장주식수 × 현재가)로 대체한다.
     - 추정 순이익 = 시가총액 ÷ PER (네이버 값이 서로 같은 시점 기준이라 동기화됨)
-      ⚠ pykrx/네이버 모두 '영업이익'(손익계산서) 자체는 제공하지 않아 "추정 순이익"이며
+      ? pykrx/네이버 모두 '영업이익'(손익계산서) 자체는 제공하지 않아 "추정 순이익"이며
       영업이익이 아니다 (DART 전자공시 연동이 별도로 필요).
     - 외국인/기관/연기금/투신/사모 순매수(수량): pykrx 실데이터. KRX가 이 데이터를
       장중에는 공개하지 않아 "최근 영업일 기준"일 수 있고, 그 기준일을 as_of로 표시한다.
@@ -655,10 +655,10 @@ def get_financial_info(code, current_price=None):
 
     if per and per > 0 and mcap_eok is not None:
         op_profit_eok = int(mcap_eok / per)
-        op_profit_label = "💵 추정 순이익 (시가총액÷PER, 영업이익 아님)"
+        op_profit_label = "?? 추정 순이익 (시가총액÷PER, 영업이익 아님)"
     else:
         op_profit_eok = None
-        op_profit_label = "💵 추정 순이익 (조회 실패)"
+        op_profit_label = "?? 추정 순이익 (조회 실패)"
 
     flow = fetch_investor_flow(code)
     flow_as_of = flow.get("as_of") if flow else None
@@ -674,7 +674,7 @@ def get_financial_info(code, current_price=None):
     trust_net = _fmt_net(flow.get("trust_net") if flow else None)
     pe_net = _fmt_net(flow.get("pe_net") if flow else None)
 
-    trade_type = "⚡ 단타" if (seed % 3 == 0) else ("🌊 스윙" if (seed % 3 == 1) else "🏆 중장기")
+    trade_type = "? 단타" if (seed % 3 == 0) else ("?? 스윙" if (seed % 3 == 1) else "?? 중장기")
     prog_net = "N/A (무료 API로 조회 불가)"
     credit_ratio = "N/A (무료 API로 조회 불가)"
 
@@ -720,11 +720,11 @@ def get_financial_info(code, current_price=None):
 STUDY_MAPPING_HTML_TEMPLATE = """
 <div id="sm_root" style="font-family: -apple-system, 'Malgun Gothic', sans-serif;">
   <div id="sm_toolbar" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px; font-size:12px;">
-      <button id="sm_btn_copy_result" class="sm-btn sm-btn-blue">📋 결과 복사</button>
-      <button id="sm_btn_copy_img" class="sm-btn sm-btn-purple">🖼 차트 이미지 복사</button>
-      <button id="sm_btn_save_img" class="sm-btn sm-btn-green">⬇ 차트 이미지 저장</button>
-      <button id="sm_btn_reset_range" class="sm-btn sm-btn-gray">↺ 전체 범위 복원</button>
-      <button id="sm_btn_reset_anchor" class="sm-btn sm-btn-orange">📌 기준점 초기화</button>
+      <button id="sm_btn_copy_result" class="sm-btn sm-btn-blue">?? 결과 복사</button>
+      <button id="sm_btn_copy_img" class="sm-btn sm-btn-purple">?? 차트 이미지 복사</button>
+      <button id="sm_btn_save_img" class="sm-btn sm-btn-green">? 차트 이미지 저장</button>
+      <button id="sm_btn_reset_range" class="sm-btn sm-btn-gray">? 전체 범위 복원</button>
+      <button id="sm_btn_reset_anchor" class="sm-btn sm-btn-orange">?? 기준점 초기화</button>
       <span style="margin-left:8px;">여백 좌:</span>
       <input type="range" id="sm_pad_left" min="0" max="60" value="5" style="width:80px;">
       <span>우:</span>
@@ -839,8 +839,8 @@ STUDY_MAPPING_HTML_TEMPLATE = """
       const box = document.getElementById('sm_latest_box');
       box.style.display = 'block';
       box.innerHTML =
-        '<span class="sm-close" onclick="document.getElementById(\\'sm_latest_box\\').style.display=\\'none\\';">✕</span>' +
-        '<div class="sm-info-title">📍 ' + D.dates[0] + ' ~ ' + D.dates[lastIdx] + '</div>' +
+        '<span class="sm-close" onclick="document.getElementById(\\'sm_latest_box\\').style.display=\\'none\\';">?</span>' +
+        '<div class="sm-info-title">?? ' + D.dates[0] + ' ~ ' + D.dates[lastIdx] + '</div>' +
         '<div class="sm-info-row"><span class="sm-info-label">종가</span><span class="sm-info-value" data-copy="' + Math.round(close_v) + '">' + fmt(close_v) + '원</span></div>' +
         '<div class="sm-info-row"><span class="sm-info-label">세력평단</span><span class="sm-info-value" style="color:#f08c00;" data-copy="' + Math.round(avg_v) + '">' + fmt(avg_v) + '원</span></div>' +
         '<div class="sm-info-row"><span class="sm-info-label">세력매수평단</span><span class="sm-info-value" style="color:#d32f2f;" data-copy="' + Math.round(buy_v) + '">' + fmt(buy_v) + '원</span></div>' +
@@ -859,8 +859,8 @@ STUDY_MAPPING_HTML_TEMPLATE = """
       const box = document.getElementById('sm_anchor_box');
       box.style.display = 'block';
       box.innerHTML =
-        '<span class="sm-close" onclick="document.getElementById(\\'sm_anchor_box\\').style.display=\\'none\\';">✕</span>' +
-        '<div class="sm-info-title">📌 ' + D.dates[idx] + ' 기준 (재계산 시작점)</div>' +
+        '<span class="sm-close" onclick="document.getElementById(\\'sm_anchor_box\\').style.display=\\'none\\';">?</span>' +
+        '<div class="sm-info-title">?? ' + D.dates[idx] + ' 기준 (재계산 시작점)</div>' +
         '<div class="sm-info-row"><span class="sm-info-label">종가</span><span class="sm-info-value" data-copy="' + Math.round(close_v) + '">' + fmt(close_v) + '원</span></div>' +
         '<div class="sm-info-row"><span class="sm-info-label">세력평단</span><span class="sm-info-value" style="color:#f08c00;" data-copy="' + Math.round(avg_v) + '">' + fmt(avg_v) + '원</span></div>' +
         '<div class="sm-info-row"><span class="sm-info-label">세력매수평단</span><span class="sm-info-value" style="color:#d32f2f;" data-copy="' + Math.round(buy_v) + '">' + fmt(buy_v) + '원</span></div>' +
@@ -930,12 +930,12 @@ STUDY_MAPPING_HTML_TEMPLATE = """
       const lastIdx = N - 1;
       const disp = ((D.close[lastIdx] - avgSeries[lastIdx]) / avgSeries[lastIdx] * 100);
       let text = '■ [' + D.stockName + '(' + D.code + ') - ' + D.timeframe + ']\\n' +
-                 '• 종가: ' + fmt(D.close[lastIdx]) + '원\\n' +
-                 '• 세력평단: ' + fmt(avgSeries[lastIdx]) + '원\\n' +
-                 '• 세력매수평단: ' + fmt(buyAvgSeries[lastIdx]) + '원\\n' +
-                 '• 세력매도평단: ' + fmt(sellAvgSeries[lastIdx]) + '원\\n' +
-                 '• 괴리율(전체평단): ' + (disp>=0?'+':'') + disp.toFixed(2) + '%';
-      if (anchorIdx > 0) { text += '\\n• 기준점(' + D.dates[anchorIdx] + ') 이후 재계산됨'; }
+                 '? 종가: ' + fmt(D.close[lastIdx]) + '원\\n' +
+                 '? 세력평단: ' + fmt(avgSeries[lastIdx]) + '원\\n' +
+                 '? 세력매수평단: ' + fmt(buyAvgSeries[lastIdx]) + '원\\n' +
+                 '? 세력매도평단: ' + fmt(sellAvgSeries[lastIdx]) + '원\\n' +
+                 '? 괴리율(전체평단): ' + (disp>=0?'+':'') + disp.toFixed(2) + '%';
+      if (anchorIdx > 0) { text += '\\n? 기준점(' + D.dates[anchorIdx] + ') 이후 재계산됨'; }
       navigator.clipboard.writeText(text);
   };
 
@@ -1070,7 +1070,7 @@ def render_quad_timeframe_chart(code, stock_name):
     if not any_data:
         st.warning("네 가지 차트 모두 데이터를 가져오지 못했습니다. 네트워크 문제일 수 있습니다.")
     elif data.get("분봉") is None:
-        st.caption("⚠ 분봉만 데이터를 가져오지 못했습니다 (장 시작 전이거나 네트워크 문제) — 나머지 3개는 정상 표시됩니다.")
+        st.caption("? 분봉만 데이터를 가져오지 못했습니다 (장 시작 전이거나 네트워크 문제) ? 나머지 3개는 정상 표시됩니다.")
 
 
 
@@ -1106,7 +1106,7 @@ def render_quad_timeframe_chart(code, stock_name):
 # ---------------------------------------------------------
 # 업종·테마 분석용 데이터 빌더
 # ---------------------------------------------------------
-# ⚠ KRX/pykrx는 "이 종목이 어떤 테마에 속하는지"를 알려주는 공식 분류 API를
+# ? KRX/pykrx는 "이 종목이 어떤 테마에 속하는지"를 알려주는 공식 분류 API를
 #   제공하지 않습니다 (테마 분류는 증권사/정보업체가 자체적으로 큐레이션하는
 #   비공개 데이터라서요). 그래서 테마-종목 매핑 자체는 예시(샘플) 데이터이고,
 #   실제 서비스로 쓰려면 이 매핑 테이블을 직접 관리하거나 유료 테마 DB를
@@ -1126,8 +1126,8 @@ def _build_stock_entry(name: str, code: str, price: int, change_pct: float) -> d
         "volume": volume,
         "amount": amount,
         "market_cap": market_cap,
-        "op_status": "🟢 흑자" if seed % 5 != 0 else "🔴 적자",
-        "trade_type": "⚡ 단타" if change_pct >= 5 else "🌊 스윙",
+        "op_status": "?? 흑자" if seed % 5 != 0 else "?? 적자",
+        "trade_type": "? 단타" if change_pct >= 5 else "?? 스윙",
         "d_vwap": int(price * (0.975 if change_pct >= 0 else 1.01)),
         "target1": int(price * 1.05),
         "target2": int(price * 1.10),
@@ -1186,7 +1186,7 @@ THEME_DATA = dict(sorted(THEME_DATA.items(), key=lambda kv: kv[1]["change_val"],
 def fetch_naver_live_ranking() -> pd.DataFrame:
     """
     네이버 금융 '거래량 상위' 페이지에서 거래량+거래대금+등락률을 함께 가져온다.
-    ⚠ pykrx의 get_market_ohlcv_by_ticker는 KRX 정식 종가(EOD) 기준이라
+    ? pykrx의 get_market_ohlcv_by_ticker는 KRX 정식 종가(EOD) 기준이라
     장중에는 "당일" 데이터가 아예 없어서 실시간 랭킹에 못 씁니다.
     이 페이지는 네이버가 장중에도 실시간으로 갱신하는 페이지라 장중에도 값이 보입니다.
     (비공식 HTML 파싱 - 페이지 구조가 바뀌면 깨질 수 있음, 실패 시 빈 DataFrame)
@@ -1243,7 +1243,7 @@ def fetch_naver_live_ranking() -> pd.DataFrame:
 def fetch_naver_popular_search() -> list:
     """
     네이버 금융 '인기 검색 종목' 페이지 기반 검색 상위 TOP10.
-    ⚠ 공식 API가 아니라 페이지 HTML을 파싱하는 방식이라, 네이버 쪽 페이지
+    ? 공식 API가 아니라 페이지 HTML을 파싱하는 방식이라, 네이버 쪽 페이지
     구조가 바뀌면 깨질 수 있습니다. 실패 시 빈 리스트를 반환하고 화면에서
     안내 문구로 대체합니다.
     """
@@ -1319,9 +1319,9 @@ with main_tab1:
         st.markdown(
             f"""
             <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; padding: 6px 10px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
-                <span style="font-size: 13px; font-weight: bold;">📌 종목: {stock_name} ({code})</span>
+                <span style="font-size: 13px; font-weight: bold;">?? 종목: {stock_name} ({code})</span>
                 <button onclick="navigator.clipboard.writeText('{code}');" style="background:#1a73e8; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
-                    📋 코드 복사 ({code})
+                    ?? 코드 복사 ({code})
                 </button>
             </div>
             """,
@@ -1365,14 +1365,14 @@ with main_tab1:
                     label_visibility="collapsed",
                 )
             else:
-                st.caption("⭐ 관심종목은 서버 파일에 저장되어 새로고침해도 유지됩니다. 추가하면 메모도 남길 수 있어요.")
+                st.caption("? 관심종목은 서버 파일에 저장되어 새로고침해도 유지됩니다. 추가하면 메모도 남길 수 있어요.")
 
         if watchlist:
             wl_list = watchlist[:10]
             wl_cols = st.columns(len(wl_list))
             for idx, w in enumerate(wl_list):
                 with wl_cols[idx]:
-                    label = f"⭐ {w['name']}" + (" 📝" if w.get("memo") else "")
+                    label = f"? {w['name']}" + (" ??" if w.get("memo") else "")
                     st.button(
                         label, key=f"wl_btn_{idx}",
                         on_click=_select_watchlist, args=(w["code"], w["name"]),
@@ -1476,13 +1476,13 @@ with main_tab1:
 
     if is_minute_mode:
         st.info(
-            f"⏱️ 분봉 모드 — 단타용이라 **당일({today.strftime('%Y-%m-%d')}) 09:00 장 시작~15:30 장 마감**만 자동 조회됩니다. "
+            f"?? 분봉 모드 ? 단타용이라 **당일({today.strftime('%Y-%m-%d')}) 09:00 장 시작~15:30 장 마감**만 자동 조회됩니다. "
             f"(참고: 한국거래소 정규장은 08:00이 아니라 **09:00 시작·15:30 종료**가 맞습니다. "
             f"08:00~09:00은 '시간외 단일가/동시호가' 구간이라 분봉 차트엔 안 잡혀요.)"
         )
         s_year, s_mon, s_day = today.year, today.month, today.day
         e_year, e_mon, e_day = today.year, today.month, today.day
-        with st.expander("📅 조회 기간 수동으로 바꾸기 (기본은 당일 자동)"):
+        with st.expander("?? 조회 기간 수동으로 바꾸기 (기본은 당일 자동)"):
             d_cols = st.columns(6)
             with d_cols[0]:
                 s_year = st.selectbox("시작 연도", year_options, index=year_options.index(today.year), key="sy")
@@ -1499,9 +1499,9 @@ with main_tab1:
     else:
         hdr_col, btn_col = st.columns([5, 1])
         with hdr_col:
-            st.markdown("📅 **조회 기간 설정 (연도·월·일 상세 선택)**")
+            st.markdown("?? **조회 기간 설정 (연도·월·일 상세 선택)**")
         with btn_col:
-            if st.button("📌 오늘로", key="reset_to_today_btn", help="시작일을 1년 전, 종료일을 오늘로 즉시 설정합니다"):
+            if st.button("?? 오늘로", key="reset_to_today_btn", help="시작일을 1년 전, 종료일을 오늘로 즉시 설정합니다"):
                 st.session_state["_reset_to_today_pending"] = True
                 st.rerun()
 
@@ -1572,17 +1572,17 @@ with main_tab1:
             if err_detail:
                 warn_msg += f"\n\n**실패 사유:** {err_detail}"
             st.warning(warn_msg)
-            if st.button("🔄 분봉 다시 시도", key="minute_retry_btn"):
+            if st.button("?? 분봉 다시 시도", key="minute_retry_btn"):
                 fetch_kiwoom_minute_df.clear()
                 fetch_naver_minute_ohlcv.clear()
                 st.rerun()
         else:
-            st.caption(f"📡 분봉 데이터 출처: {st.session_state.get('_minute_data_source', '알 수 없음')}")
+            st.caption(f"?? 분봉 데이터 출처: {st.session_state.get('_minute_data_source', '알 수 없음')}")
 
     # 실시간(준실시간) 시세 보정 - 키움 체결가와의 괴리 축소
     rt_col1, rt_col2 = st.columns([1, 5])
     with rt_col1:
-        use_realtime_patch = st.checkbox("⚡ 실시간 시세 보정", value=True, key="rt_patch_toggle")
+        use_realtime_patch = st.checkbox("? 실시간 시세 보정", value=True, key="rt_patch_toggle")
     rt_info = None
     if use_realtime_patch and df is not None and not df.empty:
         rt_info = fetch_realtime_price(code)
@@ -1593,13 +1593,13 @@ with main_tab1:
     with rt_col2:
         if use_realtime_patch and rt_info:
             st.caption(
-                f"🟢 준실시간 반영됨 (네이버 시세 기준, {rt_info['time']} 조회) · "
+                f"?? 준실시간 반영됨 (네이버 시세 기준, {rt_info['time']} 조회) · "
                 f"현재가 {rt_info['price']:,}원 · 완전한 틱 단위 일치는 키움 Open API+ 직접 연동이 필요합니다."
             )
         elif use_realtime_patch:
-            st.caption("🟡 실시간 시세 조회 실패 — 네트워크 차단 또는 API 응답 오류. pykrx 기본값(전일/EOD)으로 표시됩니다.")
+            st.caption("?? 실시간 시세 조회 실패 ? 네트워크 차단 또는 API 응답 오류. pykrx 기본값(전일/EOD)으로 표시됩니다.")
         else:
-            st.caption("⚪ 실시간 보정 꺼짐 — pykrx 종가(EOD/지연) 기준으로 표시됩니다.")
+            st.caption("? 실시간 보정 꺼짐 ? pykrx 종가(EOD/지연) 기준으로 표시됩니다.")
 
     if df is None or df.empty:
         st.warning("선택한 조건에 해당하는 거래 데이터가 없습니다.")
@@ -1660,20 +1660,20 @@ with main_tab1:
         absolute_stop_loss = int(last_vwap * 0.96)
 
         if 0 <= disparity <= 5.0:
-            status_signal = "🔥 최적타점 (손절짧은매수타점)"
+            status_signal = "?? 최적타점 (손절짧은매수타점)"
         elif disparity > 20.0:
-            status_signal = "⚠️ 진입주의"
+            status_signal = "?? 진입주의"
         elif last_close < absolute_stop_loss:
-            status_signal = "🚨 절대손절이탈"
+            status_signal = "?? 절대손절이탈"
         else:
-            status_signal = "📊 추세유지"
+            status_signal = "?? 추세유지"
 
         # (시가총액/추정순이익/매매성향/진단상태/수급 카드는 페이지 맨 아래로 이동됨)
 
         st.markdown(
             f"""
             <div style="background-color: #f1f3f5; border-left: 4px solid #1a73e8; padding: 10px 15px; border-radius: 0 6px 6px 0; margin: 10px 0;">
-                <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 5px;">📰 [{stock_name}] 실시간 상승 이유 및 주요 뉴스 속보</div>
+                <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 5px;">?? [{stock_name}] 실시간 상승 이유 및 주요 뉴스 속보</div>
                 <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #333;">
                     {''.join([f"<li>{news}</li>" for news in news_list])}
                 </ul>
@@ -1692,58 +1692,58 @@ with main_tab1:
             </div>
             
             <div onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#1a73e8; font-weight:bold;">📌 {selected_timeframe} 평단가</div>
+                <div style="font-size:11px; color:#1a73e8; font-weight:bold;">?? {selected_timeframe} 평단가</div>
                 <div style="font-size:13px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원</div>
             </div>
 
             <div onclick="navigator.clipboard.writeText('{last_buy_vwap}');" style="background:#fff9db; border:1px solid #ffe066; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
-                <div style="font-size:11px; color:#d9480f; font-weight:bold;">🟠 세력매수평단</div>
+                <div style="font-size:11px; color:#d9480f; font-weight:bold;">?? 세력매수평단</div>
                 <div style="font-size:13px; font-weight:bold; color:#d32f2f; margin-top:2px;">{last_buy_vwap:,}원</div>
             </div>
 
             <div onclick="navigator.clipboard.writeText('{last_sell_vwap}');" style="background:#e7f5ff; border:1px solid #74c0fc; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
-                <div style="font-size:11px; color:#1864ab; font-weight:bold;">🔵 세력매도평단</div>
+                <div style="font-size:11px; color:#1864ab; font-weight:bold;">?? 세력매도평단</div>
                 <div style="font-size:13px; font-weight:bold; color:#1971c2; margin-top:2px;">{last_sell_vwap:,}원</div>
             </div>
 
             <div onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 1차목표(+5%)</div>
+                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">?? 1차목표(+5%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_1st:,}원</div>
             </div>
 
             <div onclick="navigator.clipboard.writeText('{target_2nd}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 2차목표(+10%)</div>
+                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">?? 2차목표(+10%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_2nd:,}원</div>
             </div>
 
             <div onclick="navigator.clipboard.writeText('{target_3rd}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 3차목표(+15%)</div>
+                <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">?? 3차목표(+15%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_3rd:,}원</div>
             </div>
 
             <div onclick="navigator.clipboard.writeText('{stop_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#f59f00; font-weight:bold;">🛑 1차 손절(-2%)</div>
+                <div style="font-size:11px; color:#f59f00; font-weight:bold;">?? 1차 손절(-2%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#f59f00; margin-top:2px;">{stop_1st:,}원</div>
             </div>
 
             <div onclick="navigator.clipboard.writeText('{stop_2nd}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#f08c00; font-weight:bold;">🛑 2차 손절(-3%)</div>
+                <div style="font-size:11px; color:#f08c00; font-weight:bold;">?? 2차 손절(-3%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#f08c00; margin-top:2px;">{stop_2nd:,}원</div>
             </div>
 
             <div onclick="navigator.clipboard.writeText('{absolute_stop_loss}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#e03131; font-weight:bold;">🚨 절대사수(-4%)</div>
+                <div style="font-size:11px; color:#e03131; font-weight:bold;">?? 절대사수(-4%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#e03131; margin-top:2px;">{absolute_stop_loss:,}원</div>
             </div>
         </div>
         """
         components.html(metrics_click_copy_html, height=150)
 
-        chart_mode = st.session_state.get("chart_display_mode", "📊 기본 목표가 차트")
+        chart_mode = st.session_state.get("chart_display_mode", "?? 기본 목표가 차트")
 
-        if chart_mode == "🔲 일·주·월·분봉 동시보기":
+        if chart_mode == "?? 일·주·월·분봉 동시보기":
             render_quad_timeframe_chart(code, stock_name)
-        elif chart_mode == "🧭 Study Mapping 스타일 (클릭 기준점 리셋)":
+        elif chart_mode == "?? Study Mapping 스타일 (클릭 기준점 리셋)":
             render_study_mapping_chart(df, stock_name, code, selected_timeframe)
         else:
             fig = go.Figure()
@@ -1823,56 +1823,56 @@ with main_tab1:
                 y=last_buy_vwap,
                 line_dash="dashdot",
                 line_color="#d32f2f",
-                annotation_text=f"🟠 세력매수평단: {last_buy_vwap:,}원",
+                annotation_text=f"?? 세력매수평단: {last_buy_vwap:,}원",
                 annotation_position="top right",
             )
             fig.add_hline(
                 y=last_sell_vwap,
                 line_dash="dashdot",
                 line_color="#1971c2",
-                annotation_text=f"🔵 세력매도평단: {last_sell_vwap:,}원",
+                annotation_text=f"?? 세력매도평단: {last_sell_vwap:,}원",
                 annotation_position="bottom right",
             )
             fig.add_hline(
                 y=target_3rd,
                 line_dash="dot",
                 line_color="#2b8a3e",
-                annotation_text=f"🎯 3차 목표가 (+15%): {target_3rd:,}원",
+                annotation_text=f"?? 3차 목표가 (+15%): {target_3rd:,}원",
                 annotation_position="top left",
             )
             fig.add_hline(
                 y=target_2nd,
                 line_dash="dot",
                 line_color="#2b8a3e",
-                annotation_text=f"🎯 2차 목표가 (+10%): {target_2nd:,}원",
+                annotation_text=f"?? 2차 목표가 (+10%): {target_2nd:,}원",
                 annotation_position="top left",
             )
             fig.add_hline(
                 y=target_1st,
                 line_dash="dot",
                 line_color="#2b8a3e",
-                annotation_text=f"🎯 1차 목표가 (+5%): {target_1st:,}원",
+                annotation_text=f"?? 1차 목표가 (+5%): {target_1st:,}원",
                 annotation_position="top left",
             )
             fig.add_hline(
                 y=stop_1st,
                 line_dash="dash",
                 line_color="#f59f00",
-                annotation_text=f"🛑 1차 손절가 (-2%): {stop_1st:,}원",
+                annotation_text=f"?? 1차 손절가 (-2%): {stop_1st:,}원",
                 annotation_position="bottom left",
             )
             fig.add_hline(
                 y=stop_2nd,
                 line_dash="dash",
                 line_color="#f08c00",
-                annotation_text=f"🛑 2차 손절가 (-3%): {stop_2nd:,}원",
+                annotation_text=f"?? 2차 손절가 (-3%): {stop_2nd:,}원",
                 annotation_position="bottom left",
             )
             fig.add_hline(
                 y=absolute_stop_loss,
                 line_dash="dash",
                 line_color="#e03131",
-                annotation_text=f"🚨 절대사수 손절가 (-4%): {absolute_stop_loss:,}원",
+                annotation_text=f"?? 절대사수 손절가 (-4%): {absolute_stop_loss:,}원",
                 annotation_position="bottom left",
             )
 
@@ -1897,27 +1897,27 @@ with main_tab1:
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
         st.radio(
             "차트 스타일",
-            ["📊 기본 목표가 차트", "🧭 Study Mapping 스타일 (클릭 기준점 리셋)", "🔲 일·주·월·분봉 동시보기"],
+            ["?? 기본 목표가 차트", "?? Study Mapping 스타일 (클릭 기준점 리셋)", "?? 일·주·월·분봉 동시보기"],
             horizontal=True,
             key="chart_display_mode",
         )
 
-        with st.expander("📝 텍스트 요약 및 전체 복사 기능"):
+        with st.expander("?? 텍스트 요약 및 전체 복사 기능"):
             copy_summary = (
                 f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
-                f"• 매매성향: {trade_type} | 괴리율: {disparity:+.2f}%\n"
-                f"• 현재가: {last_close:,}원 | 평단가: {last_vwap:,}원\n"
-                f"• 🎯 1차목표 (+5%): {target_1st:,}원\n"
-                f"• 🎯 2차목표 (+10%): {target_2nd:,}원\n"
-                f"• 🎯 3차목표 (+15%): {target_3rd:,}원\n"
-                f"• 🛑 1차 손절가 (-2%): {stop_1st:,}원\n"
-                f"• 🛑 2차 손절가 (-3%): {stop_2nd:,}원\n"
-                f"• 🚨 절대사수 손절가 (-4%): {absolute_stop_loss:,}원"
+                f"? 매매성향: {trade_type} | 괴리율: {disparity:+.2f}%\n"
+                f"? 현재가: {last_close:,}원 | 평단가: {last_vwap:,}원\n"
+                f"? ?? 1차목표 (+5%): {target_1st:,}원\n"
+                f"? ?? 2차목표 (+10%): {target_2nd:,}원\n"
+                f"? ?? 3차목표 (+15%): {target_3rd:,}원\n"
+                f"? ?? 1차 손절가 (-2%): {stop_1st:,}원\n"
+                f"? ?? 2차 손절가 (-3%): {stop_2nd:,}원\n"
+                f"? ?? 절대사수 손절가 (-4%): {absolute_stop_loss:,}원"
             )
             st.code(copy_summary, language="text")
 
-        # 📌 최근 날짜별 상세 수치 카드 (클릭 즉시 복사)
-        st.markdown("### 📋 최근 날짜별 상세 수치 복사 (원하시는 가격 글자를 클릭하면 즉시 복사됩니다)")
+        # ?? 최근 날짜별 상세 수치 카드 (클릭 즉시 복사)
+        st.markdown("### ?? 최근 날짜별 상세 수치 복사 (원하시는 가격 글자를 클릭하면 즉시 복사됩니다)")
         recent_df = df.tail(10).iloc[::-1]
         
         card_rows_html = ""
@@ -1970,23 +1970,23 @@ with main_tab1:
         components.html(recent_table_html, height=280)
 
         st.markdown("<hr style='margin:16px 0 10px 0;'>", unsafe_allow_html=True)
-        st.markdown("### 📊 시가총액 · 수급 · 진단 정보")
+        st.markdown("### ?? 시가총액 · 수급 · 진단 정보")
 
         f1, f2, f3, f4 = st.columns(4)
-        f1.metric("🏢 시가총액", f"{mcap_val:,} 억원" if mcap_val is not None else "N/A (조회 실패)")
+        f1.metric("?? 시가총액", f"{mcap_val:,} 억원" if mcap_val is not None else "N/A (조회 실패)")
         f2.metric(
             op_profit_label,
             f"{op_profit:,} 억원" if op_profit is not None else "N/A",
-            ("🟢 흑자" if op_profit > 0 else "🔴 적자") if op_profit is not None else None,
+            ("?? 흑자" if op_profit > 0 else "?? 적자") if op_profit is not None else None,
         )
-        f3.metric("🎯 매매 성향", trade_type)
-        f4.metric("⚡ 진단 상태", status_signal)
+        f3.metric("?? 매매 성향", trade_type)
+        f4.metric("? 진단 상태", status_signal)
 
         s_c1, s_c2, s_c3, s_c4 = st.columns(4)
-        s_c1.metric("🌐 외국인 순매수", foreign_net)
-        s_c2.metric("🏛️ 기관 순매수", inst_net)
-        s_c3.metric("💻 실시간 프로그램", prog_net)
-        s_c4.metric("💳 신용잔고율", credit_ratio)
+        s_c1.metric("?? 외국인 순매수", foreign_net)
+        s_c2.metric("??? 기관 순매수", inst_net)
+        s_c3.metric("?? 실시간 프로그램", prog_net)
+        s_c4.metric("?? 신용잔고율", credit_ratio)
 
         flow_note_col, flow_btn_col = st.columns([5, 1])
         with flow_note_col:
@@ -1994,27 +1994,27 @@ with main_tab1:
                 as_of_fmt = f"{flow_as_of[:4]}-{flow_as_of[4:6]}-{flow_as_of[6:]}"
                 today_str = datetime.datetime.now().strftime("%Y%m%d")
                 if flow_as_of == today_str:
-                    st.caption(f"👇 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (당일)")
+                    st.caption(f"?? 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (당일)")
                 else:
-                    st.caption(f"👇 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (KRX가 당일 장중엔 투자자별 수급을 공개하지 않아 최근 영업일 기준입니다)")
+                    st.caption(f"?? 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (KRX가 당일 장중엔 투자자별 수급을 공개하지 않아 최근 영업일 기준입니다)")
             else:
-                st.caption("👇 기관합계 세부 내역 · ⚠ 수급 데이터 조회 실패 (아래 값은 N/A로 표시됩니다)")
+                st.caption("?? 기관합계 세부 내역 · ? 수급 데이터 조회 실패 (아래 값은 N/A로 표시됩니다)")
         with flow_btn_col:
-            if st.button("🔄 새로고침", key="flow_refresh_btn"):
+            if st.button("?? 새로고침", key="flow_refresh_btn"):
                 fetch_investor_flow.clear()
                 fetch_naver_integration_info.clear()
                 fetch_shares_outstanding.clear()
                 st.rerun()
 
         p_c1, p_c2, p_c3 = st.columns(3)
-        p_c1.metric("🏦 연기금 순매수", pension_net)
-        p_c2.metric("📈 투신 순매수", trust_net)
-        p_c3.metric("🕵️ 사모 순매수", pe_net)
+        p_c1.metric("?? 연기금 순매수", pension_net)
+        p_c2.metric("?? 투신 순매수", trust_net)
+        p_c3.metric("??? 사모 순매수", pe_net)
 
         hts_top_panel_html = f"""
         <div style="background: #ffffff; border: 1px solid #1a73e8; border-radius: 8px; padding: 12px 15px; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
             <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 8px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px;">
-                📊 HTS 기준 [{stock_name}] 수급 및 평단 분석 결과 <span style="font-size:11px; color:#666; font-weight:normal;">(글자 클릭 시 확인창 없이 즉시 복사)</span>
+                ?? HTS 기준 [{stock_name}] 수급 및 평단 분석 결과 <span style="font-size:11px; color:#666; font-weight:normal;">(글자 클릭 시 확인창 없이 즉시 복사)</span>
             </div>
             <div style="display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 8px; font-size: 12px;">
                 <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
@@ -2059,7 +2059,7 @@ with main_tab1:
 # TAB 2: 업종·테마 분석 대시보드
 # ---------------------------------------------------------
 with main_tab2:
-    st.markdown("### ⭐ 업종·테마 분석 대시보드")
+    st.markdown("### ? 업종·테마 분석 대시보드")
     st.caption("다단계 목표가 및 다단계 손절선 포함 분석 · 테마-종목 매핑은 예시 데이터입니다")
 
     theme_names_all = list(THEME_DATA.keys())
@@ -2093,11 +2093,11 @@ with main_tab2:
 
     with col_left:
         panel_mode = st.radio(
-            "패널 모드", ["🌡️ 인기 테마 목록", "🔎 종목 검색"], horizontal=True,
+            "패널 모드", ["??? 인기 테마 목록", "?? 종목 검색"], horizontal=True,
             key="theme_panel_mode", label_visibility="collapsed",
         )
 
-        if panel_mode == "🔎 종목 검색":
+        if panel_mode == "?? 종목 검색":
             search_input = st.text_input(
                 "검색어 입력...", "", key="t_search", placeholder="종목명 또는 코드 입력..."
             )
@@ -2116,7 +2116,7 @@ with main_tab2:
             selected_theme = None
         else:
             st.markdown(
-                f"<span style='font-size:12px; color:#555;'>🌡️ 인기 테마 목록 <b>{len(theme_names_all)}개</b></span>",
+                f"<span style='font-size:12px; color:#555;'>??? 인기 테마 목록 <b>{len(theme_names_all)}개</b></span>",
                 unsafe_allow_html=True,
             )
             radio_labels = []
@@ -2193,8 +2193,8 @@ with main_tab2:
         components.html(table_html, height=height, scrolling=True)
 
     with col_right:
-        if panel_mode == "🔎 종목 검색":
-            st.markdown("### 📌 종목 검색 결과 분석", unsafe_allow_html=True)
+        if panel_mode == "?? 종목 검색":
+            st.markdown("### ?? 종목 검색 결과 분석", unsafe_allow_html=True)
             if matched_stocks:
                 _render_stock_table(matched_stocks, height=260)
             else:
@@ -2203,7 +2203,7 @@ with main_tab2:
             t_info = THEME_DATA[selected_theme]
             head_col1, head_col2 = st.columns([3, 2])
             with head_col1:
-                st.markdown(f"### 📌 {selected_theme}", unsafe_allow_html=True)
+                st.markdown(f"### ?? {selected_theme}", unsafe_allow_html=True)
             with head_col2:
                 st.markdown(
                     f"<div style='text-align:right; font-size:13px; padding-top:8px;'>"
@@ -2231,7 +2231,7 @@ with main_tab2:
 # TAB 3: 전체 거래대금 TOP 30 대시보드
 # ---------------------------------------------------------
 with main_tab3:
-    st.title("🔥 전체 거래대금 TOP 30 대시보드")
+    st.title("?? 전체 거래대금 TOP 30 대시보드")
     st.caption("다단계 목표가 및 다단계 손절선 포함 분석")
 
     t30_sort_mode = st.radio(
@@ -2248,7 +2248,7 @@ with main_tab3:
             "price": 72500,
             "change": 4.50,
             "amt": 20600,
-            "op_status": "🟢 흑자",
+            "op_status": "?? 흑자",
             "d_vwap": 71000,
             "target1": 74550,
             "target2": 78100,
@@ -2256,7 +2256,7 @@ with main_tab3:
             "stop1": 69580,
             "stop2": 68870,
             "stop_abs": 68160,
-            "type": "🏆 중장기",
+            "type": "?? 중장기",
         },
         {
             "name": "SK하이닉스",
@@ -2264,7 +2264,7 @@ with main_tab3:
             "price": 188500,
             "change": 8.90,
             "amt": 16700,
-            "op_status": "🟢 흑자",
+            "op_status": "?? 흑자",
             "d_vwap": 165000,
             "target1": 173250,
             "target2": 181500,
@@ -2272,7 +2272,7 @@ with main_tab3:
             "stop1": 161700,
             "stop2": 160050,
             "stop_abs": 158400,
-            "type": "🏆 중장기",
+            "type": "?? 중장기",
         },
     ]
 
@@ -2329,7 +2329,7 @@ with main_tab3:
 # TAB 4: 시간외 거래 TOP 30 대시보드
 # ---------------------------------------------------------
 with main_tab4:
-    st.title("🌙 시간외 단일가 거래 TOP 30 대시보드")
+    st.title("?? 시간외 단일가 거래 TOP 30 대시보드")
     st.caption("다단계 목표가 및 다단계 손절선 포함 분석")
 
     ah_sort_mode = st.radio(
@@ -2346,7 +2346,7 @@ with main_tab4:
             "price": 1950,
             "change": 9.80,
             "amt": 850,
-            "op_status": "🟢 흑자",
+            "op_status": "?? 흑자",
             "d_vwap": 1810,
             "target1": 1900,
             "target2": 1990,
@@ -2362,7 +2362,7 @@ with main_tab4:
             "price": 14800,
             "change": 4.20,
             "amt": 1200,
-            "op_status": "🟢 흑자",
+            "op_status": "?? 흑자",
             "d_vwap": 13950,
             "target1": 14600,
             "target2": 15340,
@@ -2430,13 +2430,13 @@ with main_tab4:
 with main_tab5:
     top_head1, top_head2 = st.columns([4, 1])
     with top_head1:
-        st.markdown("### 🔴 실시간 랭킹")
+        st.markdown("### ?? 실시간 랭킹")
         st.caption(
             f"네이버 증권 실시간 페이지 기반 · 갱신: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
             "(장중에도 갱신되는 페이지를 사용합니다 - 예전에 쓰던 pykrx는 장마감 데이터라 장중엔 항상 비어있었습니다)"
         )
     with top_head2:
-        if st.button("🔄 새로고침", key="rt_rank_refresh"):
+        if st.button("?? 새로고침", key="rt_rank_refresh"):
             fetch_naver_live_ranking.clear()
             fetch_naver_popular_search.clear()
             st.rerun()
@@ -2444,7 +2444,7 @@ with main_tab5:
     market_df = fetch_naver_live_ranking()
 
     def _render_rank_rows(rows, value_fmt):
-        """네이티브 스트림릿 위젯으로 랭킹 행을 그린다 (⚡단타/🎓스터디 버튼 클릭 가능하게)."""
+        """네이티브 스트림릿 위젯으로 랭킹 행을 그린다 (?단타/??스터디 버튼 클릭 가능하게)."""
         for i, r in enumerate(rows, start=1):
             chg = r.get("등락률", 0.0) or 0.0
             chg_color = "#d32f2f" if chg >= 0 else "#1971c2"
@@ -2466,13 +2466,13 @@ with main_tab5:
                 )
             with row_c3:
                 st.button(
-                    "⚡단타", key=f"jump_day_{r.get('_key', i)}_{value_fmt(r)}",
+                    "?단타", key=f"jump_day_{r.get('_key', i)}_{value_fmt(r)}",
                     on_click=jump_to_chart, args=(r.get("code"), r["name"], "3분봉"),
                     use_container_width=True,
                 )
             with row_c4:
                 st.button(
-                    "🎓스터디", key=f"jump_study_{r.get('_key', i)}_{value_fmt(r)}",
+                    "??스터디", key=f"jump_study_{r.get('_key', i)}_{value_fmt(r)}",
                     on_click=jump_to_chart, args=(r.get("code"), r["name"], "일봉"),
                     use_container_width=True,
                 )
@@ -2480,9 +2480,9 @@ with main_tab5:
     rank_col1, rank_col2, rank_col3 = st.columns(3)
 
     with rank_col1:
-        st.markdown("#### 📊 거래량 상위 TOP10")
+        st.markdown("#### ?? 거래량 상위 TOP10")
         if market_df.empty:
-            st.warning("데이터를 불러오지 못했습니다. 🔄 새로고침을 눌러 다시 시도해보세요.")
+            st.warning("데이터를 불러오지 못했습니다. ?? 새로고침을 눌러 다시 시도해보세요.")
         else:
             top_vol = market_df.sort_values("거래량", ascending=False).head(10)
             rows = [
@@ -2492,9 +2492,9 @@ with main_tab5:
             _render_rank_rows(rows, lambda r: f"{int(r['거래량']):,}주")
 
     with rank_col2:
-        st.markdown("#### 💰 거래대금 상위 TOP10")
+        st.markdown("#### ?? 거래대금 상위 TOP10")
         if market_df.empty or market_df["거래대금"].isna().all():
-            st.warning("데이터를 불러오지 못했습니다. 🔄 새로고침을 눌러 다시 시도해보세요.")
+            st.warning("데이터를 불러오지 못했습니다. ?? 새로고침을 눌러 다시 시도해보세요.")
         else:
             top_amt = market_df.dropna(subset=["거래대금"]).sort_values("거래대금", ascending=False).head(10)
             rows = [
@@ -2504,11 +2504,11 @@ with main_tab5:
             _render_rank_rows(rows, lambda r: f"{int(r['거래대금']//1_000_000):,}백만")
 
     with rank_col3:
-        st.markdown("#### 🔍 검색 상위 TOP10")
-        st.caption("⚠ 비공식 스크래핑 기반이라 실패할 수 있습니다")
+        st.markdown("#### ?? 검색 상위 TOP10")
+        st.caption("? 비공식 스크래핑 기반이라 실패할 수 있습니다")
         search_rows = fetch_naver_popular_search()
         if not search_rows:
-            st.info("검색 순위를 지금은 불러올 수 없습니다. 🔄 새로고침을 눌러보세요.")
+            st.info("검색 순위를 지금은 불러올 수 없습니다. ?? 새로고침을 눌러보세요.")
         else:
             rows = [
                 {"name": r["name"], "code": r["code"], "가격": r.get("price", "-"), "등락률": 0.0, "_key": f"srch{idx}"}
