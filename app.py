@@ -988,9 +988,11 @@ def compute_vwap_columns(df):
 @st.cache_data(ttl=60)
 def fetch_quad_timeframe_data(code: str):
     """
-    일봉(1년)/주봉(3년)/월봉(5년)/분봉(당일 3분봉)을 한 번에 가져와서
+    일봉(1년)/주봉(3년)/월봉(5년)을 한 번에 가져와서
     각각 평단가/세력매수평단/세력매도평단까지 계산해 반환한다.
-    4분할("일·주·월·분봉 동시보기") 차트용.
+    4분할("일·주·월봉 + 기본 목표가 차트") 차트용.
+    ※ 분봉은 장중에만 존재하고 데이터 소스가 불안정해서 이 4분할에서는 빼고,
+      대신 4번째 칸에 목표가/손절가 라인이 포함된 "기본 목표가 차트"를 넣는다.
     """
     today = datetime.datetime.now()
     result = {}
@@ -1019,24 +1021,26 @@ def fetch_quad_timeframe_data(code: str):
     except Exception:
         result["월봉"] = None
 
-    try:
-        min_df = get_today_minute_df(code, 3)
-        result["분봉"] = compute_vwap_columns(min_df) if min_df is not None and not min_df.empty else None
-    except Exception:
-        result["분봉"] = None
-
     return result
 
 
-def render_quad_timeframe_chart(code, stock_name):
-    """일봉/주봉/월봉/분봉 4개를 한 화면에 2x2로 동시에 보여준다."""
+def render_quad_timeframe_chart(
+    code, stock_name, df, selected_timeframe, is_minute_mode,
+    target_1st, target_2nd, target_3rd, stop_1st, stop_2nd, absolute_stop_loss,
+):
+    """일봉/주봉/월봉 + 기본 목표가 차트(목표가·손절가 라인 포함), 4개를 2x2로 동시에 보여준다."""
     from plotly.subplots import make_subplots
 
     data = fetch_quad_timeframe_data(code)
-    labels = ["일봉", "주봉", "월봉", "분봉"]
+    labels = ["일봉", "주봉", "월봉"]
+    positions = {"일봉": (1, 1), "주봉": (1, 2), "월봉": (2, 1)}
 
-    fig = make_subplots(rows=2, cols=2, subplot_titles=labels, vertical_spacing=0.12, horizontal_spacing=0.06)
-    positions = {"일봉": (1, 1), "주봉": (1, 2), "월봉": (2, 1), "분봉": (2, 2)}
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=labels + [f"기본 목표가 차트 ({selected_timeframe})"],
+        vertical_spacing=0.12, horizontal_spacing=0.06,
+        specs=[[{}, {}], [{}, {"secondary_y": True}]],
+    )
 
     any_data = False
     for label in labels:
@@ -1045,8 +1049,7 @@ def render_quad_timeframe_chart(code, stock_name):
         if sub_df is None or sub_df.empty:
             continue
         any_data = True
-        is_min = label == "분봉"
-        x_vals = [d.strftime("%H:%M" if is_min else "%Y-%m-%d") for d in sub_df.index]
+        x_vals = [d.strftime("%Y-%m-%d") for d in sub_df.index]
         fig.add_trace(
             go.Scatter(x=x_vals, y=sub_df["종가"], mode="lines", name=f"종가({label})",
                        line=dict(color="#1f77b4", width=1.3), showlegend=False),
@@ -1059,8 +1062,54 @@ def render_quad_timeframe_chart(code, stock_name):
         )
         fig.update_xaxes(type="category", nticks=6, tickfont=dict(size=9), row=row, col=col)
 
+    # 4번째 칸: 기본 목표가 차트 (현재 선택된 주기 기준, 목표가·손절가 라인 포함)
+    if df is not None and not df.empty:
+        any_data = True
+        bx = [d.strftime("%H:%M" if is_minute_mode else "%Y-%m-%d") for d in df.index]
+        fig.add_trace(
+            go.Scatter(x=bx, y=df["종가"], mode="lines", name="종가",
+                       line=dict(color="#1f77b4", width=1.3), showlegend=False),
+            row=2, col=2,
+        )
+        fig.add_trace(
+            go.Scatter(x=bx, y=df["평단가"], mode="lines", name="평단가",
+                       line=dict(color="#ff7f0e", width=2), showlegend=False),
+            row=2, col=2,
+        )
+        if "세력매수평단" in df.columns:
+            fig.add_trace(
+                go.Scatter(x=bx, y=df["세력매수평단"], mode="lines", name="세력매수평단",
+                           line=dict(color="#d32f2f", width=1, dash="dashdot"), showlegend=False),
+                row=2, col=2,
+            )
+            fig.add_trace(
+                go.Scatter(x=bx, y=df["세력매도평단"], mode="lines", name="세력매도평단",
+                           line=dict(color="#1971c2", width=1, dash="dashdot"), showlegend=False),
+                row=2, col=2,
+            )
+        if "누적순매수증감" in df.columns:
+            fig.add_trace(
+                go.Scatter(x=bx, y=df["누적순매수증감"], mode="lines", name="누적순매수증감",
+                           line=dict(color="#2b8a3e", width=1, dash="dot"), showlegend=False),
+                row=2, col=2, secondary_y=True,
+            )
+
+        for y_val, color, text in [
+            (target_3rd, "#2b8a3e", f"3차목표 {target_3rd:,}"),
+            (target_2nd, "#2b8a3e", f"2차목표 {target_2nd:,}"),
+            (target_1st, "#2b8a3e", f"1차목표 {target_1st:,}"),
+            (stop_1st, "#f59f00", f"1차손절 {stop_1st:,}"),
+            (stop_2nd, "#f08c00", f"2차손절 {stop_2nd:,}"),
+            (absolute_stop_loss, "#e03131", f"절대사수 {absolute_stop_loss:,}"),
+        ]:
+            fig.add_hline(
+                y=y_val, line_dash="dot", line_color=color, line_width=1,
+                row=2, col=2, annotation_text=text, annotation_font_size=8,
+            )
+        fig.update_xaxes(type="category", nticks=6, tickfont=dict(size=9), row=2, col=2)
+
     fig.update_layout(
-        title=f"{stock_name} ({code}) - 일봉·주봉·월봉·분봉 동시 보기",
+        title=f"{stock_name} ({code}) - 일봉·주봉·월봉 + 기본 목표가 차트",
         height=680,
         template="plotly_white",
         margin=dict(l=30, r=20, t=60, b=20),
@@ -1068,9 +1117,7 @@ def render_quad_timeframe_chart(code, stock_name):
     st.plotly_chart(fig, use_container_width=True)
 
     if not any_data:
-        st.warning("네 가지 차트 모두 데이터를 가져오지 못했습니다. 네트워크 문제일 수 있습니다.")
-    elif data.get("분봉") is None:
-        st.caption("⚠ 분봉만 데이터를 가져오지 못했습니다 (장 시작 전이거나 네트워크 문제) — 나머지 3개는 정상 표시됩니다.")
+        st.warning("차트 데이터를 가져오지 못했습니다. 네트워크 문제일 수 있습니다.")
 
 
 def render_study_mapping_chart(df, stock_name, code, selected_timeframe):
@@ -1744,7 +1791,10 @@ with main_tab1:
         chart_mode = st.session_state.get("chart_display_mode", "🔲 일·주·월·분봉 동시보기")
 
         if chart_mode == "🔲 일·주·월·분봉 동시보기":
-            render_quad_timeframe_chart(code, stock_name)
+            render_quad_timeframe_chart(
+                code, stock_name, df, selected_timeframe, is_minute_mode,
+                target_1st, target_2nd, target_3rd, stop_1st, stop_2nd, absolute_stop_loss,
+            )
         elif chart_mode == "🧭 Study Mapping 스타일 (클릭 기준점 리셋)":
             render_study_mapping_chart(df, stock_name, code, selected_timeframe)
         else:
