@@ -1500,8 +1500,12 @@ with main_tab1:
         st.session_state["_reset_to_today_pending"] = False
 
     if st.session_state.get("_swap_dates_pending"):
-        sy0, sm0, sd0 = st.session_state.get("sy"), st.session_state.get("sm"), st.session_state.get("sd")
-        ey0, em0, ed0 = st.session_state.get("ey"), st.session_state.get("em"), st.session_state.get("ed")
+        sy0 = st.session_state.get("sy") or year_start_default.year
+        sm0 = st.session_state.get("sm") or year_start_default.month
+        sd0 = st.session_state.get("sd") or year_start_default.day
+        ey0 = st.session_state.get("ey") or today.year
+        em0 = st.session_state.get("em") or today.month
+        ed0 = st.session_state.get("ed") or today.day
         st.session_state["sy"], st.session_state["ey"] = ey0, sy0
         st.session_state["sm"], st.session_state["em"] = em0, sm0
         st.session_state["sd"], st.session_state["ed"] = ed0, sd0
@@ -1513,21 +1517,21 @@ with main_tab1:
         s_year, s_mon, s_day = today.year, today.month, today.day
         e_year, e_mon, e_day = today.year, today.month, today.day
     else:
-        s_year = st.session_state.get("sy", year_start_default.year)
-        s_mon = st.session_state.get("sm", year_start_default.month)
-        s_day = st.session_state.get("sd", year_start_default.day)
-        e_year = st.session_state.get("ey", today.year)
-        e_mon = st.session_state.get("em", today.month)
-        e_day = st.session_state.get("ed", today.day)
+        s_year = st.session_state.get("sy") or year_start_default.year
+        s_mon = st.session_state.get("sm") or year_start_default.month
+        s_day = st.session_state.get("sd") or year_start_default.day
+        e_year = st.session_state.get("ey") or today.year
+        e_mon = st.session_state.get("em") or today.month
+        e_day = st.session_state.get("ed") or today.day
 
     try:
         start_date = datetime.date(s_year, s_mon, s_day)
-    except ValueError:
+    except (ValueError, TypeError):
         start_date = datetime.date(s_year, s_mon, 1)
 
     try:
         end_date = datetime.date(e_year, e_mon, e_day)
-    except ValueError:
+    except (ValueError, TypeError):
         end_date = datetime.date(e_year, e_mon, 1)
 
     s_date = start_date.strftime("%Y%m%d")
