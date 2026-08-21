@@ -1592,8 +1592,76 @@ with main_tab1:
         else:
             st.caption("⚪ 실시간 보정 꺼짐 — pykrx 종가(EOD/지연) 기준으로 표시됩니다.")
 
+    def _render_date_range_picker(auto_copy_value=None):
+        """
+        조회기간(시작/종료 연·월·일) 선택 위젯 + 스왑/오늘로 버튼 + 차트 주기 라디오.
+        데이터가 없어서 경고만 뜨는 상태에서도 항상 보여야 사용자가 날짜를
+        직접 고쳐서 빠져나올 수 있으므로, df 유무와 무관하게 호출 가능한
+        독립 함수로 뺐다.
+        """
+        def _mark_daterange_changed():
+            st.session_state["_daterange_changed"] = True
+
+        dcol1, dcol2, dcol3 = st.columns(3)
+        with dcol1:
+            st.selectbox("시작연도", year_options,
+                         index=year_options.index(min(max(s_year, year_options[0]), year_options[-1])),
+                         key="sy", label_visibility="collapsed", on_change=_mark_daterange_changed)
+        with dcol2:
+            st.selectbox("시작월", list(range(1, 13)), index=s_mon - 1, key="sm",
+                         label_visibility="collapsed", on_change=_mark_daterange_changed)
+        with dcol3:
+            st.selectbox("시작일", list(range(1, 32)), index=s_day - 1, key="sd",
+                         label_visibility="collapsed", on_change=_mark_daterange_changed)
+
+        bcol1, bcol2 = st.columns(2)
+        with bcol1:
+            if st.button("⇄ 시작/종료", key="swap_dates_btn", use_container_width=True, help="시작연도·월·일과 종료연도·월·일을 서로 바꿉니다"):
+                st.session_state["_swap_dates_pending"] = True
+                st.rerun()
+        with bcol2:
+            if st.button("📌 오늘로", key="reset_to_today_btn", use_container_width=True, help="시작일을 올해 1월 1일, 종료일을 오늘로 즉시 설정합니다"):
+                st.session_state["_reset_to_today_pending"] = True
+                st.session_state["_daterange_changed"] = True
+                st.rerun()
+
+        ecol1, ecol2, ecol3 = st.columns(3)
+        with ecol1:
+            st.selectbox("종료연도", year_options,
+                         index=year_options.index(min(max(e_year, year_options[0]), year_options[-1])),
+                         key="ey", label_visibility="collapsed", on_change=_mark_daterange_changed)
+        with ecol2:
+            st.selectbox("종료월", list(range(1, 13)), index=e_mon - 1, key="em",
+                         label_visibility="collapsed", on_change=_mark_daterange_changed)
+        with ecol3:
+            st.selectbox("종료일", list(range(1, 32)), index=e_day - 1, key="ed",
+                         label_visibility="collapsed", on_change=_mark_daterange_changed)
+
+        if is_minute_mode:
+            st.caption("⏱️ 분봉 모드는 당일(09:00~15:30) 고정이라 위 조회기간은 무시됩니다.")
+
+        # 조회기간을 수동으로 바꾸면 일봉 평단가를 자동으로 클립보드에 복사 (데이터가 있을 때만)
+        if st.session_state.get("_daterange_changed"):
+            st.session_state["_daterange_changed"] = False
+            if auto_copy_value is not None:
+                components.html(
+                    f"<script>navigator.clipboard.writeText('{auto_copy_value}');</script>",
+                    height=0,
+                )
+
     if df is None or df.empty:
-        st.warning("선택한 조건에 해당하는 거래 데이터가 없습니다.")
+        _dp_col1, _dp_col2 = st.columns([5.3, 1.55])
+        with _dp_col1:
+            st.warning("선택한 조건에 해당하는 거래 데이터가 없습니다. 오른쪽에서 조회기간을 다시 맞춰보세요 (시작일이 종료일보다 늦으면 이렇게 됩니다).")
+        with _dp_col2:
+            _render_date_range_picker(auto_copy_value=None)
+        st.radio(
+            "차트 주기",
+            timeframe_options,
+            horizontal=True,
+            key="direct_timeframe_select",
+            label_visibility="collapsed",
+        )
     else:
         df["TPV"] = df["종가"] * df["거래량"]
         cum_volume = df["거래량"].cumsum()
@@ -1732,54 +1800,7 @@ with main_tab1:
         with row_l:
             components.html(metrics_click_copy_html, height=150)
         with row_r:
-            def _mark_daterange_changed():
-                st.session_state["_daterange_changed"] = True
-
-            dcol1, dcol2, dcol3 = st.columns(3)
-            with dcol1:
-                st.selectbox("시작연도", year_options,
-                             index=year_options.index(min(max(s_year, year_options[0]), year_options[-1])),
-                             key="sy", label_visibility="collapsed", on_change=_mark_daterange_changed)
-            with dcol2:
-                st.selectbox("시작월", list(range(1, 13)), index=s_mon - 1, key="sm",
-                             label_visibility="collapsed", on_change=_mark_daterange_changed)
-            with dcol3:
-                st.selectbox("시작일", list(range(1, 32)), index=s_day - 1, key="sd",
-                             label_visibility="collapsed", on_change=_mark_daterange_changed)
-
-            bcol1, bcol2 = st.columns(2)
-            with bcol1:
-                if st.button("⇄ 시작/종료", key="swap_dates_btn", use_container_width=True, help="시작연도·월·일과 종료연도·월·일을 서로 바꿉니다"):
-                    st.session_state["_swap_dates_pending"] = True
-                    st.rerun()
-            with bcol2:
-                if st.button("📌 오늘로", key="reset_to_today_btn", use_container_width=True, help="시작일을 올해 1월 1일, 종료일을 오늘로 즉시 설정합니다"):
-                    st.session_state["_reset_to_today_pending"] = True
-                    st.session_state["_daterange_changed"] = True
-                    st.rerun()
-
-            ecol1, ecol2, ecol3 = st.columns(3)
-            with ecol1:
-                st.selectbox("종료연도", year_options,
-                             index=year_options.index(min(max(e_year, year_options[0]), year_options[-1])),
-                             key="ey", label_visibility="collapsed", on_change=_mark_daterange_changed)
-            with ecol2:
-                st.selectbox("종료월", list(range(1, 13)), index=e_mon - 1, key="em",
-                             label_visibility="collapsed", on_change=_mark_daterange_changed)
-            with ecol3:
-                st.selectbox("종료일", list(range(1, 32)), index=e_day - 1, key="ed",
-                             label_visibility="collapsed", on_change=_mark_daterange_changed)
-
-            if is_minute_mode:
-                st.caption("⏱️ 분봉 모드는 당일(09:00~15:30) 고정이라 위 조회기간은 무시됩니다.")
-
-        # 조회기간을 수동으로 바꾸면 일봉 평단가를 자동으로 클립보드에 복사
-        if st.session_state.get("_daterange_changed"):
-            st.session_state["_daterange_changed"] = False
-            components.html(
-                f"<script>navigator.clipboard.writeText('{last_vwap}');</script>",
-                height=0,
-            )
+            _render_date_range_picker(auto_copy_value=last_vwap)
 
         st.radio(
             "차트 주기",
