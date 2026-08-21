@@ -1747,7 +1747,6 @@ with main_tab1:
             with bcol1:
                 if st.button("⇄ 시작/종료", key="swap_dates_btn", use_container_width=True, help="시작연도·월·일과 종료연도·월·일을 서로 바꿉니다"):
                     st.session_state["_swap_dates_pending"] = True
-                    st.session_state["_daterange_changed"] = True
                     st.rerun()
             with bcol2:
                 if st.button("📌 오늘로", key="reset_to_today_btn", use_container_width=True, help="시작일을 올해 1월 1일, 종료일을 오늘로 즉시 설정합니다"):
