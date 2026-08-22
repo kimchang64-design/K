@@ -1050,47 +1050,59 @@ def render_quad_timeframe_chart(
             continue
         any_data = True
         x_vals = [d.strftime("%Y-%m-%d") for d in sub_df.index]
+        disparity_sub = ((sub_df["종가"] - sub_df["평단가"]) / sub_df["평단가"] * 100)
         fig.add_trace(
-            go.Scatter(x=x_vals, y=sub_df["종가"], mode="lines", name=f"종가({label})",
-                       line=dict(color="#1f77b4", width=1.3), showlegend=False),
+            go.Scatter(x=x_vals, y=sub_df["종가"], mode="lines", name="종가",
+                       line=dict(color="#1f77b4", width=1.3),
+                       hovertemplate="종가: %{y:,.0f}원<extra></extra>", showlegend=False),
             row=row, col=col,
         )
         fig.add_trace(
-            go.Scatter(x=x_vals, y=sub_df["평단가"], mode="lines", name=f"평단가({label})",
-                       line=dict(color="#ff7f0e", width=2), showlegend=False),
+            go.Scatter(x=x_vals, y=sub_df["평단가"], mode="lines", name="평단가",
+                       line=dict(color="#ff7f0e", width=2),
+                       customdata=disparity_sub,
+                       hovertemplate="평단가: %{y:,.0f}원 (괴리율 %{customdata:+.2f}%)<extra></extra>", showlegend=False),
             row=row, col=col,
         )
         fig.update_xaxes(type="category", nticks=6, tickfont=dict(size=9), row=row, col=col)
+        fig.update_yaxes(tickformat=",.0f", row=row, col=col)
 
     # 4번째 칸: 기본 목표가 차트 (현재 선택된 주기 기준, 목표가·손절가 라인 포함)
     if df is not None and not df.empty:
         any_data = True
         bx = [d.strftime("%H:%M" if is_minute_mode else "%Y-%m-%d") for d in df.index]
+        disparity_main = ((df["종가"] - df["평단가"]) / df["평단가"] * 100)
         fig.add_trace(
             go.Scatter(x=bx, y=df["종가"], mode="lines", name="종가",
-                       line=dict(color="#1f77b4", width=1.3), showlegend=False),
+                       line=dict(color="#1f77b4", width=1.3),
+                       hovertemplate="종가: %{y:,.0f}원<extra></extra>", showlegend=False),
             row=2, col=2,
         )
         fig.add_trace(
             go.Scatter(x=bx, y=df["평단가"], mode="lines", name="평단가",
-                       line=dict(color="#ff7f0e", width=2), showlegend=False),
+                       line=dict(color="#ff7f0e", width=2),
+                       customdata=disparity_main,
+                       hovertemplate="평단가: %{y:,.0f}원 (괴리율 %{customdata:+.2f}%)<extra></extra>", showlegend=False),
             row=2, col=2,
         )
         if "세력매수평단" in df.columns:
             fig.add_trace(
                 go.Scatter(x=bx, y=df["세력매수평단"], mode="lines", name="세력매수평단",
-                           line=dict(color="#d32f2f", width=1, dash="dashdot"), showlegend=False),
+                           line=dict(color="#d32f2f", width=1, dash="dashdot"),
+                           hovertemplate="세력매수평단: %{y:,.0f}원<extra></extra>", showlegend=False),
                 row=2, col=2,
             )
             fig.add_trace(
                 go.Scatter(x=bx, y=df["세력매도평단"], mode="lines", name="세력매도평단",
-                           line=dict(color="#1971c2", width=1, dash="dashdot"), showlegend=False),
+                           line=dict(color="#1971c2", width=1, dash="dashdot"),
+                           hovertemplate="세력매도평단: %{y:,.0f}원<extra></extra>", showlegend=False),
                 row=2, col=2,
             )
         if "누적순매수증감" in df.columns:
             fig.add_trace(
-                go.Scatter(x=bx, y=df["누적순매수증감"], mode="lines", name="누적순매수증감",
-                           line=dict(color="#2b8a3e", width=1, dash="dot"), showlegend=False),
+                go.Scatter(x=bx, y=df["누적순매수증감"], mode="lines", name="순매수증감",
+                           line=dict(color="#2b8a3e", width=1, dash="dot"),
+                           hovertemplate="순매수증감: %{y:,.0f}주<extra></extra>", showlegend=False),
                 row=2, col=2, secondary_y=True,
             )
 
@@ -1107,12 +1119,15 @@ def render_quad_timeframe_chart(
                 row=2, col=2, annotation_text=text, annotation_font_size=8,
             )
         fig.update_xaxes(type="category", nticks=6, tickfont=dict(size=9), row=2, col=2)
+        fig.update_yaxes(tickformat=",.0f", row=2, col=2, secondary_y=False)
+        fig.update_yaxes(tickformat=",.0f", row=2, col=2, secondary_y=True)
 
     fig.update_layout(
         title=f"{stock_name} ({code}) - 일봉·주봉·월봉 + 기본 목표가 차트",
         height=680,
         template="plotly_white",
         margin=dict(l=30, r=20, t=60, b=20),
+        hovermode="x unified",
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -1491,9 +1506,6 @@ with main_tab1:
     year_start_default = datetime.date(today.year, 1, 1)  # 시작연도 기본값 = 올해 1월 1일
 
     if st.session_state.get("_reset_to_today_pending"):
-        st.session_state["sy"] = year_start_default.year
-        st.session_state["sm"] = year_start_default.month
-        st.session_state["sd"] = year_start_default.day
         st.session_state["ey"] = today.year
         st.session_state["em"] = today.month
         st.session_state["ed"] = today.day
@@ -1592,7 +1604,7 @@ with main_tab1:
         else:
             st.caption("⚪ 실시간 보정 꺼짐 — pykrx 종가(EOD/지연) 기준으로 표시됩니다.")
 
-    def _render_date_range_picker(auto_copy_value=None):
+    def _render_date_range_picker(auto_copy_value=None, disparity_value=None):
         """
         조회기간(시작/종료 연·월·일) 선택 위젯 + 스왑/오늘로 버튼 + 차트 주기 라디오.
         데이터가 없어서 경고만 뜨는 상태에서도 항상 보여야 사용자가 날짜를
@@ -1620,7 +1632,7 @@ with main_tab1:
                 st.session_state["_swap_dates_pending"] = True
                 st.rerun()
         with bcol2:
-            if st.button("📌 오늘로", key="reset_to_today_btn", use_container_width=True, help="시작일을 올해 1월 1일, 종료일을 오늘로 즉시 설정합니다"):
+            if st.button("📌 오늘로", key="reset_to_today_btn", use_container_width=True, help="종료일만 오늘로 즉시 설정합니다 (시작일은 그대로 둡니다)"):
                 st.session_state["_reset_to_today_pending"] = True
                 st.session_state["_daterange_changed"] = True
                 st.rerun()
@@ -1640,14 +1652,19 @@ with main_tab1:
         if is_minute_mode:
             st.caption("⏱️ 분봉 모드는 당일(09:00~15:30) 고정이라 위 조회기간은 무시됩니다.")
 
-        # 조회기간을 수동으로 바꾸면 일봉 평단가를 자동으로 클립보드에 복사 (데이터가 있을 때만)
+        # 조회기간을 수동으로 바꾸면 종료일 기준 일봉 평단가(숫자만)를 자동으로 클립보드에 복사
+        # (다른 사이트에 바로 붙여넣기 가능하도록 순수 숫자만 복사하고, 괴리율은 화면에 참고용으로 같이 표시)
         if st.session_state.get("_daterange_changed"):
             st.session_state["_daterange_changed"] = False
             if auto_copy_value is not None:
                 components.html(
-                    f"<script>navigator.clipboard.writeText('{auto_copy_value}');</script>",
+                    f"<script>navigator.clipboard.writeText('{int(auto_copy_value)}');</script>",
                     height=0,
                 )
+                if disparity_value is not None:
+                    st.caption(f"📋 복사됨: 평단가 {int(auto_copy_value):,}원 (괴리율 {disparity_value:+.2f}%)")
+                else:
+                    st.caption(f"📋 복사됨: 평단가 {int(auto_copy_value):,}원")
 
     if df is None or df.empty:
         _dp_col1, _dp_col2 = st.columns([5.3, 1.55])
@@ -1800,7 +1817,7 @@ with main_tab1:
         with row_l:
             components.html(metrics_click_copy_html, height=150)
         with row_r:
-            _render_date_range_picker(auto_copy_value=last_vwap)
+            _render_date_range_picker(auto_copy_value=last_vwap, disparity_value=disparity)
 
         st.radio(
             "차트 주기",
@@ -1826,8 +1843,15 @@ with main_tab1:
 
             hover_x = [d.strftime("%H:%M" if is_minute_mode else "%Y-%m-%d") for d in df.index]
 
-            hover_close = [f"종가: {int(val):,}원 ({disparity:+.2f}%)" for val in df["종가"]]
-            hover_vwap = [f"누적 평단가: {int(val):,}원" if pd.notna(val) else "누적 평단가: -" for val in df["평단가"]]
+            row_disparity = ((df["종가"] - df["평단가"]) / df["평단가"] * 100)
+            hover_close = [
+                f"종가: {int(c):,}원 ({d:+.2f}%)" if pd.notna(d) else f"종가: {int(c):,}원"
+                for c, d in zip(df["종가"], row_disparity)
+            ]
+            hover_vwap = [
+                f"누적 평단가: {int(v):,}원 (괴리율 {d:+.2f}%)" if pd.notna(v) and pd.notna(d) else "누적 평단가: -"
+                for v, d in zip(df["평단가"], row_disparity)
+            ]
             hover_net_inc = [f"순매수 증감: {int(val):,}주" for val in df["누적순매수증감"]]
 
             # 1. 종가 선
@@ -1958,8 +1982,8 @@ with main_tab1:
                 hovermode="x unified",
                 template="plotly_white",
                 height=400,
-                yaxis=dict(title="가격 (원)"),
-                yaxis2=dict(title="누적 순매수 증감 (주)", overlaying="y", side="right", showgrid=False)
+                yaxis=dict(title="가격 (원)", tickformat=",.0f"),
+                yaxis2=dict(title="누적 순매수 증감 (주)", overlaying="y", side="right", showgrid=False, tickformat=",.0f")
             )
 
             fig.update_xaxes(
