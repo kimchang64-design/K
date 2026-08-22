@@ -1883,11 +1883,7 @@ with main_tab1:
             </div>
         </div>
         """
-        row_l, row_r = st.columns([5.3, 1.55])
-        with row_l:
-            components.html(metrics_click_copy_html, height=150)
-        with row_r:
-            _render_date_range_picker(auto_copy_value=last_vwap, disparity_value=disparity)
+        # (카드+조회기간 위젯은 차트 스타일 글자 바로 위로 이동 - 아래쪽에서 렌더링)
 
         st.radio(
             "차트 주기",
@@ -2065,6 +2061,13 @@ with main_tab1:
             st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+
+        row_l, row_r = st.columns([5.3, 1.55])
+        with row_l:
+            components.html(metrics_click_copy_html, height=150)
+        with row_r:
+            _render_date_range_picker(auto_copy_value=last_vwap, disparity_value=disparity)
+
         st.radio(
             "차트 스타일",
             ["📊 기본 목표가 차트", "🧭 Study Mapping 스타일 (클릭 기준점 리셋)", "🔲 일·주·월·분봉 동시보기"],
