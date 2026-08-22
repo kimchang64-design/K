@@ -1034,57 +1034,10 @@ def render_quad_timeframe_chart(
     data = fetch_quad_timeframe_data(code)
     labels = ["일봉", "주봉", "월봉"]
     positions = {"일봉": (1, 1), "주봉": (1, 2), "월봉": (2, 1)}
-    panel_titles = {
-        "일봉": "일봉", "주봉": "주봉", "월봉": "월봉",
-        "기본": f"기본 목표가 차트 ({selected_timeframe})",
-    }
-
-    def _copy_panel_avg(panel_key):
-        src_df = df if panel_key == "기본" else data.get(panel_key)
-        if src_df is None or src_df.empty or "평단가" not in src_df.columns:
-            return
-        avg_series = src_df["평단가"].dropna()
-        if avg_series.empty:
-            return
-        st.session_state["_quad_copy_flash"] = {"panel": panel_key, "value": int(avg_series.iloc[-1])}
-        st.session_state["_last_copied_panel"] = panel_key
-
-    last_copied = st.session_state.get("_last_copied_panel")
-
-    def _panel_header(panel_key):
-        lc, bc = st.columns([5, 1])
-        with lc:
-            st.markdown(f"<div style='font-size:13px; font-weight:bold; padding-top:4px;'>{panel_titles[panel_key]}</div>", unsafe_allow_html=True)
-        with bc:
-            st.button(
-                "📋", key=f"copy_avg_{panel_key}", use_container_width=True,
-                type="primary" if last_copied == panel_key else "secondary",
-                on_click=_copy_panel_avg, args=(panel_key,),
-                help=f"{panel_titles[panel_key]} 최근 누적평단가 복사",
-            )
-
-    hrow1_l, hrow1_r = st.columns(2)
-    with hrow1_l:
-        _panel_header("일봉")
-    with hrow1_r:
-        _panel_header("주봉")
-    hrow2_l, hrow2_r = st.columns(2)
-    with hrow2_l:
-        _panel_header("월봉")
-    with hrow2_r:
-        _panel_header("기본")
-
-    flash = st.session_state.get("_quad_copy_flash")
-    if flash:
-        components.html(
-            f"<script>navigator.clipboard.writeText('{flash['value']}');</script>",
-            height=0,
-        )
-        st.caption(f"✅ {panel_titles[flash['panel']]} 최근 누적평단가 {flash['value']:,}원 복사됨")
-        st.session_state["_quad_copy_flash"] = None
 
     fig = make_subplots(
         rows=2, cols=2,
+        subplot_titles=labels + [f"기본 목표가 차트 ({selected_timeframe})"],
         vertical_spacing=0.12, horizontal_spacing=0.06,
         specs=[[{}, {}], [{}, {"secondary_y": True}]],
     )
@@ -1718,18 +1671,6 @@ with main_tab1:
             if st.session_state.get("_year_sync_on", True):
                 st.session_state["sy"] = st.session_state["ey"]
 
-        dcol1, dcol2, dcol3 = st.columns(3)
-        with dcol1:
-            st.selectbox("시작연도", year_options,
-                         index=year_options.index(min(max(s_year, year_options[0]), year_options[-1])),
-                         key="sy", label_visibility="collapsed", on_change=_on_sy_change)
-        with dcol2:
-            st.selectbox("시작월", list(range(1, 13)), index=s_mon - 1, key="sm",
-                         label_visibility="collapsed", on_change=_mark_daterange_changed)
-        with dcol3:
-            st.selectbox("시작일", list(range(1, 32)), index=s_day - 1, key="sd",
-                         label_visibility="collapsed", on_change=_mark_daterange_changed)
-
         st.session_state.setdefault("_year_sync_on", True)
 
         bcol1, bcol2, bcol3 = st.columns(3)
@@ -1747,6 +1688,18 @@ with main_tab1:
                 st.session_state["_reset_to_today_pending"] = True
                 st.session_state["_daterange_changed"] = True
                 st.rerun()
+
+        dcol1, dcol2, dcol3 = st.columns(3)
+        with dcol1:
+            st.selectbox("시작연도", year_options,
+                         index=year_options.index(min(max(s_year, year_options[0]), year_options[-1])),
+                         key="sy", label_visibility="collapsed", on_change=_on_sy_change)
+        with dcol2:
+            st.selectbox("시작월", list(range(1, 13)), index=s_mon - 1, key="sm",
+                         label_visibility="collapsed", on_change=_mark_daterange_changed)
+        with dcol3:
+            st.selectbox("시작일", list(range(1, 32)), index=s_day - 1, key="sd",
+                         label_visibility="collapsed", on_change=_mark_daterange_changed)
 
         ecol1, ecol2, ecol3 = st.columns(3)
         with ecol1:
