@@ -1043,6 +1043,7 @@ def render_quad_timeframe_chart(
     )
 
     any_data = False
+    curve_avg_map = []  # curve_number(트레이스 순번) -> 그 서브플롯의 날짜별 평단가 Series
     for label in labels:
         sub_df = data.get(label)
         row, col = positions[label]
@@ -1051,12 +1052,14 @@ def render_quad_timeframe_chart(
         any_data = True
         x_vals = [d.strftime("%Y-%m-%d") for d in sub_df.index]
         disparity_sub = ((sub_df["종가"] - sub_df["평단가"]) / sub_df["평단가"] * 100)
+        avg_lookup = pd.Series(sub_df["평단가"].values, index=x_vals)
         fig.add_trace(
             go.Scatter(x=x_vals, y=sub_df["종가"], mode="lines", name="종가",
                        line=dict(color="#1f77b4", width=1.3),
                        hovertemplate="종가: %{y:,.0f}원<extra></extra>", showlegend=False),
             row=row, col=col,
         )
+        curve_avg_map.append(avg_lookup)
         fig.add_trace(
             go.Scatter(x=x_vals, y=sub_df["평단가"], mode="lines", name="평단가",
                        line=dict(color="#ff7f0e", width=2),
@@ -1064,6 +1067,7 @@ def render_quad_timeframe_chart(
                        hovertemplate="평단가: %{y:,.0f}원 (괴리율 %{customdata:+.2f}%)<extra></extra>", showlegend=False),
             row=row, col=col,
         )
+        curve_avg_map.append(avg_lookup)
         fig.update_xaxes(type="category", nticks=6, tickfont=dict(size=9), row=row, col=col)
         fig.update_yaxes(tickformat=",.0f", row=row, col=col)
 
@@ -1072,12 +1076,14 @@ def render_quad_timeframe_chart(
         any_data = True
         bx = [d.strftime("%H:%M" if is_minute_mode else "%Y-%m-%d") for d in df.index]
         disparity_main = ((df["종가"] - df["평단가"]) / df["평단가"] * 100)
+        avg_lookup_main = pd.Series(df["평단가"].values, index=bx)
         fig.add_trace(
             go.Scatter(x=bx, y=df["종가"], mode="lines", name="종가",
                        line=dict(color="#1f77b4", width=1.3),
                        hovertemplate="종가: %{y:,.0f}원<extra></extra>", showlegend=False),
             row=2, col=2,
         )
+        curve_avg_map.append(avg_lookup_main)
         fig.add_trace(
             go.Scatter(x=bx, y=df["평단가"], mode="lines", name="평단가",
                        line=dict(color="#ff7f0e", width=2),
@@ -1085,6 +1091,7 @@ def render_quad_timeframe_chart(
                        hovertemplate="평단가: %{y:,.0f}원 (괴리율 %{customdata:+.2f}%)<extra></extra>", showlegend=False),
             row=2, col=2,
         )
+        curve_avg_map.append(avg_lookup_main)
         if "세력매수평단" in df.columns:
             fig.add_trace(
                 go.Scatter(x=bx, y=df["세력매수평단"], mode="lines", name="세력매수평단",
@@ -1092,12 +1099,14 @@ def render_quad_timeframe_chart(
                            hovertemplate="세력매수평단: %{y:,.0f}원<extra></extra>", showlegend=False),
                 row=2, col=2,
             )
+            curve_avg_map.append(avg_lookup_main)
             fig.add_trace(
                 go.Scatter(x=bx, y=df["세력매도평단"], mode="lines", name="세력매도평단",
                            line=dict(color="#1971c2", width=1, dash="dashdot"),
                            hovertemplate="세력매도평단: %{y:,.0f}원<extra></extra>", showlegend=False),
                 row=2, col=2,
             )
+            curve_avg_map.append(avg_lookup_main)
         if "누적순매수증감" in df.columns:
             fig.add_trace(
                 go.Scatter(x=bx, y=df["누적순매수증감"], mode="lines", name="순매수증감",
@@ -1105,6 +1114,7 @@ def render_quad_timeframe_chart(
                            hovertemplate="순매수증감: %{y:,.0f}주<extra></extra>", showlegend=False),
                 row=2, col=2, secondary_y=True,
             )
+            curve_avg_map.append(avg_lookup_main)
 
         for y_val, color, text in [
             (target_3rd, "#2b8a3e", f"3차목표 {target_3rd:,}"),
@@ -1129,7 +1139,33 @@ def render_quad_timeframe_chart(
         margin=dict(l=30, r=20, t=60, b=20),
         hovermode="x unified",
     )
-    st.plotly_chart(fig, use_container_width=True)
+
+    st.caption("💡 차트의 아무 지점이나 클릭하면 그 날짜의 누적 평단가가 클립보드에 복사됩니다.")
+    click_event = st.plotly_chart(
+        fig, use_container_width=True,
+        on_select="rerun", selection_mode=["points"],
+        key=f"quad_chart_{code}",
+    )
+
+    try:
+        points = (click_event or {}).get("selection", {}).get("points", [])
+    except AttributeError:
+        points = []
+    if points:
+        pt = points[0]
+        curve_no = pt.get("curve_number")
+        x_clicked = pt.get("x")
+        click_id = (curve_no, x_clicked)
+        if curve_no is not None and 0 <= curve_no < len(curve_avg_map) and x_clicked is not None:
+            if st.session_state.get("_quad_last_click") != click_id:
+                st.session_state["_quad_last_click"] = click_id
+                avg_val = curve_avg_map[curve_no].get(x_clicked)
+                if avg_val is not None and pd.notna(avg_val):
+                    components.html(
+                        f"<script>navigator.clipboard.writeText('{int(avg_val)}');</script>",
+                        height=0,
+                    )
+                    st.caption(f"📋 복사됨: {x_clicked} 누적평단가 {int(avg_val):,}원")
 
     if not any_data:
         st.warning("차트 데이터를 가져오지 못했습니다. 네트워크 문제일 수 있습니다.")
@@ -1614,11 +1650,21 @@ with main_tab1:
         def _mark_daterange_changed():
             st.session_state["_daterange_changed"] = True
 
+        def _on_sy_change():
+            st.session_state["_daterange_changed"] = True
+            if st.session_state.get("_year_sync_on", True):
+                st.session_state["ey"] = st.session_state["sy"]
+
+        def _on_ey_change():
+            st.session_state["_daterange_changed"] = True
+            if st.session_state.get("_year_sync_on", True):
+                st.session_state["sy"] = st.session_state["ey"]
+
         dcol1, dcol2, dcol3 = st.columns(3)
         with dcol1:
             st.selectbox("시작연도", year_options,
                          index=year_options.index(min(max(s_year, year_options[0]), year_options[-1])),
-                         key="sy", label_visibility="collapsed", on_change=_mark_daterange_changed)
+                         key="sy", label_visibility="collapsed", on_change=_on_sy_change)
         with dcol2:
             st.selectbox("시작월", list(range(1, 13)), index=s_mon - 1, key="sm",
                          label_visibility="collapsed", on_change=_mark_daterange_changed)
@@ -1626,13 +1672,20 @@ with main_tab1:
             st.selectbox("시작일", list(range(1, 32)), index=s_day - 1, key="sd",
                          label_visibility="collapsed", on_change=_mark_daterange_changed)
 
-        bcol1, bcol2 = st.columns(2)
+        st.session_state.setdefault("_year_sync_on", True)
+
+        bcol1, bcol2, bcol3 = st.columns(3)
         with bcol1:
-            if st.button("⇄ 시작/종료", key="swap_dates_btn", use_container_width=True, help="시작연도·월·일과 종료연도·월·일을 서로 바꿉니다"):
+            if st.button("⇄ 시작/종료", key="swap_dates_btn", use_container_width=True):
                 st.session_state["_swap_dates_pending"] = True
                 st.rerun()
         with bcol2:
-            if st.button("📌 오늘로", key="reset_to_today_btn", use_container_width=True, help="종료일만 오늘로 즉시 설정합니다 (시작일은 그대로 둡니다)"):
+            sync_label = "🔗 연도동기화 ON" if st.session_state["_year_sync_on"] else "⛓️‍💥 연도동기화 OFF"
+            if st.button(sync_label, key="year_sync_toggle_btn", use_container_width=True):
+                st.session_state["_year_sync_on"] = not st.session_state["_year_sync_on"]
+                st.rerun()
+        with bcol3:
+            if st.button("📌 오늘로", key="reset_to_today_btn", use_container_width=True):
                 st.session_state["_reset_to_today_pending"] = True
                 st.session_state["_daterange_changed"] = True
                 st.rerun()
@@ -1641,7 +1694,7 @@ with main_tab1:
         with ecol1:
             st.selectbox("종료연도", year_options,
                          index=year_options.index(min(max(e_year, year_options[0]), year_options[-1])),
-                         key="ey", label_visibility="collapsed", on_change=_mark_daterange_changed)
+                         key="ey", label_visibility="collapsed", on_change=_on_ey_change)
         with ecol2:
             st.selectbox("종료월", list(range(1, 13)), index=e_mon - 1, key="em",
                          label_visibility="collapsed", on_change=_mark_daterange_changed)
@@ -2003,7 +2056,7 @@ with main_tab1:
             key="chart_display_mode",
         )
 
-        with st.expander("📝 텍스트 요약 및 전체 복사 기능"):
+        with st.expander("📝 텍스트 요약 및 전체 복사 기능", expanded=True):
             copy_summary = (
                 f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
                 f"• 매매성향: {trade_type} | 괴리율: {disparity:+.2f}%\n"
@@ -2017,58 +2070,6 @@ with main_tab1:
             )
             st.code(copy_summary, language="text")
 
-        # 📌 최근 날짜별 상세 수치 카드 (클릭 즉시 복사)
-        st.markdown("### 📋 최근 날짜별 상세 수치 복사 (원하시는 가격 글자를 클릭하면 즉시 복사됩니다)")
-        recent_df = df.tail(10).iloc[::-1]
-        
-        card_rows_html = ""
-        for dt_idx, row in recent_df.iterrows():
-            d_str = dt_idx.strftime("%H:%M" if is_minute_mode else "%Y-%m-%d") if hasattr(dt_idx, "strftime") else str(dt_idx)[:10]
-            c_val = int(row["종가"])
-            v_val = int(row["평단가"]) if pd.notna(row["평단가"]) else 0
-            n_val = int(row["순매수증감"])
-            t1 = int(v_val * 1.05) if v_val > 0 else 0
-            t2 = int(v_val * 1.10) if v_val > 0 else 0
-            t3 = int(v_val * 1.15) if v_val > 0 else 0
-            s1 = int(v_val * 0.98) if v_val > 0 else 0
-            s2 = int(v_val * 0.97) if v_val > 0 else 0
-            s_abs = int(v_val * 0.96) if v_val > 0 else 0
-            
-            card_rows_html += f"""
-            <tr style="border-bottom: 1px solid #f0f0f0; height: 40px; font-size: 11px;">
-                <td style="text-align: center; font-weight: bold; color: #333;">{d_str}</td>
-                <td onclick="navigator.clipboard.writeText('{c_val}');" style="text-align: right; font-weight: bold; color: #1f77b4; cursor: pointer;" title="클릭 시 즉시 복사">{c_val:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{v_val}');" style="text-align: right; font-weight: bold; color: #ff7f0e; cursor: pointer; background: #fff9db;" title="클릭 시 즉시 복사">{v_val:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{t1}');" style="text-align: right; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t1:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{t2}');" style="text-align: right; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t2:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{t3}');" style="text-align: right; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t3:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{s1}');" style="text-align: right; color: #f59f00; cursor: pointer;" title="클릭 시 즉시 복사">{s1:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{s2}');" style="text-align: right; color: #f08c00; cursor: pointer;" title="클릭 시 즉시 복사">{s2:,}원</td>
-                <td onclick="navigator.clipboard.writeText('{s_abs}');" style="text-align: right; font-weight: bold; color: #e03131; cursor: pointer;" title="클릭 시 즉시 복사">{s_abs:,}원</td>
-            </tr>
-            """
-            
-        recent_table_html = f"""
-        <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 15px;">
-            <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
-                <thead>
-                    <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 32px;">
-                        <th style="text-align: center;">날짜</th>
-                        <th style="text-align: right; color: #1f77b4;">종가 (복사)</th>
-                        <th style="text-align: right; color: #ff7f0e; background: #fff9db;">평단가 (복사)</th>
-                        <th style="text-align: right; color: #2b8a3e;">1차목표(+5%)</th>
-                        <th style="text-align: right; color: #2b8a3e;">2차목표(+10%)</th>
-                        <th style="text-align: right; color: #2b8a3e;">3차목표(+15%)</th>
-                        <th style="text-align: right; color: #f59f00;">1차손절(-2%)</th>
-                        <th style="text-align: right; color: #f08c00;">2차손절(-3%)</th>
-                        <th style="text-align: right; color: #e03131;">절대사수(-4%)</th>
-                    </tr>
-                </thead>
-                <tbody>{card_rows_html}</tbody>
-            </table>
-        </div>
-        """
-        components.html(recent_table_html, height=280)
 
         st.markdown("<hr style='margin:16px 0 10px 0;'>", unsafe_allow_html=True)
         st.markdown("### 📊 시가총액 · 수급 · 진단 정보")
@@ -2154,6 +2155,59 @@ with main_tab1:
         </div>
         """
         components.html(hts_top_panel_html, height=135)
+
+        # 📌 최근 날짜별 상세 수치 카드 (클릭 즉시 복사)
+        st.markdown("### 📋 최근 날짜별 상세 수치 복사 (원하시는 가격 글자를 클릭하면 즉시 복사됩니다)")
+        recent_df = df.tail(10).iloc[::-1]
+        
+        card_rows_html = ""
+        for dt_idx, row in recent_df.iterrows():
+            d_str = dt_idx.strftime("%H:%M" if is_minute_mode else "%Y-%m-%d") if hasattr(dt_idx, "strftime") else str(dt_idx)[:10]
+            c_val = int(row["종가"])
+            v_val = int(row["평단가"]) if pd.notna(row["평단가"]) else 0
+            n_val = int(row["순매수증감"])
+            t1 = int(v_val * 1.05) if v_val > 0 else 0
+            t2 = int(v_val * 1.10) if v_val > 0 else 0
+            t3 = int(v_val * 1.15) if v_val > 0 else 0
+            s1 = int(v_val * 0.98) if v_val > 0 else 0
+            s2 = int(v_val * 0.97) if v_val > 0 else 0
+            s_abs = int(v_val * 0.96) if v_val > 0 else 0
+            
+            card_rows_html += f"""
+            <tr style="border-bottom: 1px solid #f0f0f0; height: 40px; font-size: 11px;">
+                <td style="text-align: center; font-weight: bold; color: #333;">{d_str}</td>
+                <td onclick="navigator.clipboard.writeText('{c_val}');" style="text-align: right; font-weight: bold; color: #1f77b4; cursor: pointer;" title="클릭 시 즉시 복사">{c_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{v_val}');" style="text-align: right; font-weight: bold; color: #ff7f0e; cursor: pointer; background: #fff9db;" title="클릭 시 즉시 복사">{v_val:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{t1}');" style="text-align: right; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t1:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{t2}');" style="text-align: right; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t2:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{t3}');" style="text-align: right; color: #2b8a3e; cursor: pointer;" title="클릭 시 즉시 복사">{t3:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{s1}');" style="text-align: right; color: #f59f00; cursor: pointer;" title="클릭 시 즉시 복사">{s1:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{s2}');" style="text-align: right; color: #f08c00; cursor: pointer;" title="클릭 시 즉시 복사">{s2:,}원</td>
+                <td onclick="navigator.clipboard.writeText('{s_abs}');" style="text-align: right; font-weight: bold; color: #e03131; cursor: pointer;" title="클릭 시 즉시 복사">{s_abs:,}원</td>
+            </tr>
+            """
+            
+        recent_table_html = f"""
+        <div style="overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 15px;">
+            <table style="width: 100%; border-collapse: collapse; background-color: #ffffff;">
+                <thead>
+                    <tr style="background-color: #fafafa; border-bottom: 2px solid #e0e0e0; font-size: 11px; height: 32px;">
+                        <th style="text-align: center;">날짜</th>
+                        <th style="text-align: right; color: #1f77b4;">종가 (복사)</th>
+                        <th style="text-align: right; color: #ff7f0e; background: #fff9db;">평단가 (복사)</th>
+                        <th style="text-align: right; color: #2b8a3e;">1차목표(+5%)</th>
+                        <th style="text-align: right; color: #2b8a3e;">2차목표(+10%)</th>
+                        <th style="text-align: right; color: #2b8a3e;">3차목표(+15%)</th>
+                        <th style="text-align: right; color: #f59f00;">1차손절(-2%)</th>
+                        <th style="text-align: right; color: #f08c00;">2차손절(-3%)</th>
+                        <th style="text-align: right; color: #e03131;">절대사수(-4%)</th>
+                    </tr>
+                </thead>
+                <tbody>{card_rows_html}</tbody>
+            </table>
+        </div>
+        """
+        components.html(recent_table_html, height=280)
 
 
 # ---------------------------------------------------------
