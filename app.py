@@ -1630,9 +1630,8 @@ with main_tab1:
             st.caption(f"📡 분봉 데이터 출처: {st.session_state.get('_minute_data_source', '알 수 없음')}")
 
     # 실시간(준실시간) 시세 보정 - 키움 체결가와의 괴리 축소
-    rt_col1, rt_col2 = st.columns([1, 5])
-    with rt_col1:
-        use_realtime_patch = st.checkbox("⚡ 실시간 시세 보정", value=False, key="rt_patch_toggle")
+    # (체크박스 위젯 자체는 페이지 맨 아래로 이동 - 여기서는 값만 세션에서 읽어서 적용)
+    use_realtime_patch = st.session_state.get("rt_patch_toggle", False)
     rt_info = None
     if use_realtime_patch and df is not None and not df.empty:
         rt_info = fetch_realtime_price(code)
@@ -1640,16 +1639,21 @@ with main_tab1:
             df = patch_latest_row_with_realtime(df, code)
         else:
             df = patch_today_with_realtime(df, code)
-    with rt_col2:
-        if use_realtime_patch and rt_info:
-            st.caption(
-                f"🟢 준실시간 반영됨 (네이버 시세 기준, {rt_info['time']} 조회) · "
-                f"현재가 {rt_info['price']:,}원 · 완전한 틱 단위 일치는 키움 Open API+ 직접 연동이 필요합니다."
-            )
-        elif use_realtime_patch:
-            st.caption("🟡 실시간 시세 조회 실패 — 네트워크 차단 또는 API 응답 오류. pykrx 기본값(전일/EOD)으로 표시됩니다.")
-        else:
-            st.caption("⚪ 실시간 보정 꺼짐 — pykrx 종가(EOD/지연) 기준으로 표시됩니다.")
+
+    def _render_realtime_patch_toggle():
+        rt_col1, rt_col2 = st.columns([1, 5])
+        with rt_col1:
+            st.checkbox("⚡ 실시간 시세 보정", value=False, key="rt_patch_toggle")
+        with rt_col2:
+            if use_realtime_patch and rt_info:
+                st.caption(
+                    f"🟢 준실시간 반영됨 (네이버 시세 기준, {rt_info['time']} 조회) · "
+                    f"현재가 {rt_info['price']:,}원 · 완전한 틱 단위 일치는 키움 Open API+ 직접 연동이 필요합니다."
+                )
+            elif use_realtime_patch:
+                st.caption("🟡 실시간 시세 조회 실패 — 네트워크 차단 또는 API 응답 오류. pykrx 기본값(전일/EOD)으로 표시됩니다.")
+            else:
+                st.caption("⚪ 실시간 보정 꺼짐 — pykrx 종가(EOD/지연) 기준으로 표시됩니다.")
 
     def _render_date_range_picker(auto_copy_value=None, disparity_value=None):
         """
@@ -1743,6 +1747,8 @@ with main_tab1:
             key="direct_timeframe_select",
             label_visibility="collapsed",
         )
+        st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+        _render_realtime_patch_toggle()
     else:
         df["TPV"] = df["종가"] * df["거래량"]
         cum_volume = df["거래량"].cumsum()
@@ -1826,26 +1832,6 @@ with main_tab1:
 
         metrics_click_copy_html = f"""
         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 5px;">
-            <div onclick="navigator.clipboard.writeText('{last_close}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#666; font-weight:bold;">현재가</div>
-                <div style="font-size:13px; font-weight:bold; color:#111; margin-top:2px;">{last_close:,}원 <span style="font-size:10px; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.1f}%)</span></div>
-            </div>
-            
-            <div onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#1a73e8; font-weight:bold;">📌 {selected_timeframe} 평단가</div>
-                <div style="font-size:13px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원</div>
-            </div>
-
-            <div onclick="navigator.clipboard.writeText('{last_buy_vwap}');" style="background:#fff9db; border:1px solid #ffe066; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
-                <div style="font-size:11px; color:#d9480f; font-weight:bold;">🟠 세력매수평단</div>
-                <div style="font-size:13px; font-weight:bold; color:#d32f2f; margin-top:2px;">{last_buy_vwap:,}원</div>
-            </div>
-
-            <div onclick="navigator.clipboard.writeText('{last_sell_vwap}');" style="background:#e7f5ff; border:1px solid #74c0fc; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
-                <div style="font-size:11px; color:#1864ab; font-weight:bold;">🔵 세력매도평단</div>
-                <div style="font-size:13px; font-weight:bold; color:#1971c2; margin-top:2px;">{last_sell_vwap:,}원</div>
-            </div>
-
             <div onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 1차목표(+5%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_1st:,}원</div>
@@ -1874,6 +1860,26 @@ with main_tab1:
             <div onclick="navigator.clipboard.writeText('{absolute_stop_loss}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#e03131; font-weight:bold;">🚨 절대사수(-4%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#e03131; margin-top:2px;">{absolute_stop_loss:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{last_close}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#666; font-weight:bold;">현재가</div>
+                <div style="font-size:13px; font-weight:bold; color:#111; margin-top:2px;">{last_close:,}원 <span style="font-size:10px; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.1f}%)</span></div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#1a73e8; font-weight:bold;">📌 {selected_timeframe} 평단가</div>
+                <div style="font-size:13px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{last_buy_vwap}');" style="background:#fff9db; border:1px solid #ffe066; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
+                <div style="font-size:11px; color:#d9480f; font-weight:bold;">🟠 세력매수평단</div>
+                <div style="font-size:13px; font-weight:bold; color:#d32f2f; margin-top:2px;">{last_buy_vwap:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{last_sell_vwap}');" style="background:#e7f5ff; border:1px solid #74c0fc; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
+                <div style="font-size:11px; color:#1864ab; font-weight:bold;">🔵 세력매도평단</div>
+                <div style="font-size:13px; font-weight:bold; color:#1971c2; margin-top:2px;">{last_sell_vwap:,}원</div>
             </div>
         </div>
         """
@@ -2219,6 +2225,9 @@ with main_tab1:
         </div>
         """
         components.html(recent_table_html, height=280)
+
+        st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+        _render_realtime_patch_toggle()
 
 
 # ---------------------------------------------------------
