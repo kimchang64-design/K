@@ -1147,14 +1147,28 @@ def render_quad_timeframe_chart(
         key=f"quad_chart_{code}",
     )
 
-    try:
-        points = (click_event or {}).get("selection", {}).get("points", [])
-    except AttributeError:
-        points = []
+    def _get_field(obj, key, alt_key=None, default=None):
+        if obj is None:
+            return default
+        if isinstance(obj, dict):
+            if key in obj:
+                return obj[key]
+            if alt_key and alt_key in obj:
+                return obj[alt_key]
+            return default
+        if hasattr(obj, key):
+            return getattr(obj, key)
+        if alt_key and hasattr(obj, alt_key):
+            return getattr(obj, alt_key)
+        return default
+
+    selection_obj = _get_field(click_event, "selection")
+    points = _get_field(selection_obj, "points", default=[]) or []
+
     if points:
         pt = points[0]
-        curve_no = pt.get("curve_number")
-        x_clicked = pt.get("x")
+        curve_no = _get_field(pt, "curve_number", "curveNumber")
+        x_clicked = _get_field(pt, "x")
         click_id = (curve_no, x_clicked)
         if curve_no is not None and 0 <= curve_no < len(curve_avg_map) and x_clicked is not None:
             if st.session_state.get("_quad_last_click") != click_id:
@@ -1549,14 +1563,8 @@ with main_tab1:
 
     if st.session_state.get("_swap_dates_pending"):
         sy0 = st.session_state.get("sy") or year_start_default.year
-        sm0 = st.session_state.get("sm") or year_start_default.month
-        sd0 = st.session_state.get("sd") or year_start_default.day
         ey0 = st.session_state.get("ey") or today.year
-        em0 = st.session_state.get("em") or today.month
-        ed0 = st.session_state.get("ed") or today.day
         st.session_state["sy"], st.session_state["ey"] = ey0, sy0
-        st.session_state["sm"], st.session_state["em"] = em0, sm0
-        st.session_state["sd"], st.session_state["ed"] = ed0, sd0
         st.session_state["_swap_dates_pending"] = False
 
     # 실제 위젯은 현재가~절대사수 카드 옆(오른쪽)에서 그리고, 여기서는 값만 읽어서
@@ -1676,7 +1684,7 @@ with main_tab1:
 
         bcol1, bcol2, bcol3 = st.columns(3)
         with bcol1:
-            if st.button("⇄ 시작/종료", key="swap_dates_btn", use_container_width=True):
+            if st.button("⇄ 연도만 스왑", key="swap_dates_btn", use_container_width=True):
                 st.session_state["_swap_dates_pending"] = True
                 st.rerun()
         with bcol2:
