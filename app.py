@@ -1140,7 +1140,6 @@ def render_quad_timeframe_chart(
         hovermode="x unified",
     )
 
-    st.caption("💡 차트의 아무 지점이나 클릭하면 그 날짜의 누적 평단가가 클립보드에 복사됩니다.")
     click_event = st.plotly_chart(
         fig, use_container_width=True,
         on_select="rerun", selection_mode=["points"],
@@ -1395,7 +1394,7 @@ with main_tab1:
         st.session_state.target_stock = val
         st.session_state.stock_input_field = val
 
-    sc1, sc2 = st.columns([5, 1])
+    sc1, sc2, sc3, sc4 = st.columns([2.6, 0.7, 2.2, 1])
 
     with sc1:
         input_val = st.text_input(
@@ -1424,17 +1423,25 @@ with main_tab1:
         if len(st.session_state.search_history) > 12:
             st.session_state.search_history.pop()
 
-    st.markdown(
-        f"""
-        <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; padding: 6px 10px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 6px;">
-            <span style="font-size: 13px; font-weight: bold;">📌 종목: {stock_name} ({code})</span>
-            <button onclick="navigator.clipboard.writeText('{code}');" style="background:#1a73e8; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
+    with sc3:
+        st.markdown(
+            f"""
+            <div style="display:flex; align-items:center; height:38px; background:#f8f9fa; padding:0 10px; border:1px solid #e9ecef; border-radius:6px; font-size:13px; font-weight:bold;">
+                📌 종목: {stock_name} ({code})
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with sc4:
+        st.markdown(
+            f"""
+            <button onclick="navigator.clipboard.writeText('{code}');"
+                    style="width:100%; height:38px; background:#1a73e8; color:white; border:none; border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">
                 📋 코드 복사 ({code})
             </button>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
 
     watchlist = load_watchlist()
     wl_map = {w["code"]: w for w in watchlist}
@@ -1488,10 +1495,6 @@ with main_tab1:
                 )
 
     if st.session_state.search_history:
-        st.markdown(
-            "<span style='font-size:11px; color:#666;'>최근 검색 기록 (최대 12개):</span>",
-            unsafe_allow_html=True,
-        )
         history_list = st.session_state.search_history[:12]
         h_cols = st.columns(len(history_list))
         for idx, hist_name in enumerate(history_list):
