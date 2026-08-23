@@ -1406,14 +1406,6 @@ with main_tab1:
             label_visibility="collapsed",
         )
 
-    with sc2:
-        search_clicked = st.button(
-            "검색", use_container_width=True, type="primary"
-        )
-
-    if search_clicked and input_val:
-        st.session_state.target_stock = input_val
-
     code, stock_name = resolve_code_or_name(
         st.session_state.target_stock
     )
@@ -1422,6 +1414,17 @@ with main_tab1:
         st.session_state.search_history.insert(0, stock_name)
         if len(st.session_state.search_history) > 12:
             st.session_state.search_history.pop()
+
+    with sc2:
+        st.markdown(
+            f"""
+            <button onclick="navigator.clipboard.writeText('{code}');"
+                    style="width:100%; height:38px; background:#1a73e8; color:white; border:none; border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">
+                📋 코드 복사 ({code})
+            </button>
+            """,
+            unsafe_allow_html=True,
+        )
 
     with sc3:
         st.markdown(
@@ -1432,16 +1435,14 @@ with main_tab1:
             """,
             unsafe_allow_html=True,
         )
+
     with sc4:
-        st.markdown(
-            f"""
-            <button onclick="navigator.clipboard.writeText('{code}');"
-                    style="width:100%; height:38px; background:#1a73e8; color:white; border:none; border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">
-                📋 코드 복사 ({code})
-            </button>
-            """,
-            unsafe_allow_html=True,
+        search_clicked = st.button(
+            "검색", use_container_width=True, type="primary"
         )
+
+    if search_clicked and input_val:
+        st.session_state.target_stock = input_val
 
     watchlist = load_watchlist()
     wl_map = {w["code"]: w for w in watchlist}
