@@ -1260,52 +1260,13 @@ def render_n_wave_mapping_chart(df, stock_name, code):
     with bcol3:
         run_clicked = st.button("▶ 목표가 MAPPING 실행", key="nwave_run_btn", use_container_width=True, type="primary")
 
-    sma5_pt = st.session_state["nwave_sma5_point"]
-    avg_pt = st.session_state["nwave_avg_point"]
+    # 정보 카드/목표가 카드는 아래 차트 클릭 처리 이후에 채운다 (placeholder).
+    # 차트가 on_select="rerun"으로 자체적으로 리런되기 때문에, 여기서 또 st.rerun()을
+    # 부르면 리런이 겹쳐서 화면 아래쪽(차트 스타일 라디오 등)의 위젯 상태가 꼬일 수 있다.
+    info_placeholder = st.empty()
+    targets_placeholder = st.empty()
 
-    info_cols = st.columns(4)
-    with info_cols[0]:
-        st.metric("상승 시작일 (저가)", f"{start_low:,.0f}원", start_actual_date)
-    with info_cols[1]:
-        st.metric("5이평 언덕 (SMA5)", f"{sma5_pt['value']:,.0f}원" if sma5_pt else "미선택", sma5_pt["date"] if sma5_pt else None)
-    with info_cols[2]:
-        st.metric("세력평단 Mapping", f"{avg_pt['value']:,.0f}원" if avg_pt else "미선택", avg_pt["date"] if avg_pt else None)
-    with info_cols[3]:
-        wave1_preview = (sma5_pt["value"] - start_low) if sma5_pt else None
-        st.metric("Wave1 (상승폭)", f"{wave1_preview:,.0f}원" if wave1_preview is not None else "-")
-
-    if run_clicked:
-        if sma5_pt and avg_pt:
-            wave1 = sma5_pt["value"] - start_low
-            support = avg_pt["value"]
-            st.session_state["nwave_targets"] = {
-                "T1": support + wave1 * 0.618,
-                "T2": support + wave1 * 1.0,
-                "T3": support + wave1 * 1.618,
-                "T4": support + wave1 * 2.0,
-            }
-        else:
-            st.warning("먼저 차트에서 '5이평 언덕'과 '세력평단' 지점을 클릭해서 선택해주세요.")
-
-    targets = st.session_state.get("nwave_targets")
     t_meta = [("T1", "약", "#4263eb"), ("T2", "평균", "#2b8a3e"), ("T3", "강", "#e03131"), ("T4", "따블", "#7048e8")]
-
-    if targets:
-        t_cols = st.columns(4)
-        for col, (key, label, color) in zip(t_cols, t_meta):
-            val = targets[key]
-            with col:
-                st.markdown(
-                    f"""
-                    <div onclick="navigator.clipboard.writeText('{int(val)}');"
-                         style="border:2px solid {color}; border-radius:8px; padding:10px; text-align:center; cursor:pointer;"
-                         title="클릭 시 숫자만 즉시 복사">
-                        <div style="font-size:12px; font-weight:bold; color:{color};">{key} ({label})</div>
-                        <div style="font-size:16px; font-weight:bold; margin-top:4px;">{val:,.0f}원</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
 
     fig = go.Figure()
     x_vals = [d.strftime("%Y-%m-%d") for d in plot_df.index]
@@ -1319,10 +1280,11 @@ def render_n_wave_mapping_chart(df, stock_name, code):
                               line=dict(color="#f08c00", width=2),
                               hovertemplate="세력평단: %{y:,.0f}원<extra></extra>"))
 
-    if targets:
+    existing_targets = st.session_state.get("nwave_targets")
+    if existing_targets:
         for key, label, color in t_meta:
-            fig.add_hline(y=targets[key], line_dash="dash", line_color=color, line_width=1.5,
-                          annotation_text=f"{key}({label}) {targets[key]:,.0f}원", annotation_font_size=10)
+            fig.add_hline(y=existing_targets[key], line_dash="dash", line_color=color, line_width=1.5,
+                          annotation_text=f"{key}({label}) {existing_targets[key]:,.0f}원", annotation_font_size=10)
 
     fig.update_layout(
         title=f"{stock_name} ({code}) 일봉 + SMA5 + 세력평단 차트",
@@ -1369,11 +1331,59 @@ def render_n_wave_mapping_chart(df, stock_name, code):
             if mode == "sma5" and pd.notna(row["SMA5"]):
                 st.session_state["nwave_sma5_point"] = {"date": x_clicked, "value": float(row["SMA5"])}
                 st.session_state["nwave_select_mode"] = None
-                st.rerun()
             elif mode == "avg" and pd.notna(row["평단가"]):
                 st.session_state["nwave_avg_point"] = {"date": x_clicked, "value": float(row["평단가"])}
                 st.session_state["nwave_select_mode"] = None
-                st.rerun()
+
+    # 여기서부터는 차트 클릭 처리까지 끝난 "최신" 상태 - 이제 위쪽 placeholder를 채운다.
+    sma5_pt = st.session_state["nwave_sma5_point"]
+    avg_pt = st.session_state["nwave_avg_point"]
+
+    with info_placeholder.container():
+        info_cols = st.columns(4)
+        with info_cols[0]:
+            st.metric("상승 시작일 (저가)", f"{start_low:,.0f}원", start_actual_date)
+        with info_cols[1]:
+            st.metric("5이평 언덕 (SMA5)", f"{sma5_pt['value']:,.0f}원" if sma5_pt else "미선택", sma5_pt["date"] if sma5_pt else None)
+        with info_cols[2]:
+            st.metric("세력평단 Mapping", f"{avg_pt['value']:,.0f}원" if avg_pt else "미선택", avg_pt["date"] if avg_pt else None)
+        with info_cols[3]:
+            wave1_preview = (sma5_pt["value"] - start_low) if sma5_pt else None
+            st.metric("Wave1 (상승폭)", f"{wave1_preview:,.0f}원" if wave1_preview is not None else "-")
+
+    if run_clicked:
+        if sma5_pt and avg_pt:
+            wave1 = sma5_pt["value"] - start_low
+            support = avg_pt["value"]
+            st.session_state["nwave_targets"] = {
+                "T1": support + wave1 * 0.618,
+                "T2": support + wave1 * 1.0,
+                "T3": support + wave1 * 1.618,
+                "T4": support + wave1 * 2.0,
+            }
+        else:
+            st.warning("먼저 차트에서 '5이평 언덕'과 '세력평단' 지점을 클릭해서 선택해주세요.")
+
+    targets = st.session_state.get("nwave_targets")
+    if targets:
+        with targets_placeholder.container():
+            t_cols = st.columns(4)
+            for col, (key, label, color) in zip(t_cols, t_meta):
+                val = targets[key]
+                with col:
+                    st.markdown(
+                        f"""
+                        <div onclick="navigator.clipboard.writeText('{int(val)}');"
+                             style="border:2px solid {color}; border-radius:8px; padding:10px; text-align:center; cursor:pointer;"
+                             title="클릭 시 숫자만 즉시 복사">
+                            <div style="font-size:12px; font-weight:bold; color:{color};">{key} ({label})</div>
+                            <div style="font-size:16px; font-weight:bold; margin-top:4px;">{val:,.0f}원</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+        if run_clicked:
+            st.caption("⚠ 방금 계산한 목표가 라인은 차트를 한 번 더 조작하면 다음 렌더에 반영됩니다.")
 
 
 def render_study_mapping_chart(df, stock_name, code, selected_timeframe):
