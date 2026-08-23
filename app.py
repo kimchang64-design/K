@@ -1729,10 +1729,32 @@ with main_tab1:
                     f"<script>navigator.clipboard.writeText('{int(auto_copy_value)}');</script>",
                     height=0,
                 )
-                if disparity_value is not None:
-                    st.caption(f"📋 복사됨: 평단가 {int(auto_copy_value):,}원 (괴리율 {disparity_value:+.2f}%)")
-                else:
-                    st.caption(f"📋 복사됨: 평단가 {int(auto_copy_value):,}원")
+                st.session_state["_last_copied_avg"] = {
+                    "value": int(auto_copy_value),
+                    "disparity": disparity_value,
+                }
+
+        last_copied = st.session_state.get("_last_copied_avg")
+        if last_copied is not None:
+            v = last_copied["value"]
+            d = last_copied["disparity"]
+            label = f"📋 복사됨: 평단가 {v:,}원" + (f" (괴리율 {d:+.2f}%)" if d is not None else "")
+            components.html(
+                f"""
+                <div onclick="navigator.clipboard.writeText('{v}');
+                              this.querySelector('.copied-flash').style.opacity=1;
+                              setTimeout(()=>{{this.querySelector('.copied-flash').style.opacity=0;}}, 900);"
+                     style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#555;
+                            cursor:pointer; padding:2px 6px; border-radius:4px;"
+                     title="클릭하면 평단가 숫자를 다시 복사합니다"
+                     onmouseover="this.style.background='#f1f3f5';"
+                     onmouseout="this.style.background='transparent';">
+                    <span>{label}</span>
+                    <span class="copied-flash" style="opacity:0; transition:opacity .2s; color:#2b8a3e; font-weight:bold;">✓ 복사됨</span>
+                </div>
+                """,
+                height=26,
+            )
 
     if df is None or df.empty:
         _dp_col1, _dp_col2 = st.columns([5.3, 1.55])
