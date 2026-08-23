@@ -1394,9 +1394,9 @@ with main_tab1:
         st.session_state.target_stock = val
         st.session_state.stock_input_field = val
 
-    sc1, sc2, sc3, sc4 = st.columns([2.6, 0.7, 2.2, 1])
+    sc1, sc2, sc3, sc4 = st.columns([2.2, 0.7, 2.6, 1])
 
-    with sc1:
+    with sc3:
         input_val = st.text_input(
             "종목 입력",
             value=st.session_state.target_stock,
@@ -1423,7 +1423,7 @@ with main_tab1:
         if len(st.session_state.search_history) > 12:
             st.session_state.search_history.pop()
 
-    with sc3:
+    with sc1:
         st.markdown(
             f"""
             <div style="display:flex; align-items:center; height:38px; background:#f8f9fa; padding:0 10px; border:1px solid #e9ecef; border-radius:6px; font-size:13px; font-weight:bold;">
