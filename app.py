@@ -1685,7 +1685,7 @@ with main_tab1:
             st.caption("⭐ 관심종목은 서버 파일에 저장되어 새로고침해도 유지됩니다. 추가하면 메모도 남길 수 있어요.")
 
     if watchlist:
-        wl_list = watchlist[:10]
+        wl_list = watchlist[:30]
         wl_cols = st.columns(len(wl_list))
         for idx, w in enumerate(wl_list):
             with wl_cols[idx]:
