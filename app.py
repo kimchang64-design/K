@@ -1,5 +1,6 @@
 import datetime
 import json
+import os
 import pandas as pd
 import plotly.graph_objects as go
 import re
@@ -8,6 +9,40 @@ import streamlit as st
 import streamlit.components.v1 as components
 import xml.etree.ElementTree as ET
 from pykrx import stock
+
+# 키움 REST API 연동 (분봉 전용). kiwoom_client.py가 같은 폴더에 있어야 동작합니다.
+# 파일이 없거나 import 실패해도 앱이 죽지 않고 네이버 방식으로 자동 폴백합니다.
+try:
+    import kiwoom_client
+    _KIWOOM_AVAILABLE = True
+except Exception:
+    kiwoom_client = None
+    _KIWOOM_AVAILABLE = False
+
+# ---------------------------------------------------------
+# 관심종목 (서버 파일 기반 영구 저장 - 새로고침해도 유지됨)
+# ---------------------------------------------------------
+# ⚠ 진짜 DB는 아니고 서버에 JSON 파일로 저장하는 방식입니다. 앱이 켜져있는
+# 동안은 계속 유지되지만, 호스팅 서비스가 재배포/재시작되면서 디스크가
+# 초기화되는 경우(예: Render 무료 플랜) 파일이 사라질 수 있습니다.
+WATCHLIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist_data.json")
+
+
+def load_watchlist():
+    try:
+        with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_watchlist(items):
+    try:
+        with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
 
 # ---------------------------------------------------------
 # 실시간(준실시간) 시세 보정
@@ -49,6 +84,12 @@ def patch_today_with_realtime(df: pd.DataFrame, code: str) -> pd.DataFrame:
     - 오늘 날짜 행이 아예 없으면 새로 추가
     - 있으면 종가/거래량을 실시간 값으로 교체
     거래량이 없으면(장중 누적거래량 조회 실패) 직전 거래량으로 대체.
+
+    ⚠ 이 함수는 "일봉(하루=한 행)" 데이터 전용입니다. 분봉처럼 하루 안에
+    여러 행(09:03, 09:06 ...)이 있는 데이터에 그대로 쓰면, "오늘 자정(00:00)"
+    이라는 존재하지 않는 시각의 행을 새로 끼워 넣어버려서 누적평단(세력평단)
+    계산 순서가 깨지고 차트에서 평단선이 이상해지거나 안 보이는 원인이 됩니다.
+    분봉 데이터는 patch_latest_row_with_realtime을 대신 쓰세요.
     """
     rt = fetch_realtime_price(code)
     if rt is None or df is None or df.empty:
@@ -74,6 +115,23 @@ def patch_today_with_realtime(df: pd.DataFrame, code: str) -> pd.DataFrame:
     return df
 
 
+def patch_latest_row_with_realtime(df: pd.DataFrame, code: str) -> pd.DataFrame:
+    """
+    분봉(하루 안에 여러 행) 데이터용 실시간 보정. 새 행을 추가하지 않고
+    '가장 마지막 봉'의 종가만 준실시간 시세로 살짝 덮어써서 괴리를 줄인다.
+    (분봉 자체가 이미 15초 캐시로 자주 갱신되므로 이건 보조적인 보정입니다)
+    """
+    rt = fetch_realtime_price(code)
+    if rt is None or df is None or df.empty:
+        return df
+    df = df.copy()
+    last_idx = df.index[-1]
+    df.loc[last_idx, "종가"] = rt["price"]
+    df.loc[last_idx, "고가"] = max(df.loc[last_idx, "고가"], rt["price"])
+    df.loc[last_idx, "저가"] = min(df.loc[last_idx, "저가"], rt["price"])
+    return df
+
+
 # ---------------------------------------------------------
 # 분봉(실제 장중 1분봉) 데이터
 # ---------------------------------------------------------
@@ -86,16 +144,21 @@ def fetch_naver_minute_ohlcv(code: str, count: int = 500) -> pd.DataFrame:
     """
     네이버 증권 1분봉 원본 데이터를 가져온다. (기본 최근 count개 캔들)
     반환: index=datetime, columns=[시가,고가,저가,종가,거래량]
-    실패 시 빈 DataFrame 반환.
+    실패 시 빈 DataFrame 반환하고 실패 사유를 session_state["_minute_fetch_error"]에 남긴다.
     """
     try:
         url = (
             f"https://fchart.stock.naver.com/sise.nhn?"
             f"symbol={code}&timeframe=minute&count={count}&requestType=0"
         )
-        resp = requests.get(url, timeout=3)
+        resp = requests.get(url, timeout=4, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
         resp.raise_for_status()
-        root = ET.fromstring(resp.content)
+        # pyexpat(ET.fromstring)이 XML 선언부의 EUC-KR 같은 멀티바이트 인코딩을
+        # 직접 처리 못 해서 "multi-byte encodings are not supported" 오류가 남.
+        # 그래서 바이트를 직접 디코딩한 뒤, 인코딩 선언을 지우고 순수 str로 파싱한다.
+        raw_text = resp.content.decode("euc-kr", errors="replace")
+        raw_text = re.sub(r'encoding="[^"]*"', "", raw_text, count=1)
+        root = ET.fromstring(raw_text)
         rows = []
         for item in root.iter("item"):
             data_str = item.attrib.get("data", "")
@@ -118,17 +181,81 @@ def fetch_naver_minute_ohlcv(code: str, count: int = 500) -> pd.DataFrame:
             except (ValueError, TypeError):
                 continue
         if not rows:
+            st.session_state["_minute_fetch_error"] = "응답은 받았지만 파싱 가능한 캔들 데이터가 0개였습니다 (장 시작 전이거나 페이지 구조 변경 가능성)."
             return pd.DataFrame()
+        st.session_state["_minute_fetch_error"] = None
         out = pd.DataFrame(rows).set_index("datetime").sort_index()
         return out
-    except Exception:
+    except requests.exceptions.Timeout:
+        st.session_state["_minute_fetch_error"] = "요청 시간 초과(4초) - 배포 서버에서 fchart.stock.naver.com으로 나가는 네트워크가 느리거나 막혀있을 수 있습니다."
+        return pd.DataFrame()
+    except requests.exceptions.RequestException as e:
+        st.session_state["_minute_fetch_error"] = f"HTTP 요청 실패: {e}"
+        return pd.DataFrame()
+    except Exception as e:
+        st.session_state["_minute_fetch_error"] = f"알 수 없는 오류: {e}"
+        return pd.DataFrame()
+
+
+_MARKET_OPEN_TIME = datetime.time(9, 0, 0)
+
+
+@st.cache_data(ttl=15, show_spinner=False)
+def fetch_kiwoom_minute_df(code: str, interval_minutes: int) -> pd.DataFrame:
+    """
+    키움 REST API(kiwoom_client.fetch_minute_chart) 기반 실제 분봉 데이터.
+    실제 체결가 기반이라 네이버 스크래핑보다 정확하고 안정적입니다.
+    kiwoom_client가 없거나 호출이 실패하면 빈 DataFrame을 반환해서
+    get_today_minute_df가 네이버 방식으로 자동 폴백하도록 합니다.
+    반환 형식은 앱 전체에서 쓰는 컨벤션(index=datetime, 시가/고가/저가/종가/거래량)에 맞춘다.
+    """
+    if not _KIWOOM_AVAILABLE:
+        return pd.DataFrame()
+    try:
+        raw = kiwoom_client.fetch_minute_chart(code, tick_range=interval_minutes)
+        if raw is None or raw.empty or "datetime" not in raw.columns:
+            return pd.DataFrame()
+
+        raw = raw.copy()
+        raw["datetime"] = pd.to_datetime(raw["datetime"])
+        latest_date = raw["datetime"].dt.date.max()
+        raw = raw[raw["datetime"].dt.date == latest_date]
+        raw = raw[raw["datetime"].dt.time >= _MARKET_OPEN_TIME]
+        if raw.empty:
+            return pd.DataFrame()
+
+        raw = raw.set_index("datetime").sort_index()
+        out = pd.DataFrame(index=raw.index)
+        out["종가"] = raw["close"]
+        out["거래량"] = raw["volume"] if "volume" in raw.columns else 0
+        out["시가"] = raw["open"] if "open" in raw.columns else raw["close"]
+        out["고가"] = raw["high"] if "high" in raw.columns else raw["close"]
+        out["저가"] = raw["low"] if "low" in raw.columns else raw["close"]
+        # kiwoom_client._num()이 파싱 실패 시 None을 줄 수 있어 안전하게 정리
+        out["종가"] = pd.to_numeric(out["종가"], errors="coerce")
+        out = out.dropna(subset=["종가"])
+        for col in ["거래량", "시가", "고가", "저가"]:
+            out[col] = pd.to_numeric(out[col], errors="coerce").fillna(out["종가"] if col != "거래량" else 0)
+        if out.empty:
+            return pd.DataFrame()
+        return out
+    except Exception as e:
+        st.session_state["_minute_fetch_error"] = f"키움 API 오류: {e}"
         return pd.DataFrame()
 
 
 def get_today_minute_df(code: str, interval_minutes: int) -> pd.DataFrame:
     """
-    당일(09:00~15:30) 분봉만 골라 원하는 분단위(1/3/5/10...)로 리샘플해서 반환.
+    당일(09:00~15:30) 분봉만 골라 원하는 분단위(1/3/5/10...)로 반환.
+    1순위: 키움 REST API (kiwoom_client.py) - 실제 체결가 기반
+    2순위: 네이버 1분봉 스크래핑 → 리샘플 (키움 연동 실패/미설정 시 대체)
     """
+    kiwoom_df = fetch_kiwoom_minute_df(code, interval_minutes)
+    if not kiwoom_df.empty:
+        st.session_state["_minute_fetch_error"] = None
+        st.session_state["_minute_data_source"] = "🟢 키움 REST API"
+        return kiwoom_df
+
     raw = fetch_naver_minute_ohlcv(code, count=500)
     if raw.empty:
         return raw
@@ -144,6 +271,7 @@ def get_today_minute_df(code: str, interval_minutes: int) -> pd.DataFrame:
         )
         raw = raw.dropna()
 
+    st.session_state["_minute_data_source"] = "🟡 네이버 (키움 연동 실패/미설정 - 대체)"
     return raw
 
 
@@ -242,6 +370,35 @@ main_tab1, main_tab2, main_tab3, main_tab4, main_tab5 = st.tabs(
 )
 
 
+def jump_to_chart(code, name, timeframe):
+    """
+    다른 탭(실시간 랭킹 등)의 '⚡단타'/'🎓스터디' 버튼에서 호출.
+    평단선 차트 탭의 종목/차트주기를 세팅하고, 화면도 그 탭으로 전환한다.
+    ⚠ Streamlit 공식 API로는 탭을 코드로 전환할 수 없어서, 탭 버튼을 자바스크립트로
+    직접 클릭하는 방식을 쓴다(비공식 트릭이라 스트림릿 버전에 따라 안 먹힐 수 있음).
+    """
+    st.session_state["target_stock"] = name
+    st.session_state["stock_input_field"] = name
+    st.session_state["direct_timeframe_select"] = timeframe
+    st.session_state["_jump_to_tab1_pending"] = True
+
+
+if st.session_state.get("_jump_to_tab1_pending"):
+    st.session_state["_jump_to_tab1_pending"] = False
+    components.html(
+        """
+        <script>
+        setTimeout(function() {
+            const doc = window.parent.document;
+            const tabs = doc.querySelectorAll('button[data-baseweb="tab"]');
+            if (tabs && tabs.length > 0) { tabs[0].click(); }
+        }, 150);
+        </script>
+        """,
+        height=0,
+    )
+
+
 # ---------------------------------------------------------
 # 공통 함수 (한글 종목명 및 매핑 강화)
 # ---------------------------------------------------------
@@ -287,24 +444,60 @@ def get_stock_ticker_map():
     return name_map
 
 
+@st.cache_data(ttl=300)
+def naver_autocomplete_stock(query: str):
+    """
+    네이버 증권 자동완성 API로 종목명(한글 일부 입력 포함)을 종목코드로 변환한다.
+    pykrx로 시장 전체 티커(약 2,700개)를 순회해 이름을 매핑하는 방식보다
+    훨씬 빠르고, 부분 한글 입력("삼성", "하이닉스" 등)에도 잘 맞는다.
+    """
+    try:
+        url = "https://m.stock.naver.com/front-api/search/autoComplete"
+        resp = requests.get(
+            url,
+            params={"query": query, "target": "stock"},
+            timeout=2,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        items = (data.get("result") or {}).get("items", [])
+        results = []
+        for it in items:
+            code = str(it.get("code", "")).strip()
+            name = str(it.get("name", "")).strip()
+            if code and name and code.isdigit() and len(code) == 6:
+                results.append((code, name))
+        return results
+    except Exception:
+        return []
+
+
 def resolve_code_or_name(user_input):
     user_input = str(user_input).strip()
-    name_map = get_stock_ticker_map()
-    code_to_name = {v: k for k, v in name_map.items()}
+    if not user_input:
+        return "005930", "삼성전자"
 
+    # 1) 6자리 숫자 코드를 직접 입력한 경우
     if user_input.isdigit() and len(user_input) == 6:
-        if user_input in code_to_name:
-            return user_input, code_to_name[user_input]
         try:
             name = stock.get_market_ticker_name(user_input)
-            name_str = str(name).strip() if name else user_input
-            return user_input, name_str
+            if name and str(name) != user_input:
+                return user_input, str(name).strip()
         except Exception:
-            return user_input, user_input
+            pass
+        return user_input, user_input
 
+    # 2) 한글(또는 영문) 종목명 부분 입력 → 네이버 자동완성 API로 우선 조회
+    #    (전체 시장 티커를 순회하는 것보다 빠르고 부분 입력에 강함)
+    naver_hits = naver_autocomplete_stock(user_input)
+    if naver_hits:
+        return naver_hits[0]
+
+    # 3) 네이버 API가 실패한 경우에 대비한 대체 경로: 정적 dict + pykrx 전체 티커명
+    name_map = get_stock_ticker_map()
     if user_input in name_map:
         return name_map[user_input], user_input
-
     for name, code in name_map.items():
         if user_input.lower() in name.lower():
             return code, name
@@ -312,63 +505,209 @@ def resolve_code_or_name(user_input):
     return "005930", "삼성전자"
 
 
-def get_financial_info(code):
-    sample_financials = {
-        "005930": {
-            "mcap": 4320000,
-            "op_profit": 656700,
-            "trade_type": "🏆 중장기",
-            "foreign_net": "+125,400주",
-            "inst_net": "+45,200주",
-            "prog_net": "+450억 (매수우위)",
-            "credit_ratio": "0.32%",
-            "news": [
-                "[특징주] 삼성전자, 하반기 HBM4 공급 기대감에 4%대 강세",
-                "외인·기관 동반 순매수… 삼성전자 반도체 업황 개선 뚜렷",
-                "증권가 \"삼성전자 목표주가 상향… 메모리 반도체 실적 호조\"",
-            ],
-        },
-        "000660": {
-            "mcap": 1370000,
-            "op_profit": 120500,
-            "trade_type": "🏆 중장기",
-            "foreign_net": "+89,100주",
-            "inst_net": "-12,400주",
-            "prog_net": "+310억 (강한유입)",
-            "credit_ratio": "0.45%",
-            "news": [
-                "[클릭 e종목] SK하이닉스, AI 서버용 고부가 제품 독점 수혜",
-                "SK하이닉스, 장중 신고가 경신… \"메모리 슈퍼사이클 진입\"",
-            ],
-        },
-        "042660": {
-            "mcap": 250000,
-            "op_profit": 3500,
-            "trade_type": "🏆 중장기",
-            "foreign_net": "+45,000주",
-            "inst_net": "+12,000주",
-            "prog_net": "+150억",
-            "credit_ratio": "0.80%",
-            "news": [
-                "한화오션, 특수선 수주 호조 및 해양 플랜트 실적 개선 기대감",
-            ],
-        },
+@st.cache_data(ttl=120)
+@st.cache_data(ttl=30)
+def fetch_naver_integration_info(code: str):
+    """
+    네이버 증권 모바일 API(m.stock.naver.com)에서 시가총액/PER/EPS를 가져온다.
+    이미 실시간 시세 보정에 쓰는 polling.finance.naver.com과 같은 네이버
+    계열 API라 이 환경에서 안정적으로 응답하며, pykrx처럼 날짜를 여러 번
+    소급 조회할 필요가 없어 훨씬 빠르다(호출 1번).
+    """
+    try:
+        url = f"https://m.stock.naver.com/api/stock/{code}/integration"
+        resp = requests.get(url, timeout=3, headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        data = resp.json()
+        info = {}
+        for item in data.get("totalInfos", []) or []:
+            k = item.get("key")
+            if k is not None:
+                info[k] = item.get("value")
+
+        def _num(*keys):
+            for k in keys:
+                v = info.get(k)
+                if v is None:
+                    continue
+                try:
+                    return float(str(v).replace(",", "").replace("%", ""))
+                except ValueError:
+                    continue
+            return None
+
+        price = _num("closePrice", "lastClosePrice", "now")
+        market_cap = _num("marketValue")
+        per = _num("per")
+        eps = _num("eps")
+
+        # marketValue 단위 방어: price 대비 내재 주식수가 비상식적으로 작으면
+        # (이미 억원 단위로 온 경우) 원 단위로 보정
+        if market_cap and price and price > 0:
+            implied_shares = market_cap / price
+            if implied_shares < 10_000:
+                market_cap *= 100_000_000
+
+        if market_cap is None and per is None and eps is None:
+            return None
+        return {"price": price, "market_cap": market_cap, "per": per, "eps": eps}
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=60)
+def fetch_investor_flow(code: str):
+    """
+    외국인/기관(연기금·투신·사모 포함) 순매수 수량을 pykrx로 가져온다.
+    ⚠ 이 데이터는 KRX가 당일 장중에는 공개하지 않고, 정식 집계본은 보통
+    다음 영업일에야 게시된다 (증권사 HTS의 "실시간 추정치"와는 성격이 다름).
+    그래서 "당일 실시간"이 아니라 "최근 영업일 기준"이 될 수 있으며,
+    화면에 실제 기준일(as_of)을 표시해 어느 날짜 데이터인지 명확히 한다.
+    소급 조회는 속도를 위해 최대 3일로 제한한다.
+    """
+    for back in range(3):
+        d = (datetime.datetime.now() - datetime.timedelta(days=back)).strftime("%Y%m%d")
+        try:
+            trade_df = stock.get_market_trading_volume_by_date(d, d, code)
+            if trade_df is None or trade_df.empty:
+                continue
+            row = trade_df.iloc[-1]
+            result = {"as_of": d}
+            for col in trade_df.columns:
+                c = str(col)
+                if "외국인" in c and "기타" not in c and "foreign_net" not in result:
+                    result["foreign_net"] = int(row[col])
+                elif "기관합계" in c and "inst_net" not in result:
+                    result["inst_net"] = int(row[col])
+                elif "연기금" in c and "pension_net" not in result:
+                    result["pension_net"] = int(row[col])
+                elif "투신" in c and "trust_net" not in result:
+                    result["trust_net"] = int(row[col])
+                elif "사모" in c and "pe_net" not in result:
+                    result["pe_net"] = int(row[col])
+            if len(result) > 1:
+                return result
+        except Exception:
+            continue
+    return None
+
+
+@st.cache_data(ttl=300)
+def fetch_shares_outstanding(code: str):
+    """상장주식수(느리게 변하는 값) - pykrx, 최대 3일 소급 + market-wide 스냅샷 대체 경로."""
+    for back in range(3):
+        d = (datetime.datetime.now() - datetime.timedelta(days=back)).strftime("%Y%m%d")
+        try:
+            cap_df = stock.get_market_cap(d, d, code)
+            if cap_df is not None and not cap_df.empty and "상장주식수" in cap_df.columns:
+                return int(cap_df["상장주식수"].iloc[-1])
+        except Exception:
+            continue
+    # 종목별 조회(get_market_cap)가 계속 실패하면, 시장 전체 스냅샷(get_market_cap_by_ticker)에서
+    # 해당 코드만 찾아본다 - 같은 KRX 데이터를 다른 방식으로 요청하는 것이라 한쪽만
+    # 막혀있거나 일시적으로 실패한 경우 다른 쪽이 성공할 수 있다.
+    for back in range(3):
+        d = (datetime.datetime.now() - datetime.timedelta(days=back)).strftime("%Y%m%d")
+        try:
+            for market in ("KOSPI", "KOSDAQ"):
+                snap = stock.get_market_cap_by_ticker(d, market=market)
+                if snap is not None and not snap.empty and code in snap.index and "상장주식수" in snap.columns:
+                    return int(snap.loc[code, "상장주식수"])
+        except Exception:
+            continue
+    return None
+
+
+def get_financial_info(code, current_price=None):
+    """
+    종목코드별로 실제 동기화되는 재무/수급 정보를 반환한다. (오늘/현재 기준)
+
+    - 시가총액/PER/EPS: 네이버 모바일 API 1회 호출 (fetch_naver_integration_info)
+      → pykrx로 날짜를 여러 번 소급 조회하던 이전 방식보다 훨씬 빠르고,
+      실시간 시세 보정과 같은 네이버 계열 API라 이 환경에서 더 안정적으로 응답한다.
+      실패 시에만 pykrx(상장주식수 × 현재가)로 대체한다.
+    - 추정 순이익 = 시가총액 ÷ PER (네이버 값이 서로 같은 시점 기준이라 동기화됨)
+      ⚠ pykrx/네이버 모두 '영업이익'(손익계산서) 자체는 제공하지 않아 "추정 순이익"이며
+      영업이익이 아니다 (DART 전자공시 연동이 별도로 필요).
+    - 외국인/기관/연기금/투신/사모 순매수(수량): pykrx 실데이터. KRX가 이 데이터를
+      장중에는 공개하지 않아 "최근 영업일 기준"일 수 있고, 그 기준일을 as_of로 표시한다.
+    - 매매성향: 종목코드 기반으로 산출
+    - 실시간 프로그램 순매수 / 신용잔고율: 무료 공개 API로는 조회 불가 → 종목코드 기반
+      샘플값 (실제 서비스 연동 시 증권사 API/유료 데이터로 교체 필요)
+    """
+    seed = int(code) if code and code.isdigit() else abs(hash(code or "")) % 100000
+
+    naver_info = fetch_naver_integration_info(code)
+    mcap_eok, per, op_profit_label = None, None, None
+
+    if naver_info and naver_info.get("market_cap"):
+        mcap_eok = int(naver_info["market_cap"] / 100_000_000)
+        per = naver_info.get("per")
+    elif current_price:
+        shares = fetch_shares_outstanding(code)
+        if shares:
+            mcap_eok = int(current_price * shares / 100_000_000)
+
+    if mcap_eok is None:
+        mcap_source_failed = True  # 실데이터 조회 완전 실패 - 그럴듯한 가짜 숫자 대신 "조회 실패"로 명시
+    else:
+        mcap_source_failed = False
+
+    if per and per > 0 and mcap_eok is not None:
+        op_profit_eok = int(mcap_eok / per)
+        op_profit_label = "💵 추정 순이익 (시가총액÷PER, 영업이익 아님)"
+    else:
+        op_profit_eok = None
+        op_profit_label = "💵 추정 순이익 (조회 실패)"
+
+    flow = fetch_investor_flow(code)
+    flow_as_of = flow.get("as_of") if flow else None
+
+    def _fmt_net(val):
+        if val is not None:
+            return f"{val:+,}주"
+        return "N/A (조회 실패)"
+
+    foreign_net = _fmt_net(flow.get("foreign_net") if flow else None)
+    inst_net = _fmt_net(flow.get("inst_net") if flow else None)
+    pension_net = _fmt_net(flow.get("pension_net") if flow else None)
+    trust_net = _fmt_net(flow.get("trust_net") if flow else None)
+    pe_net = _fmt_net(flow.get("pe_net") if flow else None)
+
+    trade_type = "⚡ 단타" if (seed % 3 == 0) else ("🌊 스윙" if (seed % 3 == 1) else "🏆 중장기")
+    prog_net = "N/A (무료 API로 조회 불가)"
+    credit_ratio = "N/A (무료 API로 조회 불가)"
+
+    news_map = {
+        "005930": [
+            "[특징주] 삼성전자, 하반기 HBM4 공급 기대감에 4%대 강세",
+            "외인·기관 동반 순매수… 삼성전자 반도체 업황 개선 뚜렷",
+        ],
+        "000660": [
+            "[클릭 e종목] SK하이닉스, AI 서버용 고부가 제품 독점 수혜",
+            "SK하이닉스, 장중 신고가 경신… \"메모리 슈퍼사이클 진입\"",
+        ],
     }
-    return sample_financials.get(
+    news_list = news_map.get(
         code,
-        {
-            "mcap": 5000,
-            "op_profit": 120,
-            "trade_type": "🌊 스윙",
-            "foreign_net": "+5,000주",
-            "inst_net": "+1,200주",
-            "prog_net": "+5억",
-            "credit_ratio": "1.00%",
-            "news": [
-                f"[{stock.get_market_ticker_name(code) if code else '관련주'} 실시간 뉴스] 장내 수급 유입 및 테마 상승세 지속"
-            ],
-        },
+        [f"[{stock.get_market_ticker_name(code) if code else '관련주'} 실시간 뉴스] 장내 수급 유입 및 테마 상승세 지속"],
     )
+
+    return {
+        "mcap": mcap_eok,
+        "op_profit": op_profit_eok,
+        "op_profit_label": op_profit_label,
+        "trade_type": trade_type,
+        "foreign_net": foreign_net,
+        "inst_net": inst_net,
+        "pension_net": pension_net,
+        "trust_net": trust_net,
+        "pe_net": pe_net,
+        "flow_as_of": flow_as_of,
+        "prog_net": prog_net,
+        "credit_ratio": credit_ratio,
+        "news": news_list,
+    }
 
 
 # ---------------------------------------------------------
@@ -620,6 +959,433 @@ STUDY_MAPPING_HTML_TEMPLATE = """
 """
 
 
+def compute_vwap_columns(df):
+    """
+    OHLCV df에 평단가(세력평단)/세력매수평단/세력매도평단/누적순매수증감 컬럼을 추가한다.
+    tab1 본문과 4분할 차트(일/주/월/분봉 동시보기)에서 공통으로 쓰는 로직.
+    """
+    df = df.copy()
+    df["TPV"] = df["종가"] * df["거래량"]
+    cum_volume = df["거래량"].cumsum()
+    df["평단가"] = df["TPV"].cumsum() / cum_volume.replace(0, pd.NA)
+    df["평단가"] = df["평단가"].ffill()
+
+    df["가격변화"] = df["종가"].diff().fillna(0)
+    df["매수거래량"] = df.apply(lambda r: r["거래량"] if r["가격변화"] >= 0 else r["거래량"] * 0.4, axis=1)
+    df["매도거래량"] = df.apply(lambda r: r["거래량"] * 0.6 if r["가격변화"] < 0 else r["거래량"] * 0.2, axis=1)
+    df["순매수증감"] = df["매수거래량"] - df["매도거래량"]
+    df["누적순매수증감"] = df["순매수증감"].cumsum()
+
+    buy_cum_tpv = (df["종가"] * df["매수거래량"]).cumsum()
+    buy_cum_vol = df["매수거래량"].cumsum().replace(0, pd.NA)
+    sell_cum_tpv = (df["종가"] * df["매도거래량"]).cumsum()
+    sell_cum_vol = df["매도거래량"].cumsum().replace(0, pd.NA)
+    df["세력매수평단"] = (buy_cum_tpv / buy_cum_vol).ffill()
+    df["세력매도평단"] = (sell_cum_tpv / sell_cum_vol).ffill()
+    return df
+
+
+@st.cache_data(ttl=60)
+def fetch_quad_timeframe_data(code: str):
+    """
+    일봉(1년)/주봉(3년)/월봉(5년)을 한 번에 가져와서
+    각각 평단가/세력매수평단/세력매도평단까지 계산해 반환한다.
+    4분할("일·주·월봉 + 기본 목표가 차트") 차트용.
+    ※ 분봉은 장중에만 존재하고 데이터 소스가 불안정해서 이 4분할에서는 빼고,
+      대신 4번째 칸에 목표가/손절가 라인이 포함된 "기본 목표가 차트"를 넣는다.
+    """
+    today = datetime.datetime.now()
+    result = {}
+
+    try:
+        d_df = stock.get_market_ohlcv_by_date((today - datetime.timedelta(days=365)).strftime("%Y%m%d"), today.strftime("%Y%m%d"), code, "d")
+        result["일봉"] = compute_vwap_columns(d_df) if d_df is not None and not d_df.empty else None
+    except Exception:
+        result["일봉"] = None
+
+    try:
+        w_raw = stock.get_market_ohlcv_by_date((today - datetime.timedelta(days=365 * 3)).strftime("%Y%m%d"), today.strftime("%Y%m%d"), code, "d")
+        if w_raw is not None and not w_raw.empty:
+            w_df = w_raw.resample("W-MON").agg(
+                {"시가": "first", "고가": "max", "저가": "min", "종가": "last", "거래량": "sum"}
+            ).dropna()
+        else:
+            w_df = None
+        result["주봉"] = compute_vwap_columns(w_df) if w_df is not None and not w_df.empty else None
+    except Exception:
+        result["주봉"] = None
+
+    try:
+        m_df = stock.get_market_ohlcv_by_date((today - datetime.timedelta(days=365 * 5)).strftime("%Y%m%d"), today.strftime("%Y%m%d"), code, "m")
+        result["월봉"] = compute_vwap_columns(m_df) if m_df is not None and not m_df.empty else None
+    except Exception:
+        result["월봉"] = None
+
+    return result
+
+
+def render_quad_timeframe_chart(
+    code, stock_name, df, selected_timeframe, is_minute_mode,
+    target_1st, target_2nd, target_3rd, stop_1st, stop_2nd, absolute_stop_loss,
+):
+    """일봉/주봉/월봉 + 기본 목표가 차트(목표가·손절가 라인 포함), 4개를 2x2로 동시에 보여준다."""
+    from plotly.subplots import make_subplots
+
+    data = fetch_quad_timeframe_data(code)
+    labels = ["일봉", "주봉", "월봉"]
+    positions = {"일봉": (1, 1), "주봉": (1, 2), "월봉": (2, 1)}
+
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=labels + [f"기본 목표가 차트 ({selected_timeframe})"],
+        vertical_spacing=0.12, horizontal_spacing=0.06,
+        specs=[[{}, {}], [{}, {"secondary_y": True}]],
+    )
+
+    any_data = False
+    curve_avg_map = []  # curve_number(트레이스 순번) -> 그 서브플롯의 날짜별 평단가 Series
+    for label in labels:
+        sub_df = data.get(label)
+        row, col = positions[label]
+        if sub_df is None or sub_df.empty:
+            continue
+        any_data = True
+        x_vals = [d.strftime("%Y-%m-%d") for d in sub_df.index]
+        disparity_sub = ((sub_df["종가"] - sub_df["평단가"]) / sub_df["평단가"] * 100)
+        avg_lookup = pd.Series(sub_df["평단가"].values, index=x_vals)
+        fig.add_trace(
+            go.Scatter(x=x_vals, y=sub_df["종가"], mode="lines", name="종가",
+                       line=dict(color="#1f77b4", width=1.3),
+                       hovertemplate="종가: %{y:,.0f}원<extra></extra>", showlegend=False),
+            row=row, col=col,
+        )
+        curve_avg_map.append(avg_lookup)
+        fig.add_trace(
+            go.Scatter(x=x_vals, y=sub_df["평단가"], mode="lines", name="평단가",
+                       line=dict(color="#ff7f0e", width=2),
+                       customdata=disparity_sub,
+                       hovertemplate="평단가: %{y:,.0f}원 (괴리율 %{customdata:+.2f}%)<extra></extra>", showlegend=False),
+            row=row, col=col,
+        )
+        curve_avg_map.append(avg_lookup)
+        fig.update_xaxes(type="category", nticks=6, tickfont=dict(size=9), row=row, col=col)
+        fig.update_yaxes(tickformat=",.0f", row=row, col=col)
+
+    # 4번째 칸: 기본 목표가 차트 (현재 선택된 주기 기준, 목표가·손절가 라인 포함)
+    if df is not None and not df.empty:
+        any_data = True
+        bx = [d.strftime("%H:%M" if is_minute_mode else "%Y-%m-%d") for d in df.index]
+        disparity_main = ((df["종가"] - df["평단가"]) / df["평단가"] * 100)
+        avg_lookup_main = pd.Series(df["평단가"].values, index=bx)
+        fig.add_trace(
+            go.Scatter(x=bx, y=df["종가"], mode="lines", name="종가",
+                       line=dict(color="#1f77b4", width=1.3),
+                       hovertemplate="종가: %{y:,.0f}원<extra></extra>", showlegend=False),
+            row=2, col=2,
+        )
+        curve_avg_map.append(avg_lookup_main)
+        fig.add_trace(
+            go.Scatter(x=bx, y=df["평단가"], mode="lines", name="평단가",
+                       line=dict(color="#ff7f0e", width=2),
+                       customdata=disparity_main,
+                       hovertemplate="평단가: %{y:,.0f}원 (괴리율 %{customdata:+.2f}%)<extra></extra>", showlegend=False),
+            row=2, col=2,
+        )
+        curve_avg_map.append(avg_lookup_main)
+        if "세력매수평단" in df.columns:
+            fig.add_trace(
+                go.Scatter(x=bx, y=df["세력매수평단"], mode="lines", name="세력매수평단",
+                           line=dict(color="#d32f2f", width=1, dash="dashdot"),
+                           hovertemplate="세력매수평단: %{y:,.0f}원<extra></extra>", showlegend=False),
+                row=2, col=2,
+            )
+            curve_avg_map.append(avg_lookup_main)
+            fig.add_trace(
+                go.Scatter(x=bx, y=df["세력매도평단"], mode="lines", name="세력매도평단",
+                           line=dict(color="#1971c2", width=1, dash="dashdot"),
+                           hovertemplate="세력매도평단: %{y:,.0f}원<extra></extra>", showlegend=False),
+                row=2, col=2,
+            )
+            curve_avg_map.append(avg_lookup_main)
+        if "누적순매수증감" in df.columns:
+            fig.add_trace(
+                go.Scatter(x=bx, y=df["누적순매수증감"], mode="lines", name="순매수증감",
+                           line=dict(color="#2b8a3e", width=1, dash="dot"),
+                           hovertemplate="순매수증감: %{y:,.0f}주<extra></extra>", showlegend=False),
+                row=2, col=2, secondary_y=True,
+            )
+            curve_avg_map.append(avg_lookup_main)
+
+        for y_val, color, text in [
+            (target_3rd, "#2b8a3e", f"3차목표 {target_3rd:,}"),
+            (target_2nd, "#2b8a3e", f"2차목표 {target_2nd:,}"),
+            (target_1st, "#2b8a3e", f"1차목표 {target_1st:,}"),
+            (stop_1st, "#f59f00", f"1차손절 {stop_1st:,}"),
+            (stop_2nd, "#f08c00", f"2차손절 {stop_2nd:,}"),
+            (absolute_stop_loss, "#e03131", f"절대사수 {absolute_stop_loss:,}"),
+        ]:
+            fig.add_hline(
+                y=y_val, line_dash="dot", line_color=color, line_width=1,
+                row=2, col=2, annotation_text=text, annotation_font_size=8,
+            )
+        fig.update_xaxes(type="category", nticks=6, tickfont=dict(size=9), row=2, col=2)
+        fig.update_yaxes(tickformat=",.0f", row=2, col=2, secondary_y=False)
+        fig.update_yaxes(tickformat=",.0f", row=2, col=2, secondary_y=True)
+
+    fig.update_layout(
+        title=f"{stock_name} ({code}) - 일봉·주봉·월봉 + 기본 목표가 차트",
+        height=680,
+        template="plotly_white",
+        margin=dict(l=30, r=20, t=60, b=20),
+        hovermode="x unified",
+    )
+
+    click_event = st.plotly_chart(
+        fig, use_container_width=True,
+        on_select="rerun", selection_mode=["points"],
+        key=f"quad_chart_{code}",
+    )
+
+    def _get_field(obj, key, alt_key=None, default=None):
+        if obj is None:
+            return default
+        if isinstance(obj, dict):
+            if key in obj:
+                return obj[key]
+            if alt_key and alt_key in obj:
+                return obj[alt_key]
+            return default
+        if hasattr(obj, key):
+            return getattr(obj, key)
+        if alt_key and hasattr(obj, alt_key):
+            return getattr(obj, alt_key)
+        return default
+
+    selection_obj = _get_field(click_event, "selection")
+    points = _get_field(selection_obj, "points", default=[]) or []
+
+    if points:
+        pt = points[0]
+        curve_no = _get_field(pt, "curve_number", "curveNumber")
+        x_clicked = _get_field(pt, "x")
+        click_id = (curve_no, x_clicked)
+        if curve_no is not None and 0 <= curve_no < len(curve_avg_map) and x_clicked is not None:
+            if st.session_state.get("_quad_last_click") != click_id:
+                st.session_state["_quad_last_click"] = click_id
+                avg_val = curve_avg_map[curve_no].get(x_clicked)
+                if avg_val is not None and pd.notna(avg_val):
+                    components.html(
+                        f"<script>navigator.clipboard.writeText('{int(avg_val)}');</script>",
+                        height=0,
+                    )
+                    st.caption(f"📋 복사됨: {x_clicked} 누적평단가 {int(avg_val):,}원")
+
+    if not any_data:
+        st.warning("차트 데이터를 가져오지 못했습니다. 네트워크 문제일 수 있습니다.")
+
+
+def render_n_wave_mapping_chart(df, stock_name, code):
+    """
+    N자 파동 눌림목 목표가 매핑 (다른 사이트의 '목표가 Mapping' 기능 재현).
+
+    사용법:
+    1) 상승 시작일 선택 → 그 날의 저가가 Wave1 시작점
+    2) "차트에서 5이평 언덕 선택" 누르고 차트에서 SMA5(핑크선) 고점을 클릭 → Wave1 끝점(피크)
+    3) "차트에서 세력평단 날짜 선택" 누르고 차트에서 세력평단(주황선) 눌림목 지점을 클릭 → 지지선
+    4) "목표가 MAPPING 실행" → T1~T4 계산
+
+    공식 (스크린샷 두 사례로 역산해서 확인 완료):
+      Wave1 = 5이평_피크값 - 상승시작일_저가
+      T1(약)  = 지지값 + Wave1 × 0.618
+      T2(평균) = 지지값 + Wave1 × 1.000
+      T3(강)  = 지지값 + Wave1 × 1.618
+      T4(따블) = 지지값 + Wave1 × 2.000
+    """
+    if df is None or df.empty:
+        st.warning("데이터가 없습니다.")
+        return
+
+    df = df.copy()
+    df["SMA5"] = df["종가"].rolling(5).mean()
+
+    st.session_state.setdefault("nwave_select_mode", None)
+    st.session_state.setdefault("nwave_sma5_point", None)
+    st.session_state.setdefault("nwave_avg_point", None)
+
+    today = datetime.date.today()
+    default_start = df.index[0].date()
+
+    dc1, dc2 = st.columns(2)
+    with dc1:
+        start_date_sel = st.date_input("상승 시작일", value=default_start, key="nwave_start_date")
+    with dc2:
+        ec1, ec2 = st.columns([3, 1])
+        with ec1:
+            end_date_sel = st.date_input("조회일 (마지막 날짜)", value=today, key="nwave_end_date")
+        with ec2:
+            st.write("")
+            if st.button("TODAY", key="nwave_today_btn", use_container_width=True):
+                st.session_state["nwave_end_date"] = today
+                st.rerun()
+
+    idx_dates = df.index.date
+    start_candidates = [i for i, d in enumerate(idx_dates) if d >= start_date_sel]
+    if not start_candidates:
+        st.warning("상승 시작일 이후 데이터가 없습니다. 날짜를 다시 선택해주세요.")
+        return
+    start_i = start_candidates[0]
+    start_low = float(df["저가"].iloc[start_i])
+    start_actual_date = df.index[start_i].strftime("%Y-%m-%d")
+
+    end_candidates = [i for i, d in enumerate(idx_dates) if d <= end_date_sel]
+    end_i = end_candidates[-1] if end_candidates else len(df) - 1
+    plot_df = df.iloc[start_i:end_i + 1] if end_i >= start_i else df.iloc[start_i:]
+    if plot_df.empty:
+        st.warning("조회일이 상승 시작일보다 빠릅니다.")
+        return
+
+    bcol1, bcol2, bcol3 = st.columns(3)
+    with bcol1:
+        sma5_label = "🖱 차트를 클릭하세요" if st.session_state["nwave_select_mode"] == "sma5" else "🖱 차트에서 5이평 언덕 선택"
+        if st.button(sma5_label, key="nwave_pick_sma5", use_container_width=True,
+                     type="primary" if st.session_state["nwave_select_mode"] == "sma5" else "secondary"):
+            st.session_state["nwave_select_mode"] = None if st.session_state["nwave_select_mode"] == "sma5" else "sma5"
+            st.rerun()
+    with bcol2:
+        avg_label = "🖱 차트를 클릭하세요" if st.session_state["nwave_select_mode"] == "avg" else "🖱 차트에서 세력평단 날짜 선택"
+        if st.button(avg_label, key="nwave_pick_avg", use_container_width=True,
+                     type="primary" if st.session_state["nwave_select_mode"] == "avg" else "secondary"):
+            st.session_state["nwave_select_mode"] = None if st.session_state["nwave_select_mode"] == "avg" else "avg"
+            st.rerun()
+    with bcol3:
+        run_clicked = st.button("▶ 목표가 MAPPING 실행", key="nwave_run_btn", use_container_width=True, type="primary")
+
+    # 정보 카드/목표가 카드는 아래 차트 클릭 처리 이후에 채운다 (placeholder).
+    # 차트가 on_select="rerun"으로 자체적으로 리런되기 때문에, 여기서 또 st.rerun()을
+    # 부르면 리런이 겹쳐서 화면 아래쪽(차트 스타일 라디오 등)의 위젯 상태가 꼬일 수 있다.
+    info_placeholder = st.empty()
+    targets_placeholder = st.empty()
+
+    t_meta = [("T1", "약", "#4263eb"), ("T2", "평균", "#2b8a3e"), ("T3", "강", "#e03131"), ("T4", "따블", "#7048e8")]
+
+    fig = go.Figure()
+    x_vals = [d.strftime("%Y-%m-%d") for d in plot_df.index]
+    fig.add_trace(go.Scatter(x=x_vals, y=plot_df["종가"], mode="lines", name="종가",
+                              line=dict(color="#495057", width=1),
+                              hovertemplate="종가: %{y:,.0f}원<extra></extra>"))
+    fig.add_trace(go.Scatter(x=x_vals, y=plot_df["SMA5"], mode="lines", name="5이평(SMA5)",
+                              line=dict(color="#e64980", width=2),
+                              hovertemplate="5이평: %{y:,.0f}원<extra></extra>"))
+    fig.add_trace(go.Scatter(x=x_vals, y=plot_df["평단가"], mode="lines", name="세력평단",
+                              line=dict(color="#f08c00", width=2),
+                              hovertemplate="세력평단: %{y:,.0f}원<extra></extra>"))
+
+    existing_targets = st.session_state.get("nwave_targets")
+    if existing_targets:
+        for key, label, color in t_meta:
+            fig.add_hline(y=existing_targets[key], line_dash="dash", line_color=color, line_width=1.5,
+                          annotation_text=f"{key}({label}) {existing_targets[key]:,.0f}원", annotation_font_size=10)
+
+    fig.update_layout(
+        title=f"{stock_name} ({code}) 일봉 + SMA5 + 세력평단 차트",
+        height=480, hovermode="x unified", template="plotly_white",
+        margin=dict(l=30, r=20, t=50, b=20),
+    )
+    fig.update_xaxes(type="category", nticks=10)
+    fig.update_yaxes(tickformat=",.0f")
+
+    if st.session_state["nwave_select_mode"]:
+        mode_txt = "5이평 언덕" if st.session_state["nwave_select_mode"] == "sma5" else "세력평단 지점"
+        st.info(f"👆 아래 차트에서 **{mode_txt}**으로 삼을 지점을 클릭하세요.")
+
+    click_event = st.plotly_chart(
+        fig, use_container_width=True,
+        on_select="rerun", selection_mode=["points"],
+        key=f"nwave_chart_{code}",
+    )
+
+    def _get_field(obj, key, alt_key=None, default=None):
+        if obj is None:
+            return default
+        if isinstance(obj, dict):
+            if key in obj:
+                return obj[key]
+            if alt_key and alt_key in obj:
+                return obj[alt_key]
+            return default
+        if hasattr(obj, key):
+            return getattr(obj, key)
+        if alt_key and hasattr(obj, alt_key):
+            return getattr(obj, alt_key)
+        return default
+
+    selection_obj = _get_field(click_event, "selection")
+    points = _get_field(selection_obj, "points", default=[]) or []
+
+    if points and st.session_state["nwave_select_mode"] in ("sma5", "avg"):
+        pt = points[0]
+        x_clicked = _get_field(pt, "x")
+        if x_clicked in x_vals:
+            row = plot_df.iloc[x_vals.index(x_clicked)]
+            mode = st.session_state["nwave_select_mode"]
+            if mode == "sma5" and pd.notna(row["SMA5"]):
+                st.session_state["nwave_sma5_point"] = {"date": x_clicked, "value": float(row["SMA5"])}
+                st.session_state["nwave_select_mode"] = None
+            elif mode == "avg" and pd.notna(row["평단가"]):
+                st.session_state["nwave_avg_point"] = {"date": x_clicked, "value": float(row["평단가"])}
+                st.session_state["nwave_select_mode"] = None
+
+    # 여기서부터는 차트 클릭 처리까지 끝난 "최신" 상태 - 이제 위쪽 placeholder를 채운다.
+    sma5_pt = st.session_state["nwave_sma5_point"]
+    avg_pt = st.session_state["nwave_avg_point"]
+
+    with info_placeholder.container():
+        info_cols = st.columns(4)
+        with info_cols[0]:
+            st.metric("상승 시작일 (저가)", f"{start_low:,.0f}원", start_actual_date)
+        with info_cols[1]:
+            st.metric("5이평 언덕 (SMA5)", f"{sma5_pt['value']:,.0f}원" if sma5_pt else "미선택", sma5_pt["date"] if sma5_pt else None)
+        with info_cols[2]:
+            st.metric("세력평단 Mapping", f"{avg_pt['value']:,.0f}원" if avg_pt else "미선택", avg_pt["date"] if avg_pt else None)
+        with info_cols[3]:
+            wave1_preview = (sma5_pt["value"] - start_low) if sma5_pt else None
+            st.metric("Wave1 (상승폭)", f"{wave1_preview:,.0f}원" if wave1_preview is not None else "-")
+
+    if run_clicked:
+        if sma5_pt and avg_pt:
+            wave1 = sma5_pt["value"] - start_low
+            support = avg_pt["value"]
+            st.session_state["nwave_targets"] = {
+                "T1": support + wave1 * 0.618,
+                "T2": support + wave1 * 1.0,
+                "T3": support + wave1 * 1.618,
+                "T4": support + wave1 * 2.0,
+            }
+        else:
+            st.warning("먼저 차트에서 '5이평 언덕'과 '세력평단' 지점을 클릭해서 선택해주세요.")
+
+    targets = st.session_state.get("nwave_targets")
+    if targets:
+        with targets_placeholder.container():
+            t_cols = st.columns(4)
+            for col, (key, label, color) in zip(t_cols, t_meta):
+                val = targets[key]
+                with col:
+                    st.markdown(
+                        f"""
+                        <div onclick="navigator.clipboard.writeText('{int(val)}');"
+                             style="border:2px solid {color}; border-radius:8px; padding:10px; text-align:center; cursor:pointer;"
+                             title="클릭 시 숫자만 즉시 복사">
+                            <div style="font-size:12px; font-weight:bold; color:{color};">{key} ({label})</div>
+                            <div style="font-size:16px; font-weight:bold; margin-top:4px;">{val:,.0f}원</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+        if run_clicked:
+            st.caption("⚠ 방금 계산한 목표가 라인은 차트를 한 번 더 조작하면 다음 렌더에 반영됩니다.")
+
+
 def render_study_mapping_chart(df, stock_name, code, selected_timeframe):
     is_minute = selected_timeframe.endswith("분봉")
     x_fmt = "%H:%M" if is_minute else "%Y-%m-%d"
@@ -729,22 +1495,59 @@ for _t_name, _stocks in THEME_SEED:
 THEME_DATA = dict(sorted(THEME_DATA.items(), key=lambda kv: kv[1]["change_val"], reverse=True))
 
 
-@st.cache_data(ttl=60)
-def fetch_market_ranking(market: str = "ALL") -> pd.DataFrame:
+@st.cache_data(ttl=30)
+def fetch_naver_live_ranking() -> pd.DataFrame:
     """
-    당일(직전 거래일) 시장 전체 종목의 OHLCV+거래대금을 가져온다.
-    거래량 상위 / 거래대금 상위 TOP10 산출에 사용.
+    네이버 금융 '거래량 상위' 페이지에서 거래량+거래대금+등락률을 함께 가져온다.
+    ⚠ pykrx의 get_market_ohlcv_by_ticker는 KRX 정식 종가(EOD) 기준이라
+    장중에는 "당일" 데이터가 아예 없어서 실시간 랭킹에 못 씁니다.
+    이 페이지는 네이버가 장중에도 실시간으로 갱신하는 페이지라 장중에도 값이 보입니다.
+    (비공식 HTML 파싱 - 페이지 구조가 바뀌면 깨질 수 있음, 실패 시 빈 DataFrame)
     """
-    today = datetime.datetime.now().strftime("%Y%m%d")
     try:
-        df = stock.get_market_ohlcv_by_ticker(today, market=market)
-        if df is None or df.empty:
-            # 주말/공휴일 등으로 당일 데이터가 없으면 최근 영업일로 보정
-            prev = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y%m%d")
-            df = stock.get_market_ohlcv_by_ticker(prev, market=market)
-        df = df[df["거래량"] > 0].copy()
-        df["종목명"] = [stock.get_market_ticker_name(c) for c in df.index]
-        return df
+        url = "https://finance.naver.com/sise/sise_quant.naver"
+        resp = requests.get(url, timeout=4, headers={"User-Agent": "Mozilla/5.0"})
+        resp.encoding = "euc-kr"
+        html = resp.text
+
+        code_name_pairs = re.findall(r'/item/main\.naver\?code=(\d{6})"[^>]*>([^<]+)</a>', html)
+        code_map = {}
+        for code, name in code_name_pairs:
+            name = name.strip()
+            if name and name not in code_map:
+                code_map[name] = code
+
+        import io as _io
+        tables = pd.read_html(_io.StringIO(html))
+        target = None
+        for t in tables:
+            cols = [str(c) for c in t.columns]
+            if any("종목명" in c for c in cols) and any("거래량" in c for c in cols):
+                target = t.copy()
+                break
+        if target is None:
+            return pd.DataFrame()
+
+        target.columns = [str(c) for c in target.columns]
+        target = target.dropna(subset=["종목명"])
+        target = target[target["종목명"].astype(str).str.strip() != ""]
+
+        def _to_num(series):
+            return pd.to_numeric(
+                series.astype(str).str.replace(",", "").str.replace("%", ""), errors="coerce"
+            )
+
+        out = pd.DataFrame()
+        out["종목명"] = target["종목명"].astype(str).str.strip()
+        out["코드"] = out["종목명"].map(code_map)
+        out["현재가"] = _to_num(target.get("현재가", pd.Series(dtype=float)))
+        out["등락률"] = _to_num(target.get("등락률", pd.Series(dtype=float)))
+        out["거래량"] = _to_num(target.get("거래량", pd.Series(dtype=float)))
+        amt_col = next((c for c in target.columns if "거래대금" in c), None)
+        out["거래대금"] = _to_num(target[amt_col]) * 1_000_000 if amt_col else None  # 표시 단위: 백만원
+
+        out = out.dropna(subset=["코드", "현재가", "거래량"])
+        return out
     except Exception:
         return pd.DataFrame()
 
@@ -786,105 +1589,138 @@ with main_tab1:
     if "target_stock" not in st.session_state:
         st.session_state.target_stock = "삼성전자"
 
-    col_left, col_right = st.columns([1, 2.5])
+    def on_input_change():
+        st.session_state.target_stock = st.session_state.stock_input_field
 
-    with col_left:
+    def set_recent_stock(val):
+        st.session_state.target_stock = val
+        st.session_state.stock_input_field = val
 
-        def on_input_change():
-            st.session_state.target_stock = st.session_state.stock_input_field
+    sc1, sc2, sc3, sc4 = st.columns([2.2, 0.7, 2.6, 1])
 
-        def set_recent_stock(val):
-            st.session_state.target_stock = val
-            st.session_state.stock_input_field = val
-
-        sc1, sc2 = st.columns([4, 1])
-
-        with sc1:
-            input_val = st.text_input(
-                "종목 입력",
-                value=st.session_state.target_stock,
-                key="stock_input_field",
-                on_change=on_input_change,
-                placeholder="종목명 또는 코드",
-                label_visibility="collapsed",
-            )
-
-        with sc2:
-            search_clicked = st.button(
-                "검색", use_container_width=True, type="primary"
-            )
-
-        if search_clicked and input_val:
-            st.session_state.target_stock = input_val
-
-        code, stock_name = resolve_code_or_name(
-            st.session_state.target_stock
+    with sc3:
+        input_val = st.text_input(
+            "종목 입력",
+            value=st.session_state.target_stock,
+            key="stock_input_field",
+            on_change=on_input_change,
+            placeholder="종목명 또는 코드",
+            label_visibility="collapsed",
         )
 
-        if stock_name and stock_name not in st.session_state.search_history:
-            st.session_state.search_history.insert(0, stock_name)
-            if len(st.session_state.search_history) > 12:
-                st.session_state.search_history.pop()
+    with sc2:
+        search_clicked = st.button(
+            "검색", use_container_width=True, type="primary"
+        )
 
+    if search_clicked and input_val:
+        st.session_state.target_stock = input_val
+
+    code, stock_name = resolve_code_or_name(
+        st.session_state.target_stock
+    )
+
+    if stock_name and stock_name not in st.session_state.search_history:
+        st.session_state.search_history.insert(0, stock_name)
+        if len(st.session_state.search_history) > 12:
+            st.session_state.search_history.pop()
+
+    with sc1:
         st.markdown(
             f"""
-            <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; padding: 6px 10px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px;">
-                <span style="font-size: 13px; font-weight: bold;">📌 종목: {stock_name} ({code})</span>
-                <button onclick="navigator.clipboard.writeText('{code}');" style="background:#1a73e8; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">
-                    📋 코드 복사 ({code})
-                </button>
+            <div style="display:flex; align-items:center; height:38px; background:#f8f9fa; padding:0 10px; border:1px solid #e9ecef; border-radius:6px; font-size:13px; font-weight:bold;">
+                📌 종목: {stock_name} ({code})
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-        if st.session_state.search_history:
-            st.markdown(
-                "<span style='font-size:11px; color:#666;'>최근 검색 기록 (최대 12개):</span>",
-                unsafe_allow_html=True,
-            )
-            history_list = st.session_state.search_history[:12]
-            h_cols = st.columns(len(history_list))
-            for idx, hist_name in enumerate(history_list):
-                with h_cols[idx]:
-                    st.button(
-                        hist_name,
-                        key=f"hist_btn_{idx}",
-                        on_click=set_recent_stock,
-                        args=(hist_name,),
-                        use_container_width=True,
-                    )
-
-    with col_right:
-        timeframe_options = [
-            "일봉",
-            "주봉",
-            "월봉",
-            "1분봉",
-            "3분봉",
-            "5분봉",
-            "10분봉",
-            "15분봉",
-            "30분봉",
-            "45분봉",
-            "60분봉",
-            "90분봉",
-            "120분봉",
-            "240분봉",
-            "300분봉",
-            "999분봉",
-        ]
-        selected_timeframe = st.radio(
-            "차트 주기",
-            timeframe_options,
-            index=0,
-            horizontal=True,
-            key="direct_timeframe_select",
-            label_visibility="collapsed",
+    with sc4:
+        st.markdown(
+            f"""
+            <button onclick="navigator.clipboard.writeText('{code}');"
+                    style="width:100%; height:38px; background:#1a73e8; color:white; border:none; border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">
+                📋 코드 복사 ({code})
+            </button>
+            """,
+            unsafe_allow_html=True,
         )
+
+    watchlist = load_watchlist()
+    wl_map = {w["code"]: w for w in watchlist}
+    is_in_wl = code in wl_map
+
+    def _toggle_watchlist():
+        wl = load_watchlist()
+        if code in [w["code"] for w in wl]:
+            wl = [w for w in wl if w["code"] != code]
+        else:
+            wl.insert(0, {"code": code, "name": stock_name, "memo": ""})
+        save_watchlist(wl)
+
+    def _update_memo():
+        wl = load_watchlist()
+        for w in wl:
+            if w["code"] == code:
+                w["memo"] = st.session_state.get("wl_memo_input", "")
+        save_watchlist(wl)
+
+    def _select_watchlist(c, n):
+        st.session_state.target_stock = n
+        st.session_state.stock_input_field = n
+
+    wl_col1, wl_col2 = st.columns([1, 4])
+    with wl_col1:
+        st.button(
+            "★ 관심종목 해제" if is_in_wl else "☆ 관심종목 추가",
+            key="wl_toggle_btn", on_click=_toggle_watchlist, use_container_width=True,
+        )
+    with wl_col2:
+        if is_in_wl:
+            st.text_input(
+                "메모", value=wl_map[code].get("memo", ""), key="wl_memo_input",
+                on_change=_update_memo, placeholder="이 종목 메모 (자동 저장)",
+                label_visibility="collapsed",
+            )
+        else:
+            st.caption("⭐ 관심종목은 서버 파일에 저장되어 새로고침해도 유지됩니다. 추가하면 메모도 남길 수 있어요.")
+
+    if watchlist:
+        wl_list = watchlist[:30]
+        wl_cols = st.columns(len(wl_list))
+        for idx, w in enumerate(wl_list):
+            with wl_cols[idx]:
+                label = f"⭐ {w['name']}" + (" 📝" if w.get("memo") else "")
+                st.button(
+                    label, key=f"wl_btn_{idx}",
+                    on_click=_select_watchlist, args=(w["code"], w["name"]),
+                    use_container_width=True, help=w.get("memo") or None,
+                )
+
+    if st.session_state.search_history:
+        history_list = st.session_state.search_history[:12]
+        h_cols = st.columns(len(history_list))
+        for idx, hist_name in enumerate(history_list):
+            with h_cols[idx]:
+                st.button(
+                    hist_name,
+                    key=f"hist_btn_{idx}",
+                    on_click=set_recent_stock,
+                    args=(hist_name,),
+                    use_container_width=True,
+                )
+
+    # 차트 주기(일봉/주봉/월봉/분봉)는 실제 라디오 위젯을 현재가~절대사수 카드 바로
+    # 아래에서 그리고(요청사항), 여기서는 값만 세션에서 읽어와 데이터를 먼저 가져온다.
+    timeframe_options = [
+        "일봉", "주봉", "월봉",
+        "1분봉", "3분봉", "5분봉", "10분봉", "15분봉", "30분봉",
+        "45분봉", "60분봉", "90분봉", "120분봉", "240분봉", "300분봉", "999분봉",
+    ]
+    selected_timeframe = st.session_state.get("direct_timeframe_select", "일봉")
 
     s_date_dummy = "20240101"
     e_date_dummy = datetime.datetime.now().strftime("%Y%m%d")
+
     df_temp = stock.get_market_ohlcv_by_date(s_date_dummy, e_date_dummy, code, "d")
     if df_temp is not None and not df_temp.empty:
         df_temp["TPV"] = df_temp["종가"] * df_temp["거래량"]
@@ -917,112 +1753,49 @@ with main_tab1:
     else:
         t_vol, c_buy, n_qty, r_buy, r_net, v_val, b_vwap, s_vwap = 1599258, 285894, -109492, 17.88, -6.85, 198465, 199134, 195719
 
-    hts_top_panel_html = f"""
-    <div style="background: #ffffff; border: 1px solid #1a73e8; border-radius: 8px; padding: 12px 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-        <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 8px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px;">
-            📊 HTS 기준 [{stock_name}] 수급 및 평단 분석 결과 <span style="font-size:11px; color:#666; font-weight:normal;">(글자 클릭 시 확인창 없이 즉시 복사)</span>
-        </div>
-        <div style="display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 8px; font-size: 12px;">
-            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold; white-space: nowrap;">당일 전체 거래량:</span>
-                <span onclick="navigator.clipboard.writeText('{t_vol}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{t_vol:,} 주</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold; white-space: nowrap;">누적 매수 증가량:</span>
-                <span onclick="navigator.clipboard.writeText('{c_buy}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{c_buy:,} 주</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold; white-space: nowrap;">순매수 수량(증감):</span>
-                <span onclick="navigator.clipboard.writeText('{n_qty}');" style="font-weight: bold; color: {'#d32f2f' if n_qty>=0 else '#7048e8'}; cursor: pointer;" title="클릭 시 즉시 복사">{n_qty:,} 주</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold; white-space: nowrap;">거래량 대비 매수 비율:</span>
-                <span onclick="navigator.clipboard.writeText('{r_buy:.2f}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{r_buy:.2f} %</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold; white-space: nowrap;">거래량 대비 순매수 비율:</span>
-                <span onclick="navigator.clipboard.writeText('{r_net:.2f}');" style="font-weight: bold; color: {'#d32f2f' if r_net>=0 else '#e03131'}; cursor: pointer;" title="클릭 시 즉시 복사">{r_net:.2f} %</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
-                <span style="color: #555; font-weight: bold; white-space: nowrap;">전체 거래량 평단:</span>
-                <span onclick="navigator.clipboard.writeText('{v_val}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{v_val:,} 원</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #fff9db; border: 1px solid #ffe066; border-radius: 4px;">
-                <span style="color: #d9480f; font-weight: bold; white-space: nowrap;">세력 매수 평단:</span>
-                <span onclick="navigator.clipboard.writeText('{b_vwap}');" style="font-weight: bold; color: #d32f2f; cursor: pointer;" title="클릭 시 즉시 복사">{b_vwap:,} 원</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #e7f5ff; border: 1px solid #74c0fc; border-radius: 4px;">
-                <span style="color: #1864ab; font-weight: bold; white-space: nowrap;">세력 매도 평단:</span>
-                <span onclick="navigator.clipboard.writeText('{s_vwap}');" style="font-weight: bold; color: #1971c2; cursor: pointer;" title="클릭 시 즉시 복사">{s_vwap:,} 원</span>
-            </div>
-        </div>
-    </div>
-    """
-    components.html(hts_top_panel_html, height=135)
+    # (HTS 수급·평단 분석 박스는 페이지 맨 아래로 이동됨 - "시가총액·수급·진단 정보" 아래에 표시)
 
     is_minute_mode = selected_timeframe.endswith("분봉")
+    today = datetime.date.today()
+    year_options = list(range(today.year - 4, today.year + 1))  # 항상 올해를 포함하도록 동적 생성
+    year_start_default = datetime.date(today.year, 1, 1)  # 시작연도 기본값 = 올해 1월 1일
 
+    if st.session_state.get("_reset_to_today_pending"):
+        st.session_state["ey"] = today.year
+        st.session_state["em"] = today.month
+        st.session_state["ed"] = today.day
+        st.session_state["_reset_to_today_pending"] = False
+
+    if st.session_state.get("_swap_dates_pending"):
+        sy0 = st.session_state.get("sy") or year_start_default.year
+        sm0 = st.session_state.get("sm") or year_start_default.month
+        sd0 = st.session_state.get("sd") or year_start_default.day
+        st.session_state["ey"] = sy0
+        st.session_state["em"] = sm0
+        st.session_state["ed"] = sd0
+        st.session_state["_swap_dates_pending"] = False
+
+    # 실제 위젯은 현재가~절대사수 카드 옆(오른쪽)에서 그리고, 여기서는 값만 읽어서
+    # 데이터부터 먼저 가져온다 (요청: 조회기간 UI를 카드 오른쪽으로 이동).
     if is_minute_mode:
-        today = datetime.date.today()
-        st.info(
-            f"⏱️ 분봉 모드 — 단타용이라 **당일({today.strftime('%Y-%m-%d')}) 09:00 장 시작~15:30 장 마감**만 자동 조회됩니다. "
-            f"(참고: 한국거래소 정규장은 08:00이 아니라 **09:00 시작·15:30 종료**가 맞습니다. "
-            f"08:00~09:00은 '시간외 단일가/동시호가' 구간이라 분봉 차트엔 안 잡혀요.)"
-        )
         s_year, s_mon, s_day = today.year, today.month, today.day
         e_year, e_mon, e_day = today.year, today.month, today.day
-        with st.expander("📅 조회 기간 수동으로 바꾸기 (기본은 당일 자동)"):
-            d_cols = st.columns(6)
-            with d_cols[0]:
-                s_year = st.selectbox("시작 연도", [2022, 2023, 2024, 2025, 2026], index=[2022, 2023, 2024, 2025, 2026].index(today.year), key="sy")
-            with d_cols[1]:
-                s_mon = st.selectbox("시작 월", list(range(1, 13)), index=today.month - 1, key="sm")
-            with d_cols[2]:
-                s_day = st.selectbox("시작 일", list(range(1, 32)), index=today.day - 1, key="sd")
-            with d_cols[3]:
-                e_year = st.selectbox("종료 연도", [2022, 2023, 2024, 2025, 2026], index=[2022, 2023, 2024, 2025, 2026].index(today.year), key="ey")
-            with d_cols[4]:
-                e_mon = st.selectbox("종료 월", list(range(1, 13)), index=today.month - 1, key="em")
-            with d_cols[5]:
-                e_day = st.selectbox("종료 일", list(range(1, 32)), index=today.day - 1, key="ed")
     else:
-        st.markdown("📅 **조회 기간 설정 (연도·월·일 상세 선택)**")
-        d_cols = st.columns(6)
-
-        with d_cols[0]:
-            s_year = st.selectbox(
-                "시작 연도", [2022, 2023, 2024, 2025, 2026], index=2, key="sy"
-            )
-        with d_cols[1]:
-            s_mon = st.selectbox(
-                "시작 월", list(range(1, 13)), index=0, key="sm"
-            )
-        with d_cols[2]:
-            s_day = st.selectbox(
-                "시작 일", list(range(1, 32)), index=0, key="sd"
-            )
-
-        with d_cols[3]:
-            e_year = st.selectbox(
-                "종료 연도", [2022, 2023, 2024, 2025, 2026], index=4, key="ey"
-            )
-        with d_cols[4]:
-            e_mon = st.selectbox(
-                "종료 월", list(range(1, 13)), index=7, key="em"
-            )
-        with d_cols[5]:
-            e_day = st.selectbox(
-                "종료 일", list(range(1, 32)), index=4, key="ed"
-            )
+        s_year = st.session_state.get("sy") or year_start_default.year
+        s_mon = st.session_state.get("sm") or year_start_default.month
+        s_day = st.session_state.get("sd") or year_start_default.day
+        e_year = st.session_state.get("ey") or today.year
+        e_mon = st.session_state.get("em") or today.month
+        e_day = st.session_state.get("ed") or today.day
 
     try:
         start_date = datetime.date(s_year, s_mon, s_day)
-    except ValueError:
+    except (ValueError, TypeError):
         start_date = datetime.date(s_year, s_mon, 1)
 
     try:
         end_date = datetime.date(e_year, e_mon, e_day)
-    except ValueError:
+    except (ValueError, TypeError):
         end_date = datetime.date(e_year, e_mon, 1)
 
     s_date = start_date.strftime("%Y%m%d")
@@ -1049,32 +1822,160 @@ with main_tab1:
         interval_minutes = int(selected_timeframe.replace("분봉", ""))
         df = get_today_minute_df(code, interval_minutes)
         if df.empty:
-            st.warning(
-                "당일 분봉 데이터를 아직 받아오지 못했습니다. "
-                "장 시작(09:00) 이전이거나 네트워크 문제일 수 있습니다."
-            )
+            err_detail = st.session_state.get("_minute_fetch_error")
+            warn_msg = "당일 분봉 데이터를 아직 받아오지 못했습니다. 장 시작(09:00) 이전이거나 네트워크 문제일 수 있습니다."
+            if err_detail:
+                warn_msg += f"\n\n**실패 사유:** {err_detail}"
+            st.warning(warn_msg)
+            if st.button("🔄 분봉 다시 시도", key="minute_retry_btn"):
+                fetch_kiwoom_minute_df.clear()
+                fetch_naver_minute_ohlcv.clear()
+                st.rerun()
+        else:
+            st.caption(f"📡 분봉 데이터 출처: {st.session_state.get('_minute_data_source', '알 수 없음')}")
 
     # 실시간(준실시간) 시세 보정 - 키움 체결가와의 괴리 축소
-    rt_col1, rt_col2 = st.columns([1, 5])
-    with rt_col1:
-        use_realtime_patch = st.checkbox("⚡ 실시간 시세 보정", value=True, key="rt_patch_toggle")
+    # (체크박스 위젯 자체는 페이지 맨 아래로 이동 - 여기서는 값만 세션에서 읽어서 적용)
+    use_realtime_patch = st.session_state.get("rt_patch_toggle", False)
     rt_info = None
     if use_realtime_patch and df is not None and not df.empty:
         rt_info = fetch_realtime_price(code)
-        df = patch_today_with_realtime(df, code)
-    with rt_col2:
-        if use_realtime_patch and rt_info:
-            st.caption(
-                f"🟢 준실시간 반영됨 (네이버 시세 기준, {rt_info['time']} 조회) · "
-                f"현재가 {rt_info['price']:,}원 · 완전한 틱 단위 일치는 키움 Open API+ 직접 연동이 필요합니다."
-            )
-        elif use_realtime_patch:
-            st.caption("🟡 실시간 시세 조회 실패 — 네트워크 차단 또는 API 응답 오류. pykrx 기본값(전일/EOD)으로 표시됩니다.")
+        if is_minute_mode:
+            df = patch_latest_row_with_realtime(df, code)
         else:
-            st.caption("⚪ 실시간 보정 꺼짐 — pykrx 종가(EOD/지연) 기준으로 표시됩니다.")
+            df = patch_today_with_realtime(df, code)
+
+    def _render_realtime_patch_toggle():
+        rt_col1, rt_col2 = st.columns([1, 5])
+        with rt_col1:
+            st.checkbox("⚡ 실시간 시세 보정", value=False, key="rt_patch_toggle")
+        with rt_col2:
+            if use_realtime_patch and rt_info:
+                st.caption(
+                    f"🟢 준실시간 반영됨 (네이버 시세 기준, {rt_info['time']} 조회) · "
+                    f"현재가 {rt_info['price']:,}원 · 완전한 틱 단위 일치는 키움 Open API+ 직접 연동이 필요합니다."
+                )
+            elif use_realtime_patch:
+                st.caption("🟡 실시간 시세 조회 실패 — 네트워크 차단 또는 API 응답 오류. pykrx 기본값(전일/EOD)으로 표시됩니다.")
+            else:
+                st.caption("⚪ 실시간 보정 꺼짐 — pykrx 종가(EOD/지연) 기준으로 표시됩니다.")
+
+    def _render_date_range_picker(auto_copy_value=None, disparity_value=None):
+        """
+        조회기간(시작/종료 연·월·일) 선택 위젯 + 스왑/오늘로 버튼 + 차트 주기 라디오.
+        데이터가 없어서 경고만 뜨는 상태에서도 항상 보여야 사용자가 날짜를
+        직접 고쳐서 빠져나올 수 있으므로, df 유무와 무관하게 호출 가능한
+        독립 함수로 뺐다.
+        """
+        def _mark_daterange_changed():
+            st.session_state["_daterange_changed"] = True
+
+        def _on_sy_change():
+            st.session_state["_daterange_changed"] = True
+            if st.session_state.get("_year_sync_on", True):
+                st.session_state["ey"] = st.session_state["sy"]
+
+        def _on_ey_change():
+            st.session_state["_daterange_changed"] = True
+            if st.session_state.get("_year_sync_on", True):
+                st.session_state["sy"] = st.session_state["ey"]
+
+        st.session_state.setdefault("_year_sync_on", True)
+
+        bcol1, bcol2, bcol3 = st.columns(3)
+        with bcol1:
+            if st.button("➡ 종료=시작", key="swap_dates_btn", use_container_width=True):
+                st.session_state["_swap_dates_pending"] = True
+                st.rerun()
+        with bcol2:
+            sync_label = "🔗 연도동기화 ON" if st.session_state["_year_sync_on"] else "⛓️‍💥 연도동기화 OFF"
+            if st.button(sync_label, key="year_sync_toggle_btn", use_container_width=True):
+                st.session_state["_year_sync_on"] = not st.session_state["_year_sync_on"]
+                st.rerun()
+        with bcol3:
+            if st.button("📌 오늘로", key="reset_to_today_btn", use_container_width=True):
+                st.session_state["_reset_to_today_pending"] = True
+                st.session_state["_daterange_changed"] = True
+                st.rerun()
+
+        dcol1, dcol2, dcol3 = st.columns(3)
+        with dcol1:
+            st.selectbox("시작연도", year_options,
+                         index=year_options.index(min(max(s_year, year_options[0]), year_options[-1])),
+                         key="sy", label_visibility="collapsed", on_change=_on_sy_change)
+        with dcol2:
+            st.selectbox("시작월", list(range(1, 13)), index=s_mon - 1, key="sm",
+                         label_visibility="collapsed", on_change=_mark_daterange_changed)
+        with dcol3:
+            st.selectbox("시작일", list(range(1, 32)), index=s_day - 1, key="sd",
+                         label_visibility="collapsed", on_change=_mark_daterange_changed)
+
+        ecol1, ecol2, ecol3 = st.columns(3)
+        with ecol1:
+            st.selectbox("종료연도", year_options,
+                         index=year_options.index(min(max(e_year, year_options[0]), year_options[-1])),
+                         key="ey", label_visibility="collapsed", on_change=_on_ey_change)
+        with ecol2:
+            st.selectbox("종료월", list(range(1, 13)), index=e_mon - 1, key="em",
+                         label_visibility="collapsed", on_change=_mark_daterange_changed)
+        with ecol3:
+            st.selectbox("종료일", list(range(1, 32)), index=e_day - 1, key="ed",
+                         label_visibility="collapsed", on_change=_mark_daterange_changed)
+
+        if is_minute_mode:
+            st.caption("⏱️ 분봉 모드는 당일(09:00~15:30) 고정이라 위 조회기간은 무시됩니다.")
+
+        # 조회기간을 수동으로 바꾸면 종료일 기준 일봉 평단가(숫자만)를 자동으로 클립보드에 복사
+        # (다른 사이트에 바로 붙여넣기 가능하도록 순수 숫자만 복사하고, 괴리율은 화면에 참고용으로 같이 표시)
+        if st.session_state.get("_daterange_changed"):
+            st.session_state["_daterange_changed"] = False
+            if auto_copy_value is not None:
+                components.html(
+                    f"<script>navigator.clipboard.writeText('{int(auto_copy_value)}');</script>",
+                    height=0,
+                )
+                st.session_state["_last_copied_avg"] = {
+                    "value": int(auto_copy_value),
+                    "disparity": disparity_value,
+                }
+
+        last_copied = st.session_state.get("_last_copied_avg")
+        if last_copied is not None:
+            v = last_copied["value"]
+            d = last_copied["disparity"]
+            label = f"📋 복사됨: 평단가 {v:,}원" + (f" (괴리율 {d:+.2f}%)" if d is not None else "")
+            components.html(
+                f"""
+                <div onclick="navigator.clipboard.writeText('{v}');
+                              this.querySelector('.copied-flash').style.opacity=1;
+                              setTimeout(()=>{{this.querySelector('.copied-flash').style.opacity=0;}}, 900);"
+                     style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#555;
+                            cursor:pointer; padding:2px 6px; border-radius:4px;"
+                     title="클릭하면 평단가 숫자를 다시 복사합니다"
+                     onmouseover="this.style.background='#f1f3f5';"
+                     onmouseout="this.style.background='transparent';">
+                    <span>{label}</span>
+                    <span class="copied-flash" style="opacity:0; transition:opacity .2s; color:#2b8a3e; font-weight:bold;">✓ 복사됨</span>
+                </div>
+                """,
+                height=26,
+            )
 
     if df is None or df.empty:
-        st.warning("선택한 조건에 해당하는 거래 데이터가 없습니다.")
+        _dp_col1, _dp_col2 = st.columns([5.3, 1.55])
+        with _dp_col1:
+            st.warning("선택한 조건에 해당하는 거래 데이터가 없습니다. 오른쪽에서 조회기간을 다시 맞춰보세요 (시작일이 종료일보다 늦으면 이렇게 됩니다).")
+        with _dp_col2:
+            _render_date_range_picker(auto_copy_value=None)
+        st.radio(
+            "차트 주기",
+            timeframe_options,
+            horizontal=True,
+            key="direct_timeframe_select",
+            label_visibility="collapsed",
+        )
+        st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+        _render_realtime_patch_toggle()
     else:
         df["TPV"] = df["종가"] * df["거래량"]
         cum_volume = df["거래량"].cumsum()
@@ -1106,12 +2007,17 @@ with main_tab1:
         last_buy_vwap = int(df["세력매수평단"].iloc[-1]) if pd.notna(df["세력매수평단"].iloc[-1]) else last_vwap
         last_sell_vwap = int(df["세력매도평단"].iloc[-1]) if pd.notna(df["세력매도평단"].iloc[-1]) else last_vwap
 
-        f_info = get_financial_info(code)
+        f_info = get_financial_info(code, current_price=last_close)
         mcap_val = f_info["mcap"]
         op_profit = f_info["op_profit"]
+        op_profit_label = f_info["op_profit_label"]
         trade_type = f_info["trade_type"]
         foreign_net = f_info["foreign_net"]
         inst_net = f_info["inst_net"]
+        pension_net = f_info["pension_net"]
+        trust_net = f_info["trust_net"]
+        pe_net = f_info["pe_net"]
+        flow_as_of = f_info.get("flow_as_of")
         prog_net = f_info["prog_net"]
         credit_ratio = f_info["credit_ratio"]
         news_list = f_info.get("news", [])
@@ -1135,21 +2041,7 @@ with main_tab1:
         else:
             status_signal = "📊 추세유지"
 
-        f1, f2, f3, f4 = st.columns(4)
-        f1.metric("🏢 시가총액", f"{mcap_val:,} 억원")
-        f2.metric(
-            "💵 영업이익",
-            f"{op_profit:,} 억원",
-            "🟢 흑자" if op_profit > 0 else "🔴 적자",
-        )
-        f3.metric("🎯 매매 성향", trade_type)
-        f4.metric("⚡ 진단 상태", status_signal)
-
-        s_c1, s_c2, s_c3, s_c4 = st.columns(4)
-        s_c1.metric("🌐 외국인 순매수", foreign_net)
-        s_c2.metric("🏛️ 기관 순매수", inst_net)
-        s_c3.metric("💻 실시간 프로그램", prog_net)
-        s_c4.metric("💳 신용잔고율", credit_ratio)
+        # (시가총액/추정순이익/매매성향/진단상태/수급 카드는 페이지 맨 아래로 이동됨)
 
         st.markdown(
             f"""
@@ -1167,26 +2059,6 @@ with main_tab1:
 
         metrics_click_copy_html = f"""
         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 5px;">
-            <div onclick="navigator.clipboard.writeText('{last_close}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#666; font-weight:bold;">현재가</div>
-                <div style="font-size:13px; font-weight:bold; color:#111; margin-top:2px;">{last_close:,}원 <span style="font-size:10px; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.1f}%)</span></div>
-            </div>
-            
-            <div onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
-                <div style="font-size:11px; color:#1a73e8; font-weight:bold;">📌 {selected_timeframe} 평단가</div>
-                <div style="font-size:13px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원</div>
-            </div>
-
-            <div onclick="navigator.clipboard.writeText('{last_buy_vwap}');" style="background:#fff9db; border:1px solid #ffe066; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
-                <div style="font-size:11px; color:#d9480f; font-weight:bold;">🟠 세력매수평단</div>
-                <div style="font-size:13px; font-weight:bold; color:#d32f2f; margin-top:2px;">{last_buy_vwap:,}원</div>
-            </div>
-
-            <div onclick="navigator.clipboard.writeText('{last_sell_vwap}');" style="background:#e7f5ff; border:1px solid #74c0fc; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
-                <div style="font-size:11px; color:#1864ab; font-weight:bold;">🔵 세력매도평단</div>
-                <div style="font-size:13px; font-weight:bold; color:#1971c2; margin-top:2px;">{last_sell_vwap:,}원</div>
-            </div>
-
             <div onclick="navigator.clipboard.writeText('{target_1st}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
                 <div style="font-size:11px; color:#2b8a3e; font-weight:bold;">🎯 1차목표(+5%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#2b8a3e; margin-top:2px;">{target_1st:,}원</div>
@@ -1216,41 +2088,65 @@ with main_tab1:
                 <div style="font-size:11px; color:#e03131; font-weight:bold;">🚨 절대사수(-4%)</div>
                 <div style="font-size:13px; font-weight:bold; color:#e03131; margin-top:2px;">{absolute_stop_loss:,}원</div>
             </div>
+
+            <div onclick="navigator.clipboard.writeText('{last_close}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#666; font-weight:bold;">현재가</div>
+                <div style="font-size:13px; font-weight:bold; color:#111; margin-top:2px;">{last_close:,}원 <span style="font-size:10px; color:{'#2b8a3e' if disparity>=0 else '#e03131'};">({disparity:+.1f}%)</span></div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{last_vwap}');" style="background:#ffffff; border:1px solid #e0e0e0; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 확인창 없이 즉시 복사">
+                <div style="font-size:11px; color:#1a73e8; font-weight:bold;">📌 {selected_timeframe} 평단가</div>
+                <div style="font-size:13px; font-weight:bold; color:#1a73e8; margin-top:2px;">{last_vwap:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{last_buy_vwap}');" style="background:#fff9db; border:1px solid #ffe066; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
+                <div style="font-size:11px; color:#d9480f; font-weight:bold;">🟠 세력매수평단</div>
+                <div style="font-size:13px; font-weight:bold; color:#d32f2f; margin-top:2px;">{last_buy_vwap:,}원</div>
+            </div>
+
+            <div onclick="navigator.clipboard.writeText('{last_sell_vwap}');" style="background:#e7f5ff; border:1px solid #74c0fc; border-radius:8px; padding:10px 10px; min-width:110px; cursor:pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" title="클릭 시 가격 숫자만 즉시 복사 (키움 라인에 붙여넣기용)">
+                <div style="font-size:11px; color:#1864ab; font-weight:bold;">🔵 세력매도평단</div>
+                <div style="font-size:13px; font-weight:bold; color:#1971c2; margin-top:2px;">{last_sell_vwap:,}원</div>
+            </div>
         </div>
         """
-        components.html(metrics_click_copy_html, height=150)
+        # (카드+조회기간 위젯은 차트 스타일 글자 바로 위로 이동 - 아래쪽에서 렌더링)
 
-        with st.expander("📝 텍스트 요약 및 전체 복사 기능"):
-            copy_summary = (
-                f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
-                f"• 매매성향: {trade_type} | 괴리율: {disparity:+.2f}%\n"
-                f"• 현재가: {last_close:,}원 | 평단가: {last_vwap:,}원\n"
-                f"• 🎯 1차목표 (+5%): {target_1st:,}원\n"
-                f"• 🎯 2차목표 (+10%): {target_2nd:,}원\n"
-                f"• 🎯 3차목표 (+15%): {target_3rd:,}원\n"
-                f"• 🛑 1차 손절가 (-2%): {stop_1st:,}원\n"
-                f"• 🛑 2차 손절가 (-3%): {stop_2nd:,}원\n"
-                f"• 🚨 절대사수 손절가 (-4%): {absolute_stop_loss:,}원"
-            )
-            st.code(copy_summary, language="text")
-
-        st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-        chart_mode = st.radio(
-            "차트 스타일",
-            ["📊 기본 목표가 차트", "🧭 Study Mapping 스타일 (클릭 기준점 리셋)"],
+        st.radio(
+            "차트 주기",
+            timeframe_options,
             horizontal=True,
-            key="chart_display_mode",
+            key="direct_timeframe_select",
+            label_visibility="collapsed",
         )
 
-        if chart_mode == "🧭 Study Mapping 스타일 (클릭 기준점 리셋)":
+
+
+        chart_mode = st.session_state.get("chart_display_mode", "🔲 일·주·월·분봉 동시보기")
+
+        if chart_mode == "🌊 N파동 목표가 Mapping":
+            render_n_wave_mapping_chart(df, stock_name, code)
+        elif chart_mode == "🔲 일·주·월·분봉 동시보기":
+            render_quad_timeframe_chart(
+                code, stock_name, df, selected_timeframe, is_minute_mode,
+                target_1st, target_2nd, target_3rd, stop_1st, stop_2nd, absolute_stop_loss,
+            )
+        elif chart_mode == "🧭 Study Mapping 스타일 (클릭 기준점 리셋)":
             render_study_mapping_chart(df, stock_name, code, selected_timeframe)
         else:
             fig = go.Figure()
 
             hover_x = [d.strftime("%H:%M" if is_minute_mode else "%Y-%m-%d") for d in df.index]
 
-            hover_close = [f"종가: {int(val):,}원 ({disparity:+.2f}%)" for val in df["종가"]]
-            hover_vwap = [f"누적 평단가: {int(val):,}원" if pd.notna(val) else "누적 평단가: -" for val in df["평단가"]]
+            row_disparity = ((df["종가"] - df["평단가"]) / df["평단가"] * 100)
+            hover_close = [
+                f"종가: {int(c):,}원 ({d:+.2f}%)" if pd.notna(d) else f"종가: {int(c):,}원"
+                for c, d in zip(df["종가"], row_disparity)
+            ]
+            hover_vwap = [
+                f"누적 평단가: {int(v):,}원 (괴리율 {d:+.2f}%)" if pd.notna(v) and pd.notna(d) else "누적 평단가: -"
+                for v, d in zip(df["평단가"], row_disparity)
+            ]
             hover_net_inc = [f"순매수 증감: {int(val):,}주" for val in df["누적순매수증감"]]
 
             # 1. 종가 선
@@ -1381,8 +2277,8 @@ with main_tab1:
                 hovermode="x unified",
                 template="plotly_white",
                 height=400,
-                yaxis=dict(title="가격 (원)"),
-                yaxis2=dict(title="누적 순매수 증감 (주)", overlaying="y", side="right", showgrid=False)
+                yaxis=dict(title="가격 (원)", tickformat=",.0f"),
+                yaxis2=dict(title="누적 순매수 증감 (주)", overlaying="y", side="right", showgrid=False, tickformat=",.0f")
             )
 
             fig.update_xaxes(
@@ -1392,6 +2288,122 @@ with main_tab1:
             )
 
             st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+
+        row_l, row_r = st.columns([5.3, 1.55])
+        with row_l:
+            components.html(metrics_click_copy_html, height=150)
+        with row_r:
+            _render_date_range_picker(auto_copy_value=last_vwap, disparity_value=disparity)
+
+        st.radio(
+            "차트 스타일",
+            ["📊 기본 목표가 차트", "🧭 Study Mapping 스타일 (클릭 기준점 리셋)", "🔲 일·주·월·분봉 동시보기", "🌊 N파동 목표가 Mapping"],
+            index=2,
+            horizontal=True,
+            key="chart_display_mode",
+        )
+
+        with st.expander("📝 텍스트 요약 및 전체 복사 기능", expanded=True):
+            copy_summary = (
+                f"■ [{stock_name}({code}) - {selected_timeframe}]\n"
+                f"• 매매성향: {trade_type} | 괴리율: {disparity:+.2f}%\n"
+                f"• 현재가: {last_close:,}원 | 평단가: {last_vwap:,}원\n"
+                f"• 🎯 1차목표 (+5%): {target_1st:,}원\n"
+                f"• 🎯 2차목표 (+10%): {target_2nd:,}원\n"
+                f"• 🎯 3차목표 (+15%): {target_3rd:,}원\n"
+                f"• 🛑 1차 손절가 (-2%): {stop_1st:,}원\n"
+                f"• 🛑 2차 손절가 (-3%): {stop_2nd:,}원\n"
+                f"• 🚨 절대사수 손절가 (-4%): {absolute_stop_loss:,}원"
+            )
+            st.code(copy_summary, language="text")
+
+
+        st.markdown("<hr style='margin:16px 0 10px 0;'>", unsafe_allow_html=True)
+        st.markdown("### 📊 시가총액 · 수급 · 진단 정보")
+
+        f1, f2, f3, f4 = st.columns(4)
+        f1.metric("🏢 시가총액", f"{mcap_val:,} 억원" if mcap_val is not None else "N/A (조회 실패)")
+        f2.metric(
+            op_profit_label,
+            f"{op_profit:,} 억원" if op_profit is not None else "N/A",
+            ("🟢 흑자" if op_profit > 0 else "🔴 적자") if op_profit is not None else None,
+        )
+        f3.metric("🎯 매매 성향", trade_type)
+        f4.metric("⚡ 진단 상태", status_signal)
+
+        s_c1, s_c2, s_c3, s_c4 = st.columns(4)
+        s_c1.metric("🌐 외국인 순매수", foreign_net)
+        s_c2.metric("🏛️ 기관 순매수", inst_net)
+        s_c3.metric("💻 실시간 프로그램", prog_net)
+        s_c4.metric("💳 신용잔고율", credit_ratio)
+
+        flow_note_col, flow_btn_col = st.columns([5, 1])
+        with flow_note_col:
+            if flow_as_of:
+                as_of_fmt = f"{flow_as_of[:4]}-{flow_as_of[4:6]}-{flow_as_of[6:]}"
+                today_str = datetime.datetime.now().strftime("%Y%m%d")
+                if flow_as_of == today_str:
+                    st.caption(f"👇 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (당일)")
+                else:
+                    st.caption(f"👇 기관합계 세부 내역 · 수급 기준일: {as_of_fmt} (KRX가 당일 장중엔 투자자별 수급을 공개하지 않아 최근 영업일 기준입니다)")
+            else:
+                st.caption("👇 기관합계 세부 내역 · ⚠ 수급 데이터 조회 실패 (아래 값은 N/A로 표시됩니다)")
+        with flow_btn_col:
+            if st.button("🔄 새로고침", key="flow_refresh_btn"):
+                fetch_investor_flow.clear()
+                fetch_naver_integration_info.clear()
+                fetch_shares_outstanding.clear()
+                st.rerun()
+
+        p_c1, p_c2, p_c3 = st.columns(3)
+        p_c1.metric("🏦 연기금 순매수", pension_net)
+        p_c2.metric("📈 투신 순매수", trust_net)
+        p_c3.metric("🕵️ 사모 순매수", pe_net)
+
+        hts_top_panel_html = f"""
+        <div style="background: #ffffff; border: 1px solid #1a73e8; border-radius: 8px; padding: 12px 15px; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div style="font-weight: bold; font-size: 13px; color: #1a73e8; margin-bottom: 8px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px;">
+                📊 HTS 기준 [{stock_name}] 수급 및 평단 분석 결과 <span style="font-size:11px; color:#666; font-weight:normal;">(글자 클릭 시 확인창 없이 즉시 복사)</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 8px; font-size: 12px;">
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                    <span style="color: #555; font-weight: bold; white-space: nowrap;">당일 전체 거래량:</span>
+                    <span onclick="navigator.clipboard.writeText('{t_vol}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{t_vol:,} 주</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                    <span style="color: #555; font-weight: bold; white-space: nowrap;">누적 매수 증가량:</span>
+                    <span onclick="navigator.clipboard.writeText('{c_buy}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{c_buy:,} 주</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                    <span style="color: #555; font-weight: bold; white-space: nowrap;">순매수 수량(증감):</span>
+                    <span onclick="navigator.clipboard.writeText('{n_qty}');" style="font-weight: bold; color: {'#d32f2f' if n_qty>=0 else '#7048e8'}; cursor: pointer;" title="클릭 시 즉시 복사">{n_qty:,} 주</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                    <span style="color: #555; font-weight: bold; white-space: nowrap;">거래량 대비 매수 비율:</span>
+                    <span onclick="navigator.clipboard.writeText('{r_buy:.2f}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{r_buy:.2f} %</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                    <span style="color: #555; font-weight: bold; white-space: nowrap;">거래량 대비 순매수 비율:</span>
+                    <span onclick="navigator.clipboard.writeText('{r_net:.2f}');" style="font-weight: bold; color: {'#d32f2f' if r_net>=0 else '#e03131'}; cursor: pointer;" title="클릭 시 즉시 복사">{r_net:.2f} %</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px;">
+                    <span style="color: #555; font-weight: bold; white-space: nowrap;">전체 거래량 평단:</span>
+                    <span onclick="navigator.clipboard.writeText('{v_val}');" style="font-weight: bold; color: #111; cursor: pointer;" title="클릭 시 즉시 복사">{v_val:,} 원</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #fff9db; border: 1px solid #ffe066; border-radius: 4px;">
+                    <span style="color: #d9480f; font-weight: bold; white-space: nowrap;">세력 매수 평단:</span>
+                    <span onclick="navigator.clipboard.writeText('{b_vwap}');" style="font-weight: bold; color: #d32f2f; cursor: pointer;" title="클릭 시 즉시 복사">{b_vwap:,} 원</span>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px; padding: 5px 8px; background: #e7f5ff; border: 1px solid #74c0fc; border-radius: 4px;">
+                    <span style="color: #1864ab; font-weight: bold; white-space: nowrap;">세력 매도 평단:</span>
+                    <span onclick="navigator.clipboard.writeText('{s_vwap}');" style="font-weight: bold; color: #1971c2; cursor: pointer;" title="클릭 시 즉시 복사">{s_vwap:,} 원</span>
+                </div>
+            </div>
+        </div>
+        """
+        components.html(hts_top_panel_html, height=135)
 
         # 📌 최근 날짜별 상세 수치 카드 (클릭 즉시 복사)
         st.markdown("### 📋 최근 날짜별 상세 수치 복사 (원하시는 가격 글자를 클릭하면 즉시 복사됩니다)")
@@ -1445,6 +2457,9 @@ with main_tab1:
         </div>
         """
         components.html(recent_table_html, height=280)
+
+        st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+        _render_realtime_patch_toggle()
 
 
 # ---------------------------------------------------------
@@ -1823,84 +2838,87 @@ with main_tab5:
     top_head1, top_head2 = st.columns([4, 1])
     with top_head1:
         st.markdown("### 🔴 실시간 랭킹")
-        st.caption("네이버 증권 공식 시세 데이터를 기반으로 당일 최고 거래량, 거래대금 및 실시간 인기 검색 순위를 제공합니다.")
+        st.caption(
+            f"네이버 증권 실시간 페이지 기반 · 갱신: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
+            "(장중에도 갱신되는 페이지를 사용합니다 - 예전에 쓰던 pykrx는 장마감 데이터라 장중엔 항상 비어있었습니다)"
+        )
     with top_head2:
-        st.button("🔄 새로고침", key="rt_rank_refresh")
+        if st.button("🔄 새로고침", key="rt_rank_refresh"):
+            fetch_naver_live_ranking.clear()
+            fetch_naver_popular_search.clear()
+            st.rerun()
 
-    rank_market = st.radio(
-        "시장 선택", ["ALL", "KOSPI", "KOSDAQ"], horizontal=True, key="rt_rank_market"
-    )
+    market_df = fetch_naver_live_ranking()
 
-    market_df = fetch_market_ranking(rank_market)
-
-    def _render_rank_list(rows, value_label, value_fmt, height=430):
-        html_rows = ""
+    def _render_rank_rows(rows, value_fmt):
+        """네이티브 스트림릿 위젯으로 랭킹 행을 그린다 (⚡단타/🎓스터디 버튼 클릭 가능하게)."""
         for i, r in enumerate(rows, start=1):
-            chg = r.get("등락률", 0.0)
+            chg = r.get("등락률", 0.0) or 0.0
             chg_color = "#d32f2f" if chg >= 0 else "#1971c2"
             chg_sign = "+" if chg >= 0 else ""
-            html_rows += f"""
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 4px; border-bottom:1px solid #f0f0f0; font-size:12px;">
-                <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-                    <span style="color:#868e96; font-weight:bold; width:18px;">{i}</span>
-                    <span style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{r['name']}</span>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-weight:bold;">{value_fmt(r)}</div>
-                    <div style="color:{chg_color}; font-size:11px;">{chg_sign}{chg:.2f}%</div>
-                </div>
-            </div>
-            """
-        components.html(
-            f'<div style="border:1px solid #e0e0e0; border-radius:8px; padding:6px 10px; background:#fff;">{html_rows}</div>',
-            height=height, scrolling=True,
-        )
+            row_c1, row_c2, row_c3, row_c4 = st.columns([3, 2, 1, 1])
+            with row_c1:
+                st.markdown(
+                    f"<div style='font-size:12px; padding-top:6px;'>"
+                    f"<span style='color:#868e96; font-weight:bold;'>{i}</span> "
+                    f"<span style='font-weight:bold;'>{r['name']}</span></div>",
+                    unsafe_allow_html=True,
+                )
+            with row_c2:
+                st.markdown(
+                    f"<div style='text-align:right; font-size:12px; padding-top:6px;'>"
+                    f"<b>{value_fmt(r)}</b> "
+                    f"<span style='color:{chg_color};'>{chg_sign}{chg:.2f}%</span></div>",
+                    unsafe_allow_html=True,
+                )
+            with row_c3:
+                st.button(
+                    "⚡단타", key=f"jump_day_{r.get('_key', i)}_{value_fmt(r)}",
+                    on_click=jump_to_chart, args=(r.get("code"), r["name"], "3분봉"),
+                    use_container_width=True,
+                )
+            with row_c4:
+                st.button(
+                    "🎓스터디", key=f"jump_study_{r.get('_key', i)}_{value_fmt(r)}",
+                    on_click=jump_to_chart, args=(r.get("code"), r["name"], "일봉"),
+                    use_container_width=True,
+                )
 
     rank_col1, rank_col2, rank_col3 = st.columns(3)
 
     with rank_col1:
         st.markdown("#### 📊 거래량 상위 TOP10")
         if market_df.empty:
-            st.warning("데이터를 불러오지 못했습니다. 장 시작 이후 다시 시도해주세요.")
+            st.warning("데이터를 불러오지 못했습니다. 🔄 새로고침을 눌러 다시 시도해보세요.")
         else:
             top_vol = market_df.sort_values("거래량", ascending=False).head(10)
             rows = [
-                {"name": row["종목명"], "거래량": row["거래량"], "등락률": row["등락률"]}
-                for _, row in top_vol.iterrows()
+                {"name": row["종목명"], "code": row["코드"], "거래량": row["거래량"], "등락률": row["등락률"], "_key": f"vol{idx}"}
+                for idx, (_, row) in enumerate(top_vol.iterrows())
             ]
-            _render_rank_list(rows, "거래량", lambda r: f"{r['거래량']:,}주")
+            _render_rank_rows(rows, lambda r: f"{int(r['거래량']):,}주")
 
     with rank_col2:
         st.markdown("#### 💰 거래대금 상위 TOP10")
-        if market_df.empty:
-            st.warning("데이터를 불러오지 못했습니다. 장 시작 이후 다시 시도해주세요.")
+        if market_df.empty or market_df["거래대금"].isna().all():
+            st.warning("데이터를 불러오지 못했습니다. 🔄 새로고침을 눌러 다시 시도해보세요.")
         else:
-            top_amt = market_df.sort_values("거래대금", ascending=False).head(10)
+            top_amt = market_df.dropna(subset=["거래대금"]).sort_values("거래대금", ascending=False).head(10)
             rows = [
-                {"name": row["종목명"], "거래대금": row["거래대금"], "등락률": row["등락률"]}
-                for _, row in top_amt.iterrows()
+                {"name": row["종목명"], "code": row["코드"], "거래대금": row["거래대금"], "등락률": row["등락률"], "_key": f"amt{idx}"}
+                for idx, (_, row) in enumerate(top_amt.iterrows())
             ]
-            _render_rank_list(rows, "거래대금", lambda r: f"{r['거래대금']//1000000:,}백만")
+            _render_rank_rows(rows, lambda r: f"{int(r['거래대금']//1_000_000):,}백만")
 
     with rank_col3:
         st.markdown("#### 🔍 검색 상위 TOP10")
         st.caption("⚠ 비공식 스크래핑 기반이라 실패할 수 있습니다")
         search_rows = fetch_naver_popular_search()
         if not search_rows:
-            st.info("검색 순위를 지금은 불러올 수 없습니다. 잠시 후 새로고침 해보세요.")
+            st.info("검색 순위를 지금은 불러올 수 없습니다. 🔄 새로고침을 눌러보세요.")
         else:
-            html_rows = ""
-            for r in search_rows:
-                html_rows += f"""
-                <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 4px; border-bottom:1px solid #f0f0f0; font-size:12px;">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="color:#868e96; font-weight:bold; width:18px;">{r['rank']}</span>
-                        <span style="font-weight:bold;">{r['name']}</span>
-                    </div>
-                    <div style="text-align:right; font-weight:bold;">{r['price']}원</div>
-                </div>
-                """
-            components.html(
-                f'<div style="border:1px solid #e0e0e0; border-radius:8px; padding:6px 10px; background:#fff;">{html_rows}</div>',
-                height=430, scrolling=True,
-            )
+            rows = [
+                {"name": r["name"], "code": r["code"], "가격": r.get("price", "-"), "등락률": 0.0, "_key": f"srch{idx}"}
+                for idx, r in enumerate(search_rows)
+            ]
+            _render_rank_rows(rows, lambda r: f"{r['가격']}원")
