@@ -1188,18 +1188,25 @@ def render_n_wave_mapping_chart(df, stock_name, code):
     """
     N자 파동 눌림목 목표가 매핑 (다른 사이트의 '목표가 Mapping' 기능 재현).
 
-    사용법 (수동 날짜 선택 방식 - 차트 클릭은 안정적이지 않아 제외):
+    사용법 (전부 달력 날짜선택 방식으로 통일):
     1) 상승 시작일 선택 → 그 날의 저가가 Wave1 시작점
-    2) "5이평 언덕 날짜"를 연/월/일로 직접 선택 → 그 날짜의 SMA5 값이 Wave1 끝점(피크)
-    3) "세력평단 날짜"를 연/월/일로 직접 선택 → 그 날짜의 세력평단(누적평단) 값이 지지선
-    4) "목표가 MAPPING 실행" → T1~T4 계산
+    2) 5이평 언덕 날짜 선택 → 그 날짜의 SMA5 값이 Wave1 끝점(피크)
+    3) 세력평단 날짜 선택 → 그 날짜의 세력평단(누적평단) 값이 지지선
+    4) "목표가 MAPPING 실행" → T1~T6 계산
 
-    공식 (스크린샷 두 사례로 역산해서 확인 완료):
+    공식 (첨부 스크린샷 두 사례로 역산해서 확인 완료 - 피보나치 확장 배율):
       Wave1 = 5이평_피크값 - 상승시작일_저가
-      T1(약)  = 지지값 + Wave1 × 0.618
-      T2(평균) = 지지값 + Wave1 × 1.000
-      T3(강)  = 지지값 + Wave1 × 1.618
-      T4(따블) = 지지값 + Wave1 × 2.000
+      T1(약)     = 지지값 + Wave1 × 0.618
+      T2(평균)    = 지지값 + Wave1 × 1.000
+      T3(강)     = 지지값 + Wave1 × 1.618
+      T4(따블)    = 지지값 + Wave1 × 2.000
+      T5(따블+@)  = 지지값 + Wave1 × 2.618
+      T6(따따블)   = 지지값 + Wave1 × 4.236
+
+    ⚠ 날짜 선택창의 월/요일 표기(1월/2월.. 또는 Su Mo Tu..)는 브라우저·Streamlit
+    내장 달력 컴포넌트가 자체적으로 그리는 부분이라, 이 앱 코드에서 한글/숫자로
+    강제 변경할 수 있는 공식 옵션이 없습니다. (대부분의 최신 브라우저는 이미
+    숫자로 표시하지만, 100% 보장은 못 드려요.)
     """
     if df is None or df.empty:
         st.warning("데이터가 없습니다.")
@@ -1208,12 +1215,8 @@ def render_n_wave_mapping_chart(df, stock_name, code):
     df = df.copy()
     df["SMA5"] = df["종가"].rolling(5).mean()
 
-    st.session_state.setdefault("nwave_sma5_point", None)
-    st.session_state.setdefault("nwave_avg_point", None)
-
     today = datetime.date.today()
     default_start = df.index[0].date()
-    year_opts = list(range(default_start.year - 1, today.year + 1))
 
     def _nearest_row(target_date):
         """target_date 이전 또는 그날의 가장 가까운 거래일 행을 찾는다."""
@@ -1255,56 +1258,34 @@ def render_n_wave_mapping_chart(df, stock_name, code):
         st.warning("조회일이 상승 시작일보다 빠릅니다.")
         return
 
-    st.markdown("<div style='font-size:12px; color:#666; margin-top:6px;'>📍 5이평 언덕 날짜 (직접 선택)</div>", unsafe_allow_html=True)
-    p1, p2, p3 = st.columns(3)
-    with p1:
-        sma5_y = st.selectbox("년", year_opts, index=len(year_opts) - 1, key="nwave_sma5_y", label_visibility="collapsed")
-    with p2:
-        sma5_m = st.selectbox("월", list(range(1, 13)), index=today.month - 1, key="nwave_sma5_m", label_visibility="collapsed")
-    with p3:
-        sma5_d = st.selectbox("일", list(range(1, 32)), index=today.day - 1, key="nwave_sma5_d", label_visibility="collapsed")
+    pc1, pc2 = st.columns(2)
+    with pc1:
+        sma5_date_sel = st.date_input("5이평 언덕 날짜", value=default_start, key="nwave_sma5_date")
+    with pc2:
+        avg_date_sel = st.date_input("세력평단 날짜", value=default_start, key="nwave_avg_date")
 
-    st.markdown("<div style='font-size:12px; color:#666; margin-top:6px;'>📍 세력평단 날짜 (직접 선택)</div>", unsafe_allow_html=True)
-    q1, q2, q3 = st.columns(3)
-    with q1:
-        avg_y = st.selectbox("년", year_opts, index=len(year_opts) - 1, key="nwave_avg_y", label_visibility="collapsed")
-    with q2:
-        avg_m = st.selectbox("월", list(range(1, 13)), index=today.month - 1, key="nwave_avg_m", label_visibility="collapsed")
-    with q3:
-        avg_d = st.selectbox("일", list(range(1, 32)), index=today.day - 1, key="nwave_avg_d", label_visibility="collapsed")
+    sma5_i = _nearest_row(sma5_date_sel)
+    if sma5_i is not None and pd.notna(df["SMA5"].iloc[sma5_i]):
+        sma5_pt = {"date": df.index[sma5_i].strftime("%Y-%m-%d"), "value": float(df["SMA5"].iloc[sma5_i])}
+    else:
+        sma5_pt = None
 
-    try:
-        sma5_target_date = datetime.date(sma5_y, sma5_m, sma5_d)
-        sma5_i = _nearest_row(sma5_target_date)
-        if sma5_i is not None and pd.notna(df["SMA5"].iloc[sma5_i]):
-            st.session_state["nwave_sma5_point"] = {
-                "date": df.index[sma5_i].strftime("%Y-%m-%d"),
-                "value": float(df["SMA5"].iloc[sma5_i]),
-            }
-        else:
-            st.session_state["nwave_sma5_point"] = None
-    except ValueError:
-        st.session_state["nwave_sma5_point"] = None
-
-    try:
-        avg_target_date = datetime.date(avg_y, avg_m, avg_d)
-        avg_i = _nearest_row(avg_target_date)
-        if avg_i is not None and pd.notna(df["평단가"].iloc[avg_i]):
-            st.session_state["nwave_avg_point"] = {
-                "date": df.index[avg_i].strftime("%Y-%m-%d"),
-                "value": float(df["평단가"].iloc[avg_i]),
-            }
-        else:
-            st.session_state["nwave_avg_point"] = None
-    except ValueError:
-        st.session_state["nwave_avg_point"] = None
+    avg_i = _nearest_row(avg_date_sel)
+    if avg_i is not None and pd.notna(df["평단가"].iloc[avg_i]):
+        avg_pt = {"date": df.index[avg_i].strftime("%Y-%m-%d"), "value": float(df["평단가"].iloc[avg_i])}
+    else:
+        avg_pt = None
 
     run_clicked = st.button("▶ 목표가 MAPPING 실행", key="nwave_run_btn", use_container_width=True, type="primary")
 
-    t_meta = [("T1", "약", "#4263eb"), ("T2", "평균", "#2b8a3e"), ("T3", "강", "#e03131"), ("T4", "따블", "#7048e8")]
-
-    sma5_pt = st.session_state["nwave_sma5_point"]
-    avg_pt = st.session_state["nwave_avg_point"]
+    t_meta = [
+        ("T1", "약", 0.618, "#4263eb"),
+        ("T2", "평균", 1.0, "#2b8a3e"),
+        ("T3", "강", 1.618, "#e03131"),
+        ("T4", "따블", 2.0, "#7048e8"),
+        ("T5", "따블+@", 2.618, "#d6336c"),
+        ("T6", "따따블", 4.236, "#e8590c"),
+    ]
 
     info_cols = st.columns(4)
     with info_cols[0]:
@@ -1322,55 +1303,56 @@ def render_n_wave_mapping_chart(df, stock_name, code):
             wave1 = sma5_pt["value"] - start_low
             support = avg_pt["value"]
             st.session_state["nwave_targets"] = {
-                "T1": support + wave1 * 0.618,
-                "T2": support + wave1 * 1.0,
-                "T3": support + wave1 * 1.618,
-                "T4": support + wave1 * 2.0,
+                key: support + wave1 * mult for key, _, mult, _ in t_meta
             }
         else:
             st.warning("5이평 언덕 / 세력평단 날짜에 해당하는 데이터가 없습니다. 날짜를 다시 선택해주세요.")
 
     targets = st.session_state.get("nwave_targets")
     if targets:
-        t_cols = st.columns(4)
-        for col, (key, label, color) in zip(t_cols, t_meta):
+        t_cols = st.columns(6)
+        for col, (key, label, _, color) in zip(t_cols, t_meta):
             val = targets[key]
             with col:
                 st.markdown(
                     f"""
                     <div onclick="navigator.clipboard.writeText('{int(val)}');"
-                         style="border:2px solid {color}; border-radius:8px; padding:10px; text-align:center; cursor:pointer;"
+                         style="border:2px solid {color}; border-radius:8px; padding:8px 4px; text-align:center; cursor:pointer;"
                          title="클릭 시 숫자만 즉시 복사">
-                        <div style="font-size:12px; font-weight:bold; color:{color};">{key} ({label})</div>
-                        <div style="font-size:16px; font-weight:bold; margin-top:4px;">{val:,.0f}원</div>
+                        <div style="font-size:11px; font-weight:bold; color:{color};">{key} ({label})</div>
+                        <div style="font-size:14px; font-weight:bold; margin-top:4px;">{val:,.0f}원</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
-        if run_clicked:
-            st.caption("⚠ 방금 계산한 목표가 라인은 차트를 한 번 더 조작하면 다음 렌더에 반영됩니다.")
 
-    fig = go.Figure()
     x_vals = [d.strftime("%Y-%m-%d") for d in plot_df.index]
-    fig.add_trace(go.Scatter(x=x_vals, y=plot_df["종가"], mode="lines", name="종가",
-                              line=dict(color="#495057", width=1),
-                              hovertemplate="종가: %{y:,.0f}원<extra></extra>"))
-    fig.add_trace(go.Scatter(x=x_vals, y=plot_df["SMA5"], mode="lines", name="5이평(SMA5)",
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(
+        x=x_vals,
+        open=plot_df["시가"], high=plot_df["고가"], low=plot_df["저가"], close=plot_df["종가"],
+        name="캔들",
+        increasing_line_color="#d32f2f", increasing_fillcolor="#d32f2f",
+        decreasing_line_color="#1971c2", decreasing_fillcolor="#1971c2",
+        hovertemplate="시가: %{open:,.0f}원<br>고가: %{high:,.0f}원<br>저가: %{low:,.0f}원<br>종가: %{close:,.0f}원<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(x=x_vals, y=plot_df["SMA5"], mode="lines", name="5이평선",
                               line=dict(color="#e64980", width=2),
-                              hovertemplate="5이평: %{y:,.0f}원<extra></extra>"))
+                              hovertemplate="5이평선: %{y:,.0f}원<extra></extra>"))
     fig.add_trace(go.Scatter(x=x_vals, y=plot_df["평단가"], mode="lines", name="세력평단",
                               line=dict(color="#f08c00", width=2),
                               hovertemplate="세력평단: %{y:,.0f}원<extra></extra>"))
 
     if targets:
-        for key, label, color in t_meta:
+        for key, label, _, color in t_meta:
             fig.add_hline(y=targets[key], line_dash="dash", line_color=color, line_width=1.5,
                           annotation_text=f"{key}({label}) {targets[key]:,.0f}원", annotation_font_size=10)
 
     fig.update_layout(
         title=f"{stock_name} ({code}) 일봉 + SMA5 + 세력평단 차트",
-        height=480, hovermode="x unified", template="plotly_white",
+        height=520, hovermode="x unified", template="plotly_white",
         margin=dict(l=30, r=20, t=50, b=20),
+        xaxis_rangeslider_visible=False,
     )
     fig.update_xaxes(type="category", nticks=10)
     fig.update_yaxes(tickformat=",.0f")
