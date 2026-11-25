@@ -719,45 +719,54 @@ def get_financial_info(code, current_price=None):
 # ---------------------------------------------------------
 STUDY_MAPPING_HTML_TEMPLATE = """
 <div id="sm_root" style="font-family: -apple-system, 'Malgun Gothic', sans-serif;">
-  <div id="sm_toolbar" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px; font-size:12px;">
+  <div id="sm_toolbar" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px; font-size:12px;">
       <button id="sm_btn_copy_result" class="sm-btn sm-btn-blue">📋 결과 복사</button>
       <button id="sm_btn_copy_img" class="sm-btn sm-btn-purple">🖼 차트 이미지 복사</button>
       <button id="sm_btn_save_img" class="sm-btn sm-btn-green">⬇ 차트 이미지 저장</button>
       <button id="sm_btn_reset_range" class="sm-btn sm-btn-gray">↺ 전체 범위 복원</button>
       <button id="sm_btn_reset_anchor" class="sm-btn sm-btn-orange">📌 기준점 초기화</button>
-      <span style="margin-left:8px;">여백 좌:</span>
-      <input type="range" id="sm_pad_left" min="0" max="60" value="5" style="width:80px;">
+
+      <div style="display:inline-flex; align-items:center; gap:6px; background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; padding:3px 8px; margin-left:4px;">
+        <span style="font-weight:bold; color:#495057;">📐 표준편차 밴드:</span>
+        <label style="cursor:pointer;"><input type="checkbox" id="sm_chk_s1" checked> ±1σ</label>
+        <label style="cursor:pointer;"><input type="checkbox" id="sm_chk_s2" checked> ±2σ</label>
+        <label style="cursor:pointer;"><input type="checkbox" id="sm_chk_s3" checked> ±3σ</label>
+        <label style="cursor:pointer;"><input type="checkbox" id="sm_chk_fill" checked> 밴드음영</label>
+      </div>
+
+      <span style="margin-left:6px;">여백 좌:</span>
+      <input type="range" id="sm_pad_left" min="0" max="60" value="5" style="width:70px;">
       <span>우:</span>
-      <input type="range" id="sm_pad_right" min="0" max="60" value="5" style="width:80px;">
-      <label style="margin-left:8px;"><input type="checkbox" id="sm_show_time" checked> 시간 보이기</label>
+      <input type="range" id="sm_pad_right" min="0" max="60" value="5" style="width:70px;">
+      <label style="margin-left:6px;"><input type="checkbox" id="sm_show_time" checked> 시간 보이기</label>
       <span id="sm_clock" style="margin-left:auto; font-weight:bold; color:#1a73e8;"></span>
   </div>
 
   <div style="position:relative; border:1px solid #e0e0e0; border-radius:8px; padding:6px; background:#ffffff;">
     <div id="sm_anchor_box" class="sm-info-box" style="display:none; left:10px; top:10px;"></div>
     <div id="sm_latest_box" class="sm-info-box" style="display:none; right:10px; top:10px;"></div>
-    <div id="sm_plot" style="width:100%; height:480px;"></div>
+    <div id="sm_plot" style="width:100%; height:500px;"></div>
   </div>
   <div style="font-size:11px; color:#888; margin-top:4px;">
-    ※ 차트 위 아무 지점이나 클릭하면 그 지점부터 세력평단(누적평단)이 다시 계산됩니다. (기준점 표시: 분홍 점선)
+    ※ 차트 위 아무 지점이나 클릭(또는 상단에서 시작 날짜 선택)하면 그 지점부터 세력평단(VWAP)과 위·아래 3개의 표준편차 밴드(±1σ, ±2σ, ±3σ)가 함께 계산됩니다.
   </div>
 </div>
 
 <style>
-  .sm-btn { border:none; border-radius:5px; padding:6px 10px; font-size:11px; font-weight:bold; cursor:pointer; color:#fff; }
+  .sm-btn { border:none; border-radius:5px; padding:5px 9px; font-size:11px; font-weight:bold; cursor:pointer; color:#fff; }
   .sm-btn-blue { background:#1a73e8; }
   .sm-btn-purple { background:#7048e8; }
   .sm-btn-green { background:#2b8a3e; }
   .sm-btn-gray { background:#868e96; }
   .sm-btn-orange { background:#f08c00; }
   .sm-info-box {
-      position:absolute; z-index:5; background:#ffffff; border:1px solid #dee2e6;
-      border-radius:8px; padding:8px 10px; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.12);
-      min-width:190px;
+      position:absolute; z-index:5; background:rgba(255,255,255,0.96); border:1px solid #dee2e6;
+      border-radius:8px; padding:8px 10px; font-size:11.5px; box-shadow:0 2px 8px rgba(0,0,0,0.12);
+      min-width:210px;
   }
   .sm-info-box .sm-close { position:absolute; top:4px; right:6px; cursor:pointer; color:#adb5bd; font-weight:bold; }
-  .sm-info-title { font-weight:bold; font-size:11px; color:#495057; margin-bottom:4px; }
-  .sm-info-row { display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .sm-info-title { font-weight:bold; font-size:11px; color:#495057; margin-bottom:4px; border-bottom:1px solid #f1f3f5; padding-bottom:3px; }
+  .sm-info-row { display:flex; justify-content:space-between; gap:10px; padding:1.5px 0; }
   .sm-info-label { color:#666; }
   .sm-info-value { font-weight:bold; cursor:pointer; }
   .sm-info-value:hover { text-decoration:underline; }
@@ -769,59 +778,146 @@ STUDY_MAPPING_HTML_TEMPLATE = """
   const D = __DATA_JSON__;
   const N = D.close.length;
 
-  function cumAvgFrom(startIdx, volArr, origArr) {
-      const out = new Array(N).fill(null);
-      let cumTPV = 0, cumVol = 0;
+  function calcAnchoredBands(startIdx) {
+      const avg = new Array(N).fill(null);
+      const u1 = new Array(N).fill(null), u2 = new Array(N).fill(null), u3 = new Array(N).fill(null);
+      const l1 = new Array(N).fill(null), l2 = new Array(N).fill(null), l3 = new Array(N).fill(null);
+      const buyAvg = new Array(N).fill(null);
+      const sellAvg = new Array(N).fill(null);
+
+      let cumTPV = 0, cumTP2V = 0, cumVol = 0;
+      let bTPV = 0, bVol = 0, sTPV = 0, sVol = 0;
+
       for (let i = startIdx; i < N; i++) {
-          cumTPV += D.close[i] * (volArr[i] || 0);
-          cumVol += (volArr[i] || 0);
-          out[i] = cumVol > 0 ? cumTPV / cumVol : (out[i-1] !== undefined ? out[i-1] : D.close[i]);
+          const p = D.close[i];
+          const v = D.volume[i] || 0;
+          cumTPV += p * v;
+          cumTP2V += p * p * v;
+          cumVol += v;
+
+          const mean = cumVol > 0 ? (cumTPV / cumVol) : p;
+          const variance = cumVol > 0 ? Math.max(0, (cumTP2V / cumVol) - mean * mean) : 0;
+          const std = Math.sqrt(variance);
+
+          avg[i] = mean;
+          u1[i] = mean + 1.0 * std;
+          u2[i] = mean + 2.0 * std;
+          u3[i] = mean + 3.0 * std;
+          l1[i] = Math.max(0, mean - 1.0 * std);
+          l2[i] = Math.max(0, mean - 2.0 * std);
+          l3[i] = Math.max(0, mean - 3.0 * std);
+
+          const bv = D.buyVolume[i] || 0;
+          const sv = D.sellVolume[i] || 0;
+          bTPV += p * bv; bVol += bv;
+          sTPV += p * sv; sVol += sv;
+          buyAvg[i] = bVol > 0 ? (bTPV / bVol) : mean;
+          sellAvg[i] = sVol > 0 ? (sTPV / sVol) : mean;
       }
-      for (let i = 0; i < startIdx; i++) { out[i] = origArr[i]; }
-      return out;
+      return { avg, u1, u2, u3, l1, l2, l3, buyAvg, sellAvg };
   }
 
-  let anchorIdx = 0;
-  let avgSeries = D.origAvg.slice();
-  let buyAvgSeries = D.origBuyAvg.slice();
-  let sellAvgSeries = D.origSellAvg.slice();
+  let anchorIdx = Math.min(Math.max(0, D.defaultAnchorIdx || 0), Math.max(0, N - 1));
+  let B = calcAnchoredBands(anchorIdx);
   let padLeft = 5, padRight = 5;
+
+  // Trace 순서:
+  // 0: 중심 세력평단 (초록 실선)
+  // 1: +1σ (연파랑 점선 + 중심선까지 음영)
+  // 2: +2σ (파랑 점선 + +1σ까지 음영)
+  // 3: +3σ (진파랑 실선 + +2σ까지 음영)
+  // 4: 중심선(하단 음영 기준용)
+  // 5: -1σ (연분홍 점선 + 중심선까지 음영)
+  // 6: -2σ (분홍 점선 + -1σ까지 음영)
+  // 7: -3σ (진분홍 실선 + -2σ까지 음영)
+  // 8: 종가 (캔들/라인)
+  // 9: 세력매수평단 (주황/빨강 점선)
+  // 10: 세력매도평단 (남색 점선)
+
+  const traceAvg = {
+      x: D.dates, y: B.avg, mode: 'lines', name: '세력평단(중심)',
+      line: { color: '#2b8a3e', width: 2.5 },
+      hovertemplate: '세력평단: %{y:,.0f}원<extra></extra>'
+  };
+  const traceU1 = {
+      x: D.dates, y: B.u1, mode: 'lines', name: '+1σ',
+      line: { color: '#74c0fc', width: 1.2, dash: 'dot' },
+      fill: 'tonexty', fillcolor: 'rgba(116, 192, 252, 0.14)',
+      hovertemplate: '+1σ: %{y:,.0f}원<extra></extra>'
+  };
+  const traceU2 = {
+      x: D.dates, y: B.u2, mode: 'lines', name: '+2σ',
+      line: { color: '#339af0', width: 1.3, dash: 'dot' },
+      fill: 'tonexty', fillcolor: 'rgba(51, 154, 240, 0.14)',
+      hovertemplate: '+2σ: %{y:,.0f}원<extra></extra>'
+  };
+  const traceU3 = {
+      x: D.dates, y: B.u3, mode: 'lines', name: '+3σ (상단)',
+      line: { color: '#1971c2', width: 1.6 },
+      fill: 'tonexty', fillcolor: 'rgba(25, 113, 194, 0.14)',
+      hovertemplate: '+3σ: %{y:,.0f}원<extra></extra>'
+  };
+
+  const traceMidBase = {
+      x: D.dates, y: B.avg, mode: 'lines', name: '중심기준',
+      line: { color: 'rgba(0,0,0,0)', width: 0 },
+      showlegend: false, hoverinfo: 'skip'
+  };
+  const traceL1 = {
+      x: D.dates, y: B.l1, mode: 'lines', name: '-1σ',
+      line: { color: '#faa2c1', width: 1.2, dash: 'dot' },
+      fill: 'tonexty', fillcolor: 'rgba(250, 162, 193, 0.15)',
+      hovertemplate: '-1σ: %{y:,.0f}원<extra></extra>'
+  };
+  const traceL2 = {
+      x: D.dates, y: B.l2, mode: 'lines', name: '-2σ',
+      line: { color: '#f06595', width: 1.3, dash: 'dot' },
+      fill: 'tonexty', fillcolor: 'rgba(240, 101, 149, 0.15)',
+      hovertemplate: '-2σ: %{y:,.0f}원<extra></extra>'
+  };
+  const traceL3 = {
+      x: D.dates, y: B.l3, mode: 'lines', name: '-3σ (하단)',
+      line: { color: '#d6336c', width: 1.6 },
+      fill: 'tonexty', fillcolor: 'rgba(214, 51, 108, 0.15)',
+      hovertemplate: '-3σ: %{y:,.0f}원<extra></extra>'
+  };
 
   const traceClose = {
       x: D.dates, y: D.close, mode: 'lines', name: '종가',
-      line: { color: '#212529', width: 1.4 },
+      line: { color: '#212529', width: 1.6 },
       hovertemplate: '%{x}<br>종가: %{y:,.0f}원<extra></extra>'
   };
-  const traceAvg = {
-      x: D.dates, y: avgSeries, mode: 'lines', name: '세력평단(전체)',
-      line: { color: '#f08c00', width: 2.6 },
-      hovertemplate: '%{x}<br>세력평단: %{y:,.0f}원<extra></extra>'
-  };
   const traceBuyAvg = {
-      x: D.dates, y: buyAvgSeries, mode: 'lines', name: '세력매수평단',
-      line: { color: '#d32f2f', width: 1.7, dash: 'dashdot' },
-      hovertemplate: '%{x}<br>세력매수평단: %{y:,.0f}원<extra></extra>'
+      x: D.dates, y: B.buyAvg, mode: 'lines', name: '세력매수평단',
+      line: { color: '#f08c00', width: 1.4, dash: 'dashdot' },
+      hovertemplate: '세력매수평단: %{y:,.0f}원<extra></extra>'
   };
   const traceSellAvg = {
-      x: D.dates, y: sellAvgSeries, mode: 'lines', name: '세력매도평단',
-      line: { color: '#1971c2', width: 1.7, dash: 'dashdot' },
-      hovertemplate: '%{x}<br>세력매도평단: %{y:,.0f}원<extra></extra>'
+      x: D.dates, y: B.sellAvg, mode: 'lines', name: '세력매도평단',
+      line: { color: '#495057', width: 1.4, dash: 'dashdot' },
+      hovertemplate: '세력매도평단: %{y:,.0f}원<extra></extra>'
   };
 
+  const traces = [
+      traceAvg, traceU1, traceU2, traceU3,
+      traceMidBase, traceL1, traceL2, traceL3,
+      traceClose, traceBuyAvg, traceSellAvg
+  ];
+
   const layout = {
-      margin: {l: 50, r: 30, t: 20, b: 40},
+      margin: {l: 55, r: 30, t: 25, b: 40},
       hovermode: 'x unified',
       showlegend: true,
-      legend: {orientation: 'h', y: 1.08},
+      legend: {orientation: 'h', y: 1.09, font: {size: 11}},
       xaxis: {type: 'category'},
-      yaxis: {title: '가격(원)'},
+      yaxis: {title: '가격(원)', tickformat: ',.0f'},
       shapes: [],
   };
 
-  Plotly.newPlot('sm_plot', [traceClose, traceAvg, traceBuyAvg, traceSellAvg], layout, {displaylogo:false, responsive:true});
+  Plotly.newPlot('sm_plot', traces, layout, {displaylogo:false, responsive:true});
   const plotDiv = document.getElementById('sm_plot');
 
-  function fmt(n) { return Math.round(n).toLocaleString('ko-KR'); }
+  function fmt(n) { return (n !== null && n !== undefined && !isNaN(n)) ? Math.round(n).toLocaleString('ko-KR') : '-'; }
 
   function bindCopy(container) {
       container.querySelectorAll('[data-copy]').forEach(function(el) {
@@ -832,56 +928,72 @@ STUDY_MAPPING_HTML_TEMPLATE = """
   function showLatestBox() {
       const lastIdx = N - 1;
       const close_v = D.close[lastIdx];
-      const avg_v = avgSeries[lastIdx];
-      const buy_v = buyAvgSeries[lastIdx];
-      const sell_v = sellAvgSeries[lastIdx];
-      const disp = ((close_v - avg_v) / avg_v * 100);
+      const avg_v = B.avg[lastIdx];
+      const u1_v = B.u1[lastIdx], u2_v = B.u2[lastIdx], u3_v = B.u3[lastIdx];
+      const l1_v = B.l1[lastIdx], l2_v = B.l2[lastIdx], l3_v = B.l3[lastIdx];
+      const disp = avg_v ? ((close_v - avg_v) / avg_v * 100) : 0;
       const box = document.getElementById('sm_latest_box');
       box.style.display = 'block';
       box.innerHTML =
-        '<span class="sm-close" onclick="document.getElementById(\\'sm_latest_box\\').style.display=\\'none\\';">✕</span>' +
-        '<div class="sm-info-title">📍 ' + D.dates[0] + ' ~ ' + D.dates[lastIdx] + '</div>' +
+        '<span class="sm-close" onclick="document.getElementById(\'sm_latest_box\').style.display=\'none\';">✕</span>' +
+        '<div class="sm-info-title">📍 ' + D.dates[anchorIdx] + ' ~ ' + D.dates[lastIdx] + '</div>' +
         '<div class="sm-info-row"><span class="sm-info-label">종가</span><span class="sm-info-value" data-copy="' + Math.round(close_v) + '">' + fmt(close_v) + '원</span></div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">세력평단</span><span class="sm-info-value" style="color:#f08c00;" data-copy="' + Math.round(avg_v) + '">' + fmt(avg_v) + '원</span></div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">세력매수평단</span><span class="sm-info-value" style="color:#d32f2f;" data-copy="' + Math.round(buy_v) + '">' + fmt(buy_v) + '원</span></div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">세력매도평단</span><span class="sm-info-value" style="color:#1971c2;" data-copy="' + Math.round(sell_v) + '">' + fmt(sell_v) + '원</span></div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">괴리율(전체평단)</span><span class="sm-info-value" style="color:' + (disp>=0?'#d32f2f':'#1971c2') + ';">' + (disp>=0?'+':'') + disp.toFixed(2) + '%</span></div>' +
-        '<div style="font-size:10px; color:#adb5bd; margin-top:4px;">숫자를 누르면 가격만 복사됩니다 (키움 라인 붙여넣기용)</div>';
+        '<div class="sm-info-row"><span class="sm-info-label">+3σ (상단3)</span><span class="sm-info-value" style="color:#1971c2;" data-copy="' + Math.round(u3_v) + '">' + fmt(u3_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">+2σ (상단2)</span><span class="sm-info-value" style="color:#339af0;" data-copy="' + Math.round(u2_v) + '">' + fmt(u2_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">+1σ (상단1)</span><span class="sm-info-value" style="color:#4dabf7;" data-copy="' + Math.round(u1_v) + '">' + fmt(u1_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">세력평단(중심)</span><span class="sm-info-value" style="color:#2b8a3e;" data-copy="' + Math.round(avg_v) + '">' + fmt(avg_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">-1σ (하단1)</span><span class="sm-info-value" style="color:#f783ac;" data-copy="' + Math.round(l1_v) + '">' + fmt(l1_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">-2σ (하단2)</span><span class="sm-info-value" style="color:#f06595;" data-copy="' + Math.round(l2_v) + '">' + fmt(l2_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">-3σ (하단3)</span><span class="sm-info-value" style="color:#d6336c;" data-copy="' + Math.round(l3_v) + '">' + fmt(l3_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">괴리율(중심평단)</span><span class="sm-info-value" style="color:' + (disp>=0?'#d32f2f':'#1971c2') + ';">' + (disp>=0?'+':'') + disp.toFixed(2) + '%</span></div>' +
+        '<div style="font-size:10px; color:#adb5bd; margin-top:4px;">숫자 클릭 시 가격만 즉시 복사</div>';
       bindCopy(box);
   }
 
   function showAnchorBox(idx) {
       const close_v = D.close[idx];
-      const avg_v = avgSeries[idx];
-      const buy_v = buyAvgSeries[idx];
-      const sell_v = sellAvgSeries[idx];
-      const disp = ((close_v - avg_v) / avg_v * 100);
+      const avg_v = B.avg[idx];
       const box = document.getElementById('sm_anchor_box');
       box.style.display = 'block';
       box.innerHTML =
-        '<span class="sm-close" onclick="document.getElementById(\\'sm_anchor_box\\').style.display=\\'none\\';">✕</span>' +
-        '<div class="sm-info-title">📌 ' + D.dates[idx] + ' 기준 (재계산 시작점)</div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">종가</span><span class="sm-info-value" data-copy="' + Math.round(close_v) + '">' + fmt(close_v) + '원</span></div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">세력평단</span><span class="sm-info-value" style="color:#f08c00;" data-copy="' + Math.round(avg_v) + '">' + fmt(avg_v) + '원</span></div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">세력매수평단</span><span class="sm-info-value" style="color:#d32f2f;" data-copy="' + Math.round(buy_v) + '">' + fmt(buy_v) + '원</span></div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">세력매도평단</span><span class="sm-info-value" style="color:#1971c2;" data-copy="' + Math.round(sell_v) + '">' + fmt(sell_v) + '원</span></div>' +
-        '<div class="sm-info-row"><span class="sm-info-label">괴리율(전체평단)</span><span class="sm-info-value">' + (disp>=0?'+':'') + disp.toFixed(2) + '%</span></div>';
+        '<span class="sm-close" onclick="document.getElementById(\'sm_anchor_box\').style.display=\'none\';">✕</span>' +
+        '<div class="sm-info-title">📌 ' + D.dates[idx] + ' 기준 (밴드 시작점)</div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">시작일 종가</span><span class="sm-info-value" data-copy="' + Math.round(close_v) + '">' + fmt(close_v) + '원</span></div>' +
+        '<div class="sm-info-row"><span class="sm-info-label">시작 세력평단</span><span class="sm-info-value" style="color:#2b8a3e;" data-copy="' + Math.round(avg_v) + '">' + fmt(avg_v) + '원</span></div>' +
+        '<div style="font-size:10px; color:#868e96; margin-top:4px;">이 날짜부터 누적 표준편차(±1σ~±3σ) 밴드가 확장됩니다.</div>';
       bindCopy(box);
   }
 
+  function updateVisibility() {
+      const s1 = document.getElementById('sm_chk_s1').checked;
+      const s2 = document.getElementById('sm_chk_s2').checked;
+      const s3 = document.getElementById('sm_chk_s3').checked;
+      const fillOn = document.getElementById('sm_chk_fill').checked;
+
+      Plotly.restyle('sm_plot', { visible: s1 }, [1, 5]);
+      Plotly.restyle('sm_plot', { visible: s2 }, [2, 6]);
+      Plotly.restyle('sm_plot', { visible: s3 }, [3, 7]);
+
+      const fills = fillOn ? [
+          'tonexty', 'tonexty', 'tonexty',
+          'tonexty', 'tonexty', 'tonexty'
+      ] : ['none', 'none', 'none', 'none', 'none', 'none'];
+      Plotly.restyle('sm_plot', { fill: fills }, [1, 2, 3, 5, 6, 7]);
+  }
+
   function redraw() {
-      avgSeries = cumAvgFrom(anchorIdx, D.volume, D.origAvg);
-      buyAvgSeries = cumAvgFrom(anchorIdx, D.buyVolume, D.origBuyAvg);
-      sellAvgSeries = cumAvgFrom(anchorIdx, D.sellVolume, D.origSellAvg);
-      Plotly.restyle('sm_plot', {y: [avgSeries]}, [1]);
-      Plotly.restyle('sm_plot', {y: [buyAvgSeries]}, [2]);
-      Plotly.restyle('sm_plot', {y: [sellAvgSeries]}, [3]);
+      B = calcAnchoredBands(anchorIdx);
+      Plotly.restyle('sm_plot', {
+          y: [B.avg, B.u1, B.u2, B.u3, B.avg, B.l1, B.l2, B.l3, B.buyAvg, B.sellAvg]
+      }, [0, 1, 2, 3, 4, 5, 6, 7, 9, 10]);
+
       const shapes = anchorIdx > 0 ? [{
           type: 'line', x0: D.dates[anchorIdx], x1: D.dates[anchorIdx],
           yref: 'paper', y0: 0, y1: 1,
-          line: { color: '#e64980', width: 1.5, dash: 'dot' }
+          line: { color: '#e64980', width: 1.6, dash: 'dot' }
       }] : [];
       Plotly.relayout('sm_plot', {shapes: shapes});
+      updateVisibility();
       showLatestBox();
       if (anchorIdx > 0) { showAnchorBox(anchorIdx); }
       else { document.getElementById('sm_anchor_box').style.display = 'none'; }
@@ -891,6 +1003,10 @@ STUDY_MAPPING_HTML_TEMPLATE = """
       if (!evt.points || !evt.points.length) return;
       anchorIdx = evt.points[0].pointIndex;
       redraw();
+  });
+
+  ['sm_chk_s1', 'sm_chk_s2', 'sm_chk_s3', 'sm_chk_fill'].forEach(function(id) {
+      document.getElementById(id).onchange = updateVisibility;
   });
 
   document.getElementById('sm_btn_reset_anchor').onclick = function() {
@@ -903,11 +1019,11 @@ STUDY_MAPPING_HTML_TEMPLATE = """
       padLeft = 5; padRight = 5;
       document.getElementById('sm_pad_left').value = 5;
       document.getElementById('sm_pad_right').value = 5;
-      Plotly.relayout('sm_plot', {'margin.l': 50, 'margin.r': 30});
+      Plotly.relayout('sm_plot', {'margin.l': 55, 'margin.r': 30});
   };
 
   function applyPadding() {
-      Plotly.relayout('sm_plot', {'margin.l': 50 + padLeft, 'margin.r': 30 + padRight});
+      Plotly.relayout('sm_plot', {'margin.l': 55 + padLeft, 'margin.r': 30 + padRight});
   }
   document.getElementById('sm_pad_left').oninput = function(e) { padLeft = parseInt(e.target.value, 10); applyPadding(); };
   document.getElementById('sm_pad_right').oninput = function(e) { padRight = parseInt(e.target.value, 10); applyPadding(); };
@@ -928,19 +1044,22 @@ STUDY_MAPPING_HTML_TEMPLATE = """
 
   document.getElementById('sm_btn_copy_result').onclick = function() {
       const lastIdx = N - 1;
-      const disp = ((D.close[lastIdx] - avgSeries[lastIdx]) / avgSeries[lastIdx] * 100);
-      let text = '■ [' + D.stockName + '(' + D.code + ') - ' + D.timeframe + ']\\n' +
-                 '• 종가: ' + fmt(D.close[lastIdx]) + '원\\n' +
-                 '• 세력평단: ' + fmt(avgSeries[lastIdx]) + '원\\n' +
-                 '• 세력매수평단: ' + fmt(buyAvgSeries[lastIdx]) + '원\\n' +
-                 '• 세력매도평단: ' + fmt(sellAvgSeries[lastIdx]) + '원\\n' +
-                 '• 괴리율(전체평단): ' + (disp>=0?'+':'') + disp.toFixed(2) + '%';
-      if (anchorIdx > 0) { text += '\\n• 기준점(' + D.dates[anchorIdx] + ') 이후 재계산됨'; }
+      const disp = ((D.close[lastIdx] - B.avg[lastIdx]) / B.avg[lastIdx] * 100);
+      const text = '■ [' + D.stockName + '(' + D.code + ') - ' + D.timeframe + '] (' + D.dates[anchorIdx] + ' 시작)\n' +
+                 '• 종가: ' + fmt(D.close[lastIdx]) + '원\n' +
+                 '• +3σ (상단3): ' + fmt(B.u3[lastIdx]) + '원\n' +
+                 '• +2σ (상단2): ' + fmt(B.u2[lastIdx]) + '원\n' +
+                 '• +1σ (상단1): ' + fmt(B.u1[lastIdx]) + '원\n' +
+                 '• 세력평단(중심): ' + fmt(B.avg[lastIdx]) + '원\n' +
+                 '• -1σ (하단1): ' + fmt(B.l1[lastIdx]) + '원\n' +
+                 '• -2σ (하단2): ' + fmt(B.l2[lastIdx]) + '원\n' +
+                 '• -3σ (하단3): ' + fmt(B.l3[lastIdx]) + '원\n' +
+                 '• 괴리율(중심평단): ' + (disp>=0?'+':'') + disp.toFixed(2) + '%';
       navigator.clipboard.writeText(text);
   };
 
   document.getElementById('sm_btn_save_img').onclick = function() {
-      Plotly.downloadImage('sm_plot', {format:'png', filename: D.stockName + '_' + D.timeframe + '_chart'});
+      Plotly.downloadImage('sm_plot', {format:'png', filename: D.stockName + '_' + D.timeframe + '_std_band'});
   };
 
   document.getElementById('sm_btn_copy_img').onclick = function() {
@@ -982,6 +1101,18 @@ def compute_vwap_columns(df):
     sell_cum_vol = df["매도거래량"].cumsum().replace(0, pd.NA)
     df["세력매수평단"] = (buy_cum_tpv / buy_cum_vol).ffill()
     df["세력매도평단"] = (sell_cum_tpv / sell_cum_vol).ffill()
+
+    # 거래량 가중 표준편차 밴드 (±1σ, ±2σ, ±3σ)
+    cum_tp2v = ((df["종가"] ** 2) * df["거래량"]).cumsum()
+    mean_vwap = df["평단가"]
+    var_vwap = ((cum_tp2v / cum_volume.replace(0, pd.NA)) - (mean_vwap ** 2)).clip(lower=0).fillna(0)
+    std_vwap = var_vwap ** 0.5
+    df["평단_상단1"] = mean_vwap + 1.0 * std_vwap
+    df["평단_상단2"] = mean_vwap + 2.0 * std_vwap
+    df["평단_상단3"] = mean_vwap + 3.0 * std_vwap
+    df["평단_하단1"] = (mean_vwap - 1.0 * std_vwap).clip(lower=0)
+    df["평단_하단2"] = (mean_vwap - 2.0 * std_vwap).clip(lower=0)
+    df["평단_하단3"] = (mean_vwap - 3.0 * std_vwap).clip(lower=0)
     return df
 
 
@@ -1364,6 +1495,25 @@ def render_study_mapping_chart(df, stock_name, code, selected_timeframe):
     is_minute = selected_timeframe.endswith("분봉")
     x_fmt = "%H:%M" if is_minute else "%Y-%m-%d"
     dates = [d.strftime(x_fmt) for d in df.index]
+
+    default_anchor_idx = 0
+    if not is_minute and len(df) > 0:
+        ac1, ac2 = st.columns([1.4, 3.6])
+        with ac1:
+            anchor_date_sel = st.date_input(
+                "📌 세력평단 시작 날짜 선택",
+                value=df.index[0].date(),
+                min_value=df.index[0].date(),
+                max_value=df.index[-1].date(),
+                key=f"sm_anchor_date_{code}",
+            )
+        with ac2:
+            st.caption("선택한 날짜(또는 아래 차트에서 직접 클릭한 지점)부터 세력평단(중심)과 위 3개(+1σ, +2σ, +3σ)·아래 3개(-1σ, -2σ, -3σ) 표준편차 밴드가 시작됩니다.")
+        idx_dates = df.index.date
+        cands = [i for i, d in enumerate(idx_dates) if d >= anchor_date_sel]
+        if cands:
+            default_anchor_idx = cands[0]
+
     close = [float(v) for v in df["종가"]]
     volume = [float(v) for v in df["거래량"]]
     buy_volume = [float(v) for v in df["매수거래량"]]
@@ -1384,10 +1534,11 @@ def render_study_mapping_chart(df, stock_name, code, selected_timeframe):
         "stockName": stock_name,
         "code": code,
         "timeframe": selected_timeframe,
+        "defaultAnchorIdx": default_anchor_idx,
     }
     data_json = json.dumps(payload, ensure_ascii=False)
     html = STUDY_MAPPING_HTML_TEMPLATE.replace("__DATA_JSON__", data_json)
-    components.html(html, height=680, scrolling=False)
+    components.html(html, height=620, scrolling=False)
 
 
 # ---------------------------------------------------------
@@ -1975,6 +2126,16 @@ with main_tab1:
         df["세력매수평단"] = (buy_cum_tpv / buy_cum_vol).ffill()
         df["세력매도평단"] = (sell_cum_tpv / sell_cum_vol).ffill()
 
+        cum_tp2v_main = ((df["종가"] ** 2) * df["거래량"]).cumsum()
+        var_main = ((cum_tp2v_main / cum_volume.replace(0, pd.NA)) - (df["평단가"] ** 2)).clip(lower=0).fillna(0)
+        std_main = var_main ** 0.5
+        df["평단_상단1"] = df["평단가"] + 1.0 * std_main
+        df["평단_상단2"] = df["평단가"] + 2.0 * std_main
+        df["평단_상단3"] = df["평단가"] + 3.0 * std_main
+        df["평단_하단1"] = (df["평단가"] - 1.0 * std_main).clip(lower=0)
+        df["평단_하단2"] = (df["평단가"] - 2.0 * std_main).clip(lower=0)
+        df["평단_하단3"] = (df["평단가"] - 3.0 * std_main).clip(lower=0)
+
         last_close = int(df["종가"].iloc[-1])
         last_vwap = int(df["평단가"].iloc[-1])
         disparity = ((last_close - last_vwap) / last_vwap) * 100
@@ -2096,7 +2257,7 @@ with main_tab1:
 
 
 
-        chart_mode = st.session_state.get("chart_display_mode", "🔲 일·주·월·분봉 동시보기")
+        chart_mode = st.session_state.get("chart_display_mode", "🧭 Study Mapping 스타일 (클릭 기준점 리셋)")
 
         if chart_mode == "🌊 N파동 목표가 Mapping":
             render_n_wave_mapping_chart(df, stock_name, code)
@@ -2135,18 +2296,63 @@ with main_tab1:
                     line=dict(color="#1f77b4", width=1.5),
                 )
             )
-            # 2. 누적 평단가 선
+            # 2. 누적 평단가 선 및 ±1σ, ±2σ, ±3σ 표준편차 밴드
             fig.add_trace(
                 go.Scatter(
                     x=hover_x,
                     y=df["평단가"],
                     mode="lines",
-                    name=f"누적 평단가 ({selected_timeframe})",
+                    name=f"세력평단 ({selected_timeframe})",
                     text=hover_vwap,
                     hovertemplate="<b>%{x}</b><br>%{text}<extra>평단가</extra>",
-                    line=dict(color="#ff7f0e", width=2.5),
+                    line=dict(color="#2b8a3e", width=2.5),
                 )
             )
+            for col_u, lbl_u, clr_u, dsh_u in [
+                ("평단_상단1", "+1σ", "#74c0fc", "dot"),
+                ("평단_상단2", "+2σ", "#339af0", "dot"),
+                ("평단_상단3", "+3σ", "#1971c2", "solid"),
+            ]:
+                fig.add_trace(
+                    go.Scatter(
+                        x=hover_x,
+                        y=df[col_u],
+                        mode="lines",
+                        name=lbl_u,
+                        fill="tonexty",
+                        fillcolor="rgba(51, 154, 240, 0.12)",
+                        hovertemplate=f"{lbl_u}: %{{y:,.0f}}원<extra></extra>",
+                        line=dict(color=clr_u, width=1.2, dash=dsh_u),
+                    )
+                )
+            fig.add_trace(
+                go.Scatter(
+                    x=hover_x,
+                    y=df["평단가"],
+                    mode="lines",
+                    name="평단기준",
+                    showlegend=False,
+                    hoverinfo="skip",
+                    line=dict(color="rgba(0,0,0,0)", width=0),
+                )
+            )
+            for col_l, lbl_l, clr_l, dsh_l in [
+                ("평단_하단1", "-1σ", "#faa2c1", "dot"),
+                ("평단_하단2", "-2σ", "#f06595", "dot"),
+                ("평단_하단3", "-3σ", "#d6336c", "solid"),
+            ]:
+                fig.add_trace(
+                    go.Scatter(
+                        x=hover_x,
+                        y=df[col_l],
+                        mode="lines",
+                        name=lbl_l,
+                        fill="tonexty",
+                        fillcolor="rgba(240, 101, 149, 0.12)",
+                        hovertemplate=f"{lbl_l}: %{{y:,.0f}}원<extra></extra>",
+                        line=dict(color=clr_l, width=1.2, dash=dsh_l),
+                    )
+                )
             # 2-1. 세력매수평단 선
             hover_buy_vwap = [f"세력매수평단: {int(val):,}원" if pd.notna(val) else "세력매수평단: -" for val in df["세력매수평단"]]
             fig.add_trace(
@@ -2274,7 +2480,7 @@ with main_tab1:
         st.radio(
             "차트 스타일",
             ["📊 기본 목표가 차트", "🧭 Study Mapping 스타일 (클릭 기준점 리셋)", "🔲 일·주·월·분봉 동시보기", "🌊 N파동 목표가 Mapping"],
-            index=2,
+            index=1,
             horizontal=True,
             key="chart_display_mode",
         )
