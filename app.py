@@ -6435,8 +6435,7 @@ def render_daily_seryeok_chart(code: str, name: str, start_date, end_date, show_
                                 seryeok_auto_dates: dict | None = None,
                                 chart_display_start_date=None,
                                 nwave_marker_dates: dict | None = None,
-                                view_months: int | None = None,
-                                show_vwap_sigma: bool = False):
+                                view_months: int | None = None):
     """일봉 세력평단가 차트: 캔들 + 5~720일 이동평균선 + (선택기간) 누적 세력평단선
     (+선택 시 N파동 목표가 점선 / 매수 신호 / 거래대금 보조지표 / 관심종목 저장일 초록 점선
      / '요'·'테요' 로컬 스냅샷 조회일 흰 점선 / 세력선1~4 자동 시작일 세력평단선).
@@ -6653,39 +6652,6 @@ def render_daily_seryeok_chart(code: str, name: str, start_date, end_date, show_
         hovertext=_seryeok_hover,
         hoverinfo="text",
     ), row=price_row, col=1)
-
-    if show_vwap_sigma:
-        _vwap_s = sub["cum_vwap"]
-        _close_s = sub["close"]
-        _valid_mask = _vwap_s.notna() & (_vwap_s > 0) & _close_s.notna()
-        if _valid_mask.sum() >= 2:
-            _dev_pct = ((_close_s[_valid_mask] - _vwap_s[_valid_mask]) / _vwap_s[_valid_mask]) * 100.0
-            _sigma_pct = float(_dev_pct.std(ddof=1))
-            if pd.notna(_sigma_pct) and _sigma_pct > 0:
-                _sigma_levels = [
-                    (3, "+3σ", "dot", 1.2, "rgba(255, 120, 120, 0.75)"),
-                    (2, "+2σ", "dot", 1.2, "rgba(255, 165, 90, 0.75)"),
-                    (1, "+1σ", "dot", 1.2, "rgba(255, 220, 110, 0.80)"),
-                    (-1, "-1σ", "dot", 1.2, "rgba(130, 215, 255, 0.80)"),
-                    (-2, "-2σ", "dot", 1.2, "rgba(95, 165, 255, 0.75)"),
-                    (-3, "-3σ", "dot", 1.2, "rgba(145, 120, 255, 0.75)"),
-                ]
-                for _mult, _lbl, _dash, _w, _col in _sigma_levels:
-                    _band_y = _vwap_s * (1.0 + (_mult * _sigma_pct) / 100.0)
-                    _band_hover = [
-                        f"VWAP {_lbl} ({_mult * _sigma_pct:+.2f}%): {yv:,.0f}" if pd.notna(yv) else ""
-                        for yv in _band_y
-                    ]
-                    fig.add_trace(go.Scatter(
-                        x=sub["date"],
-                        y=_band_y,
-                        mode="lines",
-                        name=f"세력평단 {_lbl}",
-                        line=dict(color=_col, width=_w, dash=_dash),
-                        hovertext=_band_hover,
-                        hoverinfo="text",
-                        connectgaps=False,
-                    ), row=price_row, col=1)
 
     # ---- 세력선1~4: 종목 선택 시 자동으로 계산된 시작일(19개월/12개월/50봉/5개월 이내 조건) ~
     # 오늘까지의 누적 세력평단(VWAP) 선. 표시구간(sub)과 무관하게 full_df 기준으로 계산한 뒤
@@ -9830,12 +9796,6 @@ with main_col:
                                         "<div style='font-size:13px; text-align:right; white-space:nowrap;'>전 -</div>"
                                     )
                                     st.markdown(_gap_line + _day_line, unsafe_allow_html=True)
-                            show_vwap_sigma_b = st.checkbox(
-                                "세력평단 ±3σ 점선 표시",
-                                value=st.session_state.get("daily_vwap_sigma_on", False),
-                                key=f"daily_vwap_sigma_cb_{code}",
-                            )
-                            st.session_state["daily_vwap_sigma_on"] = show_vwap_sigma_b
                             if fill_b != candle_fill_state.get("daily_fill_on", False):
                                 candle_fill_state["daily_fill_on"] = fill_b
                                 _save_candle_fill_state(candle_fill_state)
@@ -9894,8 +9854,7 @@ with main_col:
                                                                 seryeok_auto_dates=seryeok_auto_dates,
                                                                 chart_display_start_date=_chart_display_start,
                                                                 nwave_marker_dates=_nwave_marker_dates,
-                                                                view_months=st.session_state.get("daily_view_months"),
-                                                                show_vwap_sigma=show_vwap_sigma_b)
+                                                                view_months=st.session_state.get("daily_view_months"))
 
                                 # "뉴" 버튼을 켰을 때만 차트 바로 아래에 실시간 뉴스속보 1줄 표시.
                                 # 꺼두면 아예 렌더링/조회 자체를 하지 않아 다른 종목 전환이 더 빠르다.
